@@ -1,0 +1,16 @@
+﻿global using System;
+global using System.Collections;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Threading.Channels;
+global using System.Threading.Tasks;
+global using Discord;
+global using Discord.Webhook;
+global using Discord.WebSocket;
+global using Ditto.Common;
+global using Ditto.Database;
+global using Ditto.Database.Models;
+global using Ditto.Extensions;
+global using Ditto.Services;
+global using NonBlocking;
+global using EventHandler = Ditto.Services.EventHandler;
