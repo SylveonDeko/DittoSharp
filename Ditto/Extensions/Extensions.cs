@@ -133,7 +133,7 @@ public static class Extensions
     public static bool IsAuthor(this IMessage msg, IDiscordClient client) => msg.Author?.Id == client.CurrentUser.Id;
 
     public static string GetFullUsage(string commandName, string args, string? prefix) =>
-        $"{prefix}{commandName} {(StringExtensions.TryFormat(args, new object[] { prefix }, out var output) ? output : args)}";
+        $"{prefix}{commandName} {(StringExtensions.TryFormat(args, [prefix], out var output) ? output : args)}";
 
     public static EmbedBuilder AddPaginatedFooter(this EmbedBuilder embed, int curPage, int? lastPage)
     {
@@ -242,7 +242,7 @@ public static class Extensions
         catch (ReflectionTypeLoadException ex)
         {
             Log.Error(ex, "Error loading assembly types");
-            return Enumerable.Empty<Type>();
+            return [];
         }
 
         // all types which have INService implementation are services
@@ -311,10 +311,10 @@ public static class Extensions
             x.Type is ApplicationCommandOptionType.SubCommand or ApplicationCommandOptionType.SubCommandGroup);
 
         if (!sgs.Any())
-            return new[]
-            {
+            return
+            [
                 baseName
-            };
+            ];
 
         var ctNames = new List<string>();
         foreach (var sg in sgs)

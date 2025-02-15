@@ -94,10 +94,9 @@ public static partial class StringExtensions
 
     public static string ToTitleCase(this string str)
     {
-        var tokens = str.Split(new[]
-        {
+        var tokens = str.Split([
             " "
-        }, StringSplitOptions.RemoveEmptyEntries);
+        ], StringSplitOptions.RemoveEmptyEntries);
         for (var i = 0; i < tokens.Length; i++)
         {
             var token = tokens[i];

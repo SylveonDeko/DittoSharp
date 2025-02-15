@@ -13,5 +13,5 @@ public class Booster
     public string Key { get; set; }
 
     [BsonElement("boosters")]
-    public List<LongIdentifier> Boosters { get; set; }
+    public List<ulong> Boosters { get; set; }
 }

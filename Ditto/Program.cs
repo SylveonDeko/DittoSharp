@@ -33,7 +33,7 @@ public class Program
                 var client = new DiscordShardedClient(new DiscordSocketConfig
                 {
                     MessageCacheSize = 15,
-                    LogLevel = LogSeverity.Info,
+                    LogLevel = LogSeverity.Debug,
                     ConnectionTimeout = int.MaxValue,
                     AlwaysDownloadUsers = true,
                     GatewayIntents = GatewayIntents.All,

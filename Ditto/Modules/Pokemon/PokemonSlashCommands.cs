@@ -45,10 +45,122 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         await ctx.Interaction.SendConfirmFollowupAsync(result.Message);
     }
 
+    [SlashCommand("list", "Shows an unfiltered, ordered list of all your obtained pokemon")]
+    public async Task ListPokemon()
+    {
+        await DeferAsync();
+
+        var pokemonList = await Service.GetPokemonList(ctx.User.Id);
+        if (pokemonList.Count == 0)
+        {
+            await FollowupAsync("You have not started!\nStart with `/start` first!");
+            return;
+        }
+
+        var pages = new List<PageBuilder>();
+        const int itemsPerPage = 15;
+        var totalPages = (pokemonList.Count - 1) / itemsPerPage + 1;
+
+        for (var i = 0; i < totalPages; i++)
+        {
+            var pageItems = pokemonList
+                .Skip(i * itemsPerPage)
+                .Take(itemsPerPage);
+
+            var description = new StringBuilder();
+            foreach (var pokemon in pageItems)
+            {
+                var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
+                var gender = GetGenderEmoji(pokemon.Gender);
+
+                description.AppendLine(
+                    $"{emoji}{gender}**{pokemon.Name.Capitalize()}** | " +
+                    $"**__No.__** - {pokemon.Number} | " +
+                    $"**Level** {pokemon.Level} | " +
+                    $"**IV%** {pokemon.IvPercent:P2}");
+            }
+
+            var embed = new EmbedBuilder()
+                .WithTitle("Your Pokemon")
+                .WithDescription(description.ToString())
+                .WithColor(new Color(255, 182, 193))
+                .WithFooter($"Page {i + 1}/{totalPages}")
+                .Build();
+
+            pages.Add(PageBuilder.FromEmbed(embed));
+        }
+
+        var pager = new StaticPaginatorBuilder()
+            .WithPages(pages)
+            .WithUsers(ctx.User)
+            .WithDefaultEmotes()
+            .WithFooter(PaginatorFooter.PageNumber)
+            .Build();
+
+        await _interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10),
+            InteractionResponseType.DeferredUpdateMessage);
+    }
+
+    [SlashCommand("resurrect", "Attempt to resurrect dead Pokemon")]
+    [RequireContext(ContextType.Guild)]
+    public async Task ResurrectDeadPokemon()
+    {
+        await DeferAsync();
+
+        var deadPokemon = await Service.GetDeadPokemon(ctx.User.Id);
+        if (deadPokemon.Count == 0)
+        {
+            await FollowupAsync("You do not have any dead Pokemon.");
+            return;
+        }
+
+        await FollowupAsync("Checking for dead Pokémon... and performing necromancy.");
+
+        // Pre-calculate all pages first
+        var pages = new List<PageBuilder>();
+        const int itemsPerPage = 30;
+
+        for (var i = 0; i < deadPokemon.Count; i += itemsPerPage)
+        {
+            var pageBuilder = new StringBuilder();
+            var pageItems = deadPokemon.Skip(i).Take(itemsPerPage);
+
+            foreach (var pokemon in pageItems)
+            {
+                var ivPercentage = (pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
+                                    pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100;
+
+                pageBuilder.AppendLine(
+                    $"✅ **ID: `{pokemon.Id}` | Name: `{pokemon.PokemonName}` | IV%: `{ivPercentage:F2}`%**");
+            }
+
+            pages.Add(new PageBuilder()
+                .WithColor(Color.Purple)
+                .WithDescription(pageBuilder.ToString()));
+        }
+
+        // Now resurrect the Pokemon
+        await Service.ResurrectPokemon(deadPokemon);
+
+        if (pages.Count > 0)
+        {
+            var paginator = new StaticPaginatorBuilder()
+                .WithPages(pages)
+                .WithUsers(ctx.User)
+                .WithDefaultEmotes()
+                .WithFooter(PaginatorFooter.PageNumber)
+                .Build();
+
+            await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10),
+                InteractionResponseType.DeferredUpdateMessage);
+        }
+    }
+
     [SlashCommand("info", "Get information about a pokemon")]
     [RequireContext(ContextType.Guild)]
     public async Task Info(string poke = null, PokemonVariantType? variant = null)
     {
+        var list = (await Service.GetPokemonList(ctx.User.Id)).Select(x => x.botId).ToList();
         try
         {
             Database.Models.PostgreSQL.Pokemon.Pokemon ownedPokemon = null;
@@ -64,7 +176,8 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                     return;
                 }
 
-                await DisplayOwnedPokemonInfo(ownedPokemon);
+                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
+                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, pokemonIndex);
                 return;
             }
 
@@ -78,7 +191,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                     return;
                 }
 
-                await DisplayOwnedPokemonInfo(ownedPokemon);
+                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, list.IndexOf(ownedPokemon.DittoId));
                 return;
             }
 
@@ -105,7 +218,8 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                     return;
                 }
 
-                await DisplayOwnedPokemonInfo(ownedPokemon);
+                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
+                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, pokemonIndex);
                 return;
             }
 
@@ -167,7 +281,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             }
 
             // Build the embed
-            var emoji = GetVariantEmoji(shiny, radiant, skin);
+            var emoji = GetPokemonEmoji(shiny, radiant, skin);
             var embed = new EmbedBuilder()
                 .WithTitle($"{emoji}{val}")
                 .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
@@ -469,6 +583,226 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         }
     }
 
+    [Group("filter", "Filter your Pokemon in various ways")]
+    public class FilterCommands : DittoSlashSubmodule<PokemonService>
+    {
+        private readonly InteractiveService _interactivity;
+
+        public FilterCommands(InteractiveService interactivity)
+        {
+            _interactivity = interactivity;
+        }
+
+        [SlashCommand("legendary", "Show all your legendary Pokemon")]
+        public async Task FilterLegendaryAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "legendary");
+            await DisplayFilteredPokemon(result, "Legendary Pokemon");
+        }
+
+        [SlashCommand("shiny", "Show all your shiny Pokemon")]
+        public async Task FilterShinyAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "shiny");
+            await DisplayFilteredPokemon(result, "Shiny Pokemon");
+        }
+
+        [SlashCommand("radiant", "Show all your radiant Pokemon")]
+        public async Task FilterRadiantAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "radiant");
+            await DisplayFilteredPokemon(result, "Radiant Pokemon");
+        }
+
+        [SlashCommand("starter", "Show all your starter Pokemon")]
+        public async Task FilterStarterAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "starter");
+            await DisplayFilteredPokemon(result, "Starter Pokemon");
+        }
+
+        [SlashCommand("skin", "Show all your skinned Pokemon")]
+        public async Task FilterSkinAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "skin");
+            await DisplayFilteredPokemon(result, "Skinned Pokemon");
+        }
+
+        [SlashCommand("level", "Filter Pokemon by level range")]
+        public async Task FilterLevelAsync(
+            [Summary("min", "Minimum level (1-100)")]
+            int minLevel,
+            [Summary("max", "Maximum level (1-100)")]
+            int? maxLevel = null)
+        {
+            await DeferAsync();
+
+            if (minLevel < 1 || minLevel > 100 || (maxLevel.HasValue && (maxLevel < 1 || maxLevel > 100)))
+            {
+                await ctx.Interaction.SendErrorAsync("Level must be between 1 and 100!");
+                return;
+            }
+
+            if (maxLevel.HasValue && maxLevel < minLevel)
+            {
+                await ctx.Interaction.SendErrorAsync("Maximum level cannot be less than minimum level!");
+                return;
+            }
+
+            var result = await Service.GetPokemonByLevel(ctx.User.Id, minLevel, maxLevel ?? 100);
+            await DisplayFilteredPokemon(result, $"Pokemon (Level {minLevel}-{maxLevel ?? 100})");
+        }
+
+        [SlashCommand("iv", "Filter Pokemon by IV percentage")]
+        public async Task FilterIvAsync(
+            [Summary("min", "Minimum IV percentage (0-100)")]
+            double minIv,
+            [Summary("max", "Maximum IV percentage (0-100)")]
+            double? maxIv = null)
+        {
+            await DeferAsync();
+
+            if (minIv < 0 || minIv > 100 || (maxIv.HasValue && (maxIv < 0 || maxIv > 100)))
+            {
+                await ctx.Interaction.SendErrorAsync("IV percentage must be between 0 and 100!");
+                return;
+            }
+
+            if (maxIv.HasValue && maxIv < minIv)
+            {
+                await ctx.Interaction.SendErrorAsync("Maximum IV cannot be less than minimum IV!");
+                return;
+            }
+
+            var result =
+                await Service.GetPokemonByIv(ctx.User.Id, minIv / 100, maxIv.HasValue ? maxIv.Value / 100 : 1.0);
+            await DisplayFilteredPokemon(result, $"Pokemon (IV {minIv:F2}%-{maxIv:F2}%)");
+        }
+
+        [SlashCommand("type", "Show Pokemon of a specific type")]
+        public async Task FilterTypeAsync(
+            [Summary("type", "Pokemon type")] PokemonType type)
+        {
+            await DeferAsync();
+            var result = await Service.GetPokemonByType(ctx.User.Id, type.ToString());
+            await DisplayFilteredPokemon(result, $"{type} Type Pokemon");
+        }
+
+        [SlashCommand("name", "Search Pokemon by name")]
+        public async Task FilterNameAsync(
+            [Summary("name", "Pokemon name to search for")]
+            string name)
+        {
+            await DeferAsync();
+            var result = await Service.GetPokemonByName(ctx.User.Id, name);
+            await DisplayFilteredPokemon(result, $"Pokemon Named '{name}'");
+        }
+
+        private async Task DisplayFilteredPokemon(List<Database.Models.PostgreSQL.Pokemon.Pokemon> pokemon,
+            string title)
+        {
+            if (!pokemon.Any())
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("No Pokemon found matching the filter criteria.");
+                return;
+            }
+
+            var pages = new List<PageBuilder>();
+            const int itemsPerPage = 15;
+            var totalPages = (pokemon.Count - 1) / itemsPerPage + 1;
+
+            for (var i = 0; i < totalPages; i++)
+            {
+                var pageItems = pokemon
+                    .Skip(i * itemsPerPage)
+                    .Take(itemsPerPage);
+
+                var description = new StringBuilder();
+                foreach (var poke in pageItems)
+                {
+                    var ivTotal = poke.HpIv + poke.AttackIv + poke.DefenseIv +
+                                  poke.SpecialAttackIv + poke.SpecialDefenseIv + poke.SpeedIv;
+                    var ivPercentage = ivTotal / 186.0;
+
+                    var emoji = GetPokemonEmoji(poke.Shiny ?? false, poke.Radiant ?? false, poke.Skin);
+                    var gender = GetGenderEmoji(poke.Gender);
+
+                    description.AppendLine(
+                        $"{emoji}{gender}**{poke.PokemonName.Titleize()}** | " +
+                        $"**__No.__** - {i * itemsPerPage + pokemon.IndexOf(poke) + 1} | " +
+                        $"**Level** {poke.Level} | " +
+                        $"**IV%** {ivPercentage:P2}");
+                }
+
+                var embed = new EmbedBuilder()
+                    .WithTitle(title)
+                    .WithDescription(description.ToString())
+                    .WithColor(Color.Blue)
+                    .WithFooter($"Page {i + 1}/{totalPages}")
+                    .Build();
+
+                pages.Add(PageBuilder.FromEmbed(embed));
+            }
+
+            var pager = new StaticPaginatorBuilder()
+                .WithPages(pages)
+                .WithDefaultEmotes()
+                .WithFooter(PaginatorFooter.PageNumber)
+                .Build();
+
+            await _interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10), InteractionResponseType.DeferredUpdateMessage);
+        }
+
+        private string GetPokemonEmoji(bool shiny, bool radiant, string skin)
+        {
+            if (radiant) return "<:radiant:1057764536456966275>";
+            if (shiny) return "<a:shiny:1057764628349853786>";
+            return skin switch
+            {
+                "glitch" => "<:glitch:1057764553091534859>",
+                "shadow" => "<:shadow:1057764584954568775>",
+                _ => "<:blank:1338358271706136648>"
+            };
+        }
+
+        private string GetGenderEmoji(string gender)
+        {
+            return gender?.ToLower() switch
+            {
+                "-m" or "male" => "♂️ ",
+                "-f" or "female" => "♀️ ",
+                _ => ""
+            };
+        }
+    }
+
+    public enum PokemonType
+    {
+        Normal,
+        Fire,
+        Water,
+        Electric,
+        Grass,
+        Ice,
+        Fighting,
+        Poison,
+        Ground,
+        Flying,
+        Psychic,
+        Bug,
+        Rock,
+        Ghost,
+        Dragon,
+        Dark,
+        Steel,
+        Fairy
+    }
+
     [ComponentInteraction("pokeinfo:*,*", true)]
     public async Task HandleInfoButtons(string action, string param)
     {
@@ -580,37 +914,6 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
     }
 
-    private async Task DisplayPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon)
-    {
-        var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
-        if (pokemonInfo == null)
-        {
-            await ctx.Interaction.SendErrorFollowupAsync("Error retrieving pokemon information.");
-            return;
-        }
-
-        var ivPercentage = (pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
-                            pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100;
-
-        var embed = new EmbedBuilder()
-            .WithTitle($"{pokemon.Name.Titleize()} (Level {pokemon.Level})")
-            .WithColor(new Color(Random.Shared.Next(256), Random.Shared.Next(256), Random.Shared.Next(256)))
-            .AddField("Types", string.Join(", ", pokemonInfo.Types))
-            .AddField("IVs", $"{ivPercentage:F2}%")
-            .AddField("Stats",
-                $"HP: {pokemonInfo.Stats.Hp}\n" +
-                $"Attack: {pokemonInfo.Stats.Attack}\n" +
-                $"Defense: {pokemonInfo.Stats.Defense}\n" +
-                $"Sp.Atk: {pokemonInfo.Stats.SpecialAttack}\n" +
-                $"Sp.Def: {pokemonInfo.Stats.SpecialDefense}\n" +
-                $"Speed: {pokemonInfo.Stats.Speed}");
-
-        if (pokemon.Shiny.GetValueOrDefault())
-            embed.AddField("✨", "This pokemon is shiny!");
-
-        await ctx.Interaction.FollowupAsync(embed: embed.Build());
-    }
-
 
     private static string GetTypeEmote(string type)
     {
@@ -619,7 +922,6 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             "normal" => "<:normal:1061418793416294460>",
             "fire" => "<:fire:1061418789725798430>",
             "water" => "<:water:1061418798549037167>",
-            // Add other type emotes here
             _ => type
         };
     }
@@ -631,7 +933,6 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             "monster" => "<:monster:1061418792191606804>",
             "water1" => "<:water1:1061418796750913586>",
             "bug" => "<:bug:1061418785808072815>",
-            // Add other egg group emotes here
             _ => eggGroup
         };
     }
@@ -644,7 +945,8 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         return name;
     }
 
-    private async Task DisplayOwnedPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon)
+    private async Task DisplayOwnedPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon, int pokeCount,
+        int selectedPoke)
     {
         var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
         if (pokemonInfo == null)
@@ -679,9 +981,9 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
 
         var embed = new EmbedBuilder()
             .WithTitle(
-                $"{titlePrefix}{GetVariantEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin)}{genderEmoji}{pokemon.PokemonName.Titleize()}")
+                $"{titlePrefix}{GetPokemonEmoji(pokemon.Shiny.GetValueOrDefault(), pokemon.Radiant.GetValueOrDefault(), pokemon.Skin)}{genderEmoji}{pokemon.PokemonName.Titleize()}")
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
-            .WithFooter(_footers[_random.Next(_footers.Length)]);
+            .WithFooter($"Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.DittoId}");
 
         var infoField = new StringBuilder();
         infoField.AppendLine($"**Level**: `{pokemon.Level}`");
@@ -725,20 +1027,25 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
     }
 
 
-    private string GetVariantEmoji(bool? shiny, bool? radiant, string skin)
+    private string GetPokemonEmoji(bool shiny, bool radiant, string skin)
     {
-        if (skin?.ToLower() == "shadow") return "💫";
-        if (radiant == true) return "🌟";
-        if (shiny == true) return "✨";
-        return "";
+        if (radiant) return "<:radiant:1057764536456966275>";
+        if (shiny) return "<a:shiny:1057764628349853786>";
+        return skin switch
+        {
+            "glitch" => "<:glitch:1057764553091534859>",
+            "shadow" => "<:shadow:1057764584954568775>",
+            _ => "<:blank:1338358271706136648>"
+        };
     }
+
 
     private string GetGenderEmoji(string gender)
     {
         return gender?.ToLower() switch
         {
-            "m" or "male" => "♂️",
-            "f" or "female" => "♀️",
+            "-m" or "male" => "♂️ ",
+            "-f" or "female" => "♀️ ",
             _ => ""
         };
     }

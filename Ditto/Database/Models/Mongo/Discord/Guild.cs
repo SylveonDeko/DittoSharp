@@ -17,13 +17,13 @@ public class Guild
     public string Prefix { get; set; }
 
     [BsonElement("disabled_channels")]
-    public List<LongIdentifier> DisabledChannels { get; set; }
+    public List<ulong> DisabledChannels { get; set; }
 
     [BsonElement("redirects")]
-    public List<LongIdentifier> Redirects { get; set; }
+    public List<ulong> Redirects { get; set; }
 
     [BsonElement("disabled_spawn_channels")]
-    public List<LongIdentifier> DisabledSpawnChannels { get; set; }
+    public List<ulong> DisabledSpawnChannels { get; set; }
 
     [BsonElement("pin_spawns")]
     public bool PinSpawns { get; set; }
@@ -41,7 +41,7 @@ public class Guild
     public bool ModalView { get; set; }
 
     [BsonElement("enabled_channels")]
-    public List<LongIdentifier> EnabledChannels { get; set; }
+    public List<ulong> EnabledChannels { get; set; }
 
     [BsonElement("enable_spawns_all")]
     public bool EnableSpawnsAll { get; set; }

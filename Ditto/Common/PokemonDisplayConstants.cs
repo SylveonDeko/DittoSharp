@@ -9,7 +9,8 @@ public static class PokemonDisplayConstants
     public const string SPDEF_DISPLAY = "`SPDEF:`";
     public const string SPE_DISPLAY = "`SPEED:`";
     
-    public static readonly string[] CUSTOM_POKES = {
+    public static readonly string[] CUSTOM_POKES =
+    [
         "Onehitmonchan",
         "Xerneas-brad",
         "Lucariosouta", 
@@ -25,5 +26,5 @@ public static class PokemonDisplayConstants
         "Palkia-lord",
         "Dialga-lord",
         "Missingno"
-    };
+    ];
 }

@@ -10,8 +10,7 @@ public class Pokemon
     [Key]
     [Column("id")]
     public int Id { get; set; }
-    
-    [Key]
+
     [Column("ditto_id")]
     public int DittoId { get; set; }
     
@@ -91,7 +90,7 @@ public class Pokemon
     
     [Column("moves", TypeName = "text[]")]
     [Required]
-    public string[] Moves { get; set; } = Array.Empty<string>();
+    public string[] Moves { get; set; } = [];
     
     [Column("hitem")]
     [Required]
@@ -159,7 +158,7 @@ public class Pokemon
     
     [Column("tags", TypeName = "text[]")]
     [Required]
-    public string[] Tags { get; set; } = Array.Empty<string>();
+    public string[] Tags { get; set; } = [];
     
     [Column("skin")]
     public string? Skin { get; set; }
@@ -179,7 +178,7 @@ public class Pokemon
     public bool Temporary { get; set; }
     
     [Column("owner")]
-    public ulong? Owner { get; set; }
+    public ulong Owner { get; set; }
     
     [Column("owned")]
     public bool? Owned { get; set; }

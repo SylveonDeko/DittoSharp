@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Collections.Immutable;
+using Microsoft.Extensions.Configuration;
 
 namespace Ditto.Common;
 
@@ -14,6 +15,12 @@ public class BotCredentials : IBotCredentials
     public DbConfig PostgresConfig { get; }
     public DbConfig MongoConfig { get; }
     public DbConfig RedisConfig { get; }
+    public ImmutableArray<ulong> OwnerIds { get; set; }
+
+    public bool IsOwner(IUser u)
+    {
+        return OwnerIds.Contains(u.Id);
+    }
 
     public BotCredentials()
     {
@@ -34,6 +41,11 @@ public class BotCredentials : IBotCredentials
         GuildJoinsChannelId = ulong.TryParse(config[nameof(GuildJoinsChannelId)], out var joinLog)
             ? joinLog 
             : 0;
+
+        OwnerIds = [
+            ..config.GetSection(nameof(OwnerIds)).GetChildren()
+                .Select(c => ulong.Parse(c.Value))
+        ];
             
         IsDebug = bool.Parse(config[nameof(IsDebug)] ?? "false");
 
@@ -63,6 +75,7 @@ public class BotCredentials : IBotCredentials
 public interface IBotCredentials
 {
     string Token { get; }
+    public ImmutableArray<ulong> OwnerIds { get; set; }
     string DefaultPrefix { get; }
     ulong DebugGuildId { get; }
     ulong GuildJoinsChannelId { get; }
@@ -70,6 +83,10 @@ public interface IBotCredentials
     DbConfig PostgresConfig { get; }
     DbConfig MongoConfig { get; }
     DbConfig RedisConfig { get; }
+    public bool IsOwner(IUser u)
+    {
+        return OwnerIds.Contains(u.Id);
+    }
 }
 
 public class DbConfig

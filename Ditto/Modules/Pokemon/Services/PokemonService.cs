@@ -1,9 +1,16 @@
+using System.Reflection;
 using System.Text;
+using Ditto.Common.Logic;
 using Ditto.Database.DbContextStuff;
 using Ditto.Database.Models.Mongo.Pokemon;
+using Ditto.Database.Models.PostgreSQL.Pokemon;
+using Ditto.Modules.Spawn.Constants;
 using Ditto.Services.Impl;
 using LinqToDB.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using MongoDB.Bson;
 using MongoDB.Driver;
+using Serilog;
 
 namespace Ditto.Modules.Pokemon.Services;
 
@@ -21,8 +28,8 @@ public class PokemonService : INService
     private const string SPDEF_DISPLAY = "`SPDEF:`";
     private const string SPE_DISPLAY = "`SPEED:`";
 
-    private readonly string[] CUSTOM_POKES = new[]
-    {
+    private readonly string[] CUSTOM_POKES =
+    [
         "Onehitmonchan",
         "Xerneas-brad",
         "Lucariosouta",
@@ -38,7 +45,7 @@ public class PokemonService : INService
         "Palkia-lord",
         "Dialga-lord",
         "Missingno"
-    };
+    ];
 
     public PokemonService(
         DiscordShardedClient client,
@@ -308,12 +315,6 @@ public class PokemonService : INService
         return form;
     }
 
-    private bool IsFormed(string name)
-    {
-        // Add your logic to check if a name is a formed Pokemon
-        return true; // Placeholder
-    }
-
     public async Task<string> GetEvolutionChain(int pokemonId)
     {
         var sb = new StringBuilder();
@@ -353,7 +354,7 @@ public class PokemonService : INService
         user.Selected = pokemon.Id;
         await dbContext.SaveChangesAsync();
 
-        return (true, $"You have selected your {pokemon.Name}");
+        return (true, $"You have selected your {pokemon.PokemonName}");
     }
 
     public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetSelectedPokemon(ulong userId)
@@ -541,7 +542,7 @@ public class PokemonService : INService
             {
                 // Get forms from MongoDB
                 var cursor = _mongo.Forms.Find(
-                    Builders<Form>.Filter.Regex(f => f.Identifier, new MongoDB.Bson.BsonRegularExpression($".*{val}.*", "i"))
+                    Builders<Form>.Filter.Regex(f => f.Identifier, new BsonRegularExpression($".*{val}.*", "i"))
                 );
 
                 forms = await cursor.Project(f => f.FormIdentifier)
@@ -552,10 +553,7 @@ public class PokemonService : INService
                     .Where(f => f is not "Galar" and not "Alola" and not "Hisui" and not "Paldea")
                     .ToList();
 
-                if (!forms.Any())
-                {
-                    forms = ["None"];
-                }
+                if (!forms.Any()) forms = ["None"];
             }
 
             return string.Join("\n", forms.Select(f => f.Capitalize()));
@@ -610,28 +608,62 @@ public class PokemonService : INService
     public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string pokemonName, bool shiny = false,
         bool radiant = false, string skin = null)
     {
-        var parsedForm = await ParseForm(pokemonName);
-        var formInfo = await _mongo.Forms
-            .Find(f => f.Identifier.Equals(parsedForm, StringComparison.CurrentCultureIgnoreCase))
+        var identifier = await _mongo.Forms
+            .Find(f => f.Identifier.Equals(pokemonName.ToLower(), StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
-        if (formInfo == null)
-            return (null, null);
+        if (identifier == null)
+            throw new ArgumentException($"Invalid name ({pokemonName}) passed to GetPokemonFormInfo");
 
-        string imageUrl;
-        if (!string.IsNullOrEmpty(skin))
-            // Handle other skin types if needed
-            imageUrl =
-                $"https://images.mewdeko.tech/skins/{skin}/{formInfo.PokemonId}-0-.{(skin.EndsWith("gif") ? "gif" : "png")}";
+        var suffix = identifier.FormIdentifier;
+        int pokemonId;
+        var formId = 0;
+
+        if (!string.IsNullOrEmpty(suffix) && pokemonName.EndsWith(suffix))
+        {
+            formId = (int)(identifier.FormOrder - 1)!;
+            var formName = pokemonName[..^(suffix.Length + 1)];
+
+            var pokemonIdentifier = await _mongo.Forms
+                .Find(f => f.Identifier.Equals(formName, StringComparison.CurrentCultureIgnoreCase))
+                .FirstOrDefaultAsync();
+
+            if (pokemonIdentifier == null)
+                throw new ArgumentException($"Invalid name ({pokemonName}) passed to GetPokemonFormInfo");
+
+            pokemonId = pokemonIdentifier.PokemonId;
+        }
         else
-            imageUrl = parsedForm switch
-            {
-                "tauros-blaze-paldeam" => "https://images.mewdeko.tech/images/128-2-.png",
-                "tauros-aqua-paldeam" => "https://images.mewdeko.tech/images/128-3-.png",
-                _ => $"https://images.mewdeko.tech/images/{formInfo.PokemonId}-0-.png"
-            };
+        {
+            pokemonId = identifier.PokemonId;
+        }
 
-        return (formInfo, imageUrl);
+        var fileType = "png";
+        var skinPath = "";
+        if (!string.IsNullOrEmpty(skin))
+        {
+            if (skin.EndsWith("_gif"))
+                fileType = "gif";
+            skinPath = $"{skin}/";
+        }
+
+        // Assuming you have a radiant_placeholder_pokes collection
+        var isPlaceholder = await _mongo.RadiantPlaceholders
+            .Find(p => p.Name.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
+            .FirstOrDefaultAsync();
+
+        var radiantPath = radiant ? "radiant/" : "";
+        if (radiant && isPlaceholder != null)
+            return (identifier, "placeholder.png");
+
+        var shinyPath = shiny ? "shiny/" : "";
+        var fileName = $"{radiantPath}{shinyPath}{skinPath}{pokemonId}-{formId}-.{fileType}";
+
+        var imageUrl = string.IsNullOrEmpty(skin)
+            ? $"https://images.mewdeko.tech/images/{fileName}"
+            : $"https://images.mewdeko.tech/skins/{fileName}";
+
+        return (identifier, imageUrl);
     }
 
 
@@ -767,7 +799,278 @@ public class PokemonService : INService
         });
     }
 
+    public async Task<List<DeadPokemon>> GetDeadPokemon(ulong userId)
+    {
+        await using var dbContext = await _dbProvider.GetContextAsync();
 
+        // First get all dead Pokemon that match user's Pokemon array in one query
+        return await dbContext.DeadPokemon
+            .AsNoTracking()
+            .Where(d => dbContext.Users
+                .Where(u => u.UserId == (userId == 1081889316848017539 ? 946611594488602694UL : userId))
+                .SelectMany(u => u.Pokemon)
+                .Contains(d.Id))
+            .ToListAsyncEF();
+    }
+
+    public async Task ResurrectPokemon(List<DeadPokemon> deadPokemon)
+    {
+        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+        try
+        {
+            // Do deletion in a single operation
+            var ids = deadPokemon.Select(d => d.Id).ToList();
+            await dbContext.DeadPokemon
+                .Where(d => ids.Contains(d.Id))
+                .ExecuteDeleteAsync();
+
+            // Convert and add all Pokemon in batches
+            var livePokemon = deadPokemon.Select(MapDeadToLivePokemon).ToList();
+
+            foreach (var batch in livePokemon.Chunk(1000))
+            {
+                await dbContext.UserPokemon.AddRangeAsync(batch);
+            }
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (Exception e)
+        {
+            await transaction.RollbackAsync();
+            Log.Error(e, "Failed to resurrect pokemon");
+            throw;
+        }
+    }
+
+private static Database.Models.PostgreSQL.Pokemon.Pokemon MapDeadToLivePokemon(DeadPokemon dead)
+{
+    return new Database.Models.PostgreSQL.Pokemon.Pokemon
+    {
+        PokemonName = dead.PokemonName,
+        HpIv = dead.HpIv,
+        AttackIv = dead.AttackIv,
+        DefenseIv = dead.DefenseIv,
+        SpecialAttackIv = dead.SpecialAttackIv,
+        SpecialDefenseIv = dead.SpecialDefenseIv,
+        SpeedIv = dead.SpeedIv,
+        HpEv = dead.HpEv,
+        AttackEv = dead.AttackEv,
+        DefenseEv = dead.DefenseEv,
+        SpecialAttackEv = dead.SpecialAttackEv,
+        SpecialDefenseEv = dead.SpecialDefenseEv,
+        SpeedEv = dead.SpeedEv,
+        Level = dead.Level,
+        Moves = dead.Moves,
+        HeldItem = dead.HeldItem,
+        Experience = dead.Experience,
+        Nature = dead.Nature,
+        ExperienceCap = dead.ExperienceCap,
+        Nickname = dead.Nickname,
+        Price = dead.Price,
+        MarketEnlist = dead.MarketEnlist,
+        Happiness = dead.Happiness,
+        Favorite = dead.Favorite,
+        AbilityIndex = dead.AbilityIndex,
+        Gender = dead.Gender,
+        Shiny = dead.Shiny,
+        Counter = dead.Counter,
+        Name = dead.Name,
+        Timestamp = dead.Timestamp,
+        CaughtBy = dead.CaughtBy,
+        Radiant = dead.Radiant,
+        Tags = dead.Tags,
+        Skin = dead.Skin,
+        Tradable = dead.Tradable,
+        Breedable = dead.Breedable,
+        Champion = dead.Champion,
+        Temporary = dead.Temporary,
+        Voucher = dead.Voucher,
+        Owner = dead.Owner,
+        Owned = dead.Owned
+    };
+}
+
+public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByLevel(ulong userId, int minLevel, int maxLevel)
+{
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    return await dbContext.UserPokemon
+        .AsNoTracking()  // Add this since we're only reading
+        .Where(p => p.Owner == userId && p.Level >= minLevel && p.Level <= maxLevel)
+        .OrderByDescending(p => p.Level)
+        .ToListAsyncEF();
+}
+
+public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByIv(ulong userId, double minIvPercent, double maxIvPercent)
+{
+    var minIvSum = (int)(minIvPercent * 186);
+    var maxIvSum = (int)(maxIvPercent * 186);
+
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    return await dbContext.UserPokemon
+        .AsNoTracking()
+        .Where(p => p.Owner == userId)
+        .Select(p => new
+        {
+            Pokemon = p,
+            IvSum = p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
+        })
+        .Where(x => x.IvSum >= minIvSum && x.IvSum <= maxIvSum)
+        .OrderByDescending(x => x.IvSum)
+        .Select(x => x.Pokemon)
+        .ToListAsyncEF();
+}
+
+public async Task<int> GetPokemonIndex(ulong userId, int pokemonId)
+{
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    var user = await dbContext.Users
+        .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+
+    if (user?.Pokemon == null)
+        return -1;
+
+    // Find the index of this Pokemon in the user's array
+    return Array.IndexOf(user.Pokemon, pokemonId) + 1; // +1 for 1-based indexing
+}
+
+public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByType(ulong userId, string type)
+{
+    // Get type info from MongoDB - do this first to fail fast if type is invalid
+    var typeInfo = await _mongo.Types
+        .Find(t => t.Identifier.Equals(type.ToLower()))
+        .FirstOrDefaultAsync();
+
+    if (typeInfo == null)
+        return [];
+
+    // Get Pokemon IDs and forms in parallel
+    var typeTask = _mongo.PokemonTypes
+        .Find(pt => pt.Types.Contains(typeInfo.TypeId))
+        .Project(p => p.PokemonId)
+        .ToListAsync();
+
+    var formsTask = _mongo.Forms
+        .Find(Builders<Form>.Filter.Empty)
+        .Project(f => new { f.PokemonId, f.Identifier })
+        .ToListAsync();
+
+    await Task.WhenAll(typeTask, formsTask);
+
+    var pokemonIds = await typeTask;
+    var forms = await formsTask;
+
+    var pokemonNames = forms
+        .Where(f => pokemonIds.Contains(f.PokemonId))
+        .Select(f => f.Identifier.Capitalize())
+        .ToHashSet(); // HashSet for more efficient lookup
+
+    // Query PostgreSQL
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    return await dbContext.UserPokemon
+        .AsNoTracking()
+        .Where(p => p.Owner == userId && pokemonNames.Contains(p.PokemonName))
+        .ToListAsyncEF();
+}
+
+public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByName(ulong userId, string name)
+{
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    return await dbContext.UserPokemon
+        .AsNoTracking()
+        .Where(p => p.Owner == userId &&
+                   EF.Functions.ILike(p.PokemonName, $"%{name}%"))
+        .ToListAsyncEF();
+}
+
+public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredPokemon(ulong userId, string filter)
+{
+    await using var dbContext = await _dbProvider.GetContextAsync();
+    var query = dbContext.UserPokemon
+        .AsNoTracking()
+        .Where(p => p.Owner == userId);
+
+    query = filter.ToLower() switch
+    {
+        "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.PokemonName)),
+        "starter" => query.Where(p => PokemonList.starterList.Contains(p.PokemonName)),
+        "shiny" => query.Where(p => p.Shiny == true),
+        "radiant" => query.Where(p => p.Radiant == true),
+        "skin" => query.Where(p => !string.IsNullOrEmpty(p.Skin)),
+        _ => query
+    };
+
+    return await query.ToListAsyncEF();
+}
+
+   public async Task<List<PokemonListEntry>> GetPokemonList(ulong userId, SortOrder order = SortOrder.Default)
+{
+    try
+    {
+        await using var db = await _dbProvider.GetContextAsync();
+
+        // Get user and their Pokemon array
+        var user = await db.Users
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.Pokemon)
+            .FirstOrDefaultAsync();
+
+        if (user == null || user.Length == 0)
+            return [];
+
+        // Get Pokemon data
+        var pokemonData = await db.UserPokemon
+            .AsNoTracking()
+            .Where(x => user.Contains(x.Id))
+            .Select(p => new
+            {
+                p.Id,
+                p.DittoId,
+                p.PokemonName,
+                p.Level,
+                IvTotal = p.AttackIv + p.DefenseIv + p.SpecialAttackIv +
+                         p.SpecialDefenseIv + p.SpeedIv + p.HpIv,
+                p.Shiny,
+                p.Radiant,
+                p.Skin,
+                p.Gender,
+                p.Nickname
+            })
+            .ToListAsync();
+
+        // Sort if needed (in memory since we have all data)
+        var sorted = order switch
+        {
+            SortOrder.Iv => pokemonData.OrderByDescending(p => p.IvTotal),
+            SortOrder.Level => pokemonData.OrderByDescending(p => p.Level),
+            SortOrder.Name => pokemonData.OrderByDescending(p => p.PokemonName),
+            _ => pokemonData.AsEnumerable()
+        };
+
+        // Return with correct numbering based on array position
+        return sorted
+            .Select(p => new PokemonListEntry(
+                p.DittoId,
+                p.PokemonName,
+                Array.IndexOf(user, p.Id) + 1,
+                p.Level,
+                p.IvTotal / 186.0,
+                p.Shiny ?? false,
+                p.Radiant ?? false,
+                p.Skin,
+                p.Gender,
+                p.Nickname))
+            .ToList();
+    }
+    catch (Exception e)
+    {
+        Console.WriteLine(e);
+        throw;
+    }
+}
     private static int CalculateHpStat(int baseStat, int level, int iv, int ev)
     {
         return (2 * baseStat + iv + ev / 4) * level / 100 + level + 10;
@@ -825,6 +1128,304 @@ public class PokemonService : INService
         // Cap at 255
         return Math.Min(friendship, 255);
     }
+
+    private async Task<bool> CheckEvoReqs(
+        Database.Models.PostgreSQL.Pokemon.Pokemon pokemon,
+        int? heldItemId,
+        int? activeItemId,
+        string region,
+        Dictionary<string, object> evoReq,
+        bool overrideLvl100)
+    {
+        var reqFlags = EvoReqs.FromRaw(evoReq);
+
+        // They used an active item but this evo doesn't use an active item, don't use it.
+        if (activeItemId.HasValue && !reqFlags.UsedActiveItem())
+            return false;
+
+        // If a pokemon is level 100, ONLY evolve via an override or active item.
+        if (pokemon.Level >= 100 && !(overrideLvl100 || activeItemId.HasValue))
+            return false;
+
+        // Check trigger item
+        if (evoReq.GetValueOrDefault("trigger_item_id") is int triggerItemId)
+            if (triggerItemId != activeItemId)
+                return false;
+
+        // Check held item
+        if (evoReq.GetValueOrDefault("held_item_id") is int requiredHeldItemId)
+            if (requiredHeldItemId != heldItemId)
+                return false;
+
+        // Check gender
+        if (evoReq.GetValueOrDefault("gender_id") is int genderId)
+        {
+            if (genderId == 1 && pokemon.Gender == "-m")
+                return false;
+            if (genderId == 2 && pokemon.Gender == "-f")
+                return false;
+        }
+
+        // Check minimum level
+        if (evoReq.GetValueOrDefault("minimum_level") is int minLevel)
+            if (pokemon.Level < minLevel)
+                return false;
+
+        // Check known move
+        if (evoReq.GetValueOrDefault("known_move_id") is int moveId)
+        {
+            var move = await _mongo.Moves.Find(m => m.MoveId == moveId).FirstOrDefaultAsync();
+            if (move == null || !pokemon.Moves.Contains(move.Identifier))
+                return false;
+        }
+
+        // Check happiness
+        if (evoReq.GetValueOrDefault("minimum_happiness") is int minHappiness)
+            if (pokemon.Happiness < minHappiness)
+                return false;
+
+        // Check relative physical stats
+        if (evoReq.GetValueOrDefault("relative_physical_stats") is int relativeStats)
+        {
+            // WARNING: Currently only used by Tyrogue which has identical base stats for atk and def
+            // If used on other Pokemon, base stats need to be considered
+            var attack = pokemon.AttackIv + pokemon.AttackEv;
+            var defense = pokemon.DefenseIv + pokemon.DefenseEv;
+
+            if (relativeStats == 1 && !(attack > defense))
+                return false;
+            if (relativeStats == -1 && !(attack < defense))
+                return false;
+            if (relativeStats == 0 && attack != defense)
+                return false;
+        }
+
+        // Check region
+        if (evoReq.GetValueOrDefault("region") is string requiredRegion)
+        {
+            if (requiredRegion != region)
+                return false;
+            // Temp blocker since previously radiants could never evolve to regional forms
+            if (pokemon.Radiant.GetValueOrDefault())
+                return false;
+        }
+
+        return true;
+    }
+
+    private (int Id, EvoReqs Reqs) PickEvo(List<Dictionary<string, object>> validEvos)
+    {
+        var bestScore = -1.0;
+        var bestId = -1;
+        EvoReqs bestReqs = null;
+
+        foreach (var evo in validEvos)
+        {
+            var reqs = EvoReqs.FromRaw(evo);
+            if (reqs > bestScore)
+            {
+                bestScore = reqs.Score;
+                bestId = (int)evo["evolved_species_id"];
+                bestReqs = reqs;
+            }
+        }
+
+        return (bestId, bestReqs);
+    }
+
+    private bool IsFormed(string pokemonName)
+    {
+        return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
+               pokemonName.EndsWith("-origin") || pokemonName.EndsWith("-10") || pokemonName.EndsWith("-complete") ||
+               pokemonName.EndsWith("-ultra") || pokemonName.EndsWith("-crowned") ||
+               pokemonName.EndsWith("-eternamax") ||
+               pokemonName.EndsWith("-blade");
+    }
+
+    public async Task<(bool Success, int? NewSpeciesId, bool UsedActiveItem)> TryEvolve(
+        int pokemonId,
+        string activeItem = null,
+        bool overrideLvl100 = false,
+        IMessageChannel channel = null)
+    {
+        await using var db = await _dbProvider.GetContextAsync();
+        var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+        if (pokemon == null) return (false, null, false);
+
+        var originalName = pokemon.PokemonName;
+        var pokemonName = pokemon.PokemonName.ToLower();
+
+        // Everstones block evolutions
+        if (pokemon.HeldItem.ToLower() is "everstone" or "eviolite")
+            return (false, null, false);
+
+        // Eggs cannot evolve
+        if (pokemonName == "egg")
+            return (false, null, false);
+
+        // Don't evolve forms
+        if (IsFormed(pokemonName) || pokemonName.EndsWith("-staff") || pokemonName.EndsWith("-custom"))
+            return (false, null, false);
+
+        // Get necessary info
+        var pokemonInfo = await _mongo.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
+        if (pokemonInfo == null)
+        {
+            Log.Error("A poke exists that is not in the mongo forms table - {Name}", pokemonName);
+            return (false, null, false);
+        }
+
+        var rawPfile = await _mongo.PFile.Find(f => f.Identifier == pokemonInfo.Identifier).FirstOrDefaultAsync();
+        if (rawPfile == null)
+        {
+            Log.Error("A non-formed poke exists that is not in the mongo pfile table - {Name}", pokemonName);
+            return (false, null, false);
+        }
+
+        // Get evolution line
+        var evoline = await _mongo.PFile
+            .Find(f => f.EvolutionChainId == rawPfile.EvolutionChainId)
+            .ToListAsync();
+
+        evoline.Sort((a, b) => b.IsBaby.GetValueOrDefault().CompareTo(a.IsBaby.GetValueOrDefault()));
+
+        // Filter potential evos
+        var potentialEvos = new List<Dictionary<string, object>>();
+        foreach (var evo in evoline)
+        {
+            if (evo.EvolvesFromSpeciesId != pokemonInfo.PokemonId)
+                continue;
+
+            var val = await _mongo.Evolution.Find(e => e.EvolvedSpeciesId == evo.EvolvesFromSpeciesId)
+                .FirstOrDefaultAsync();
+            if (val == null)
+                Log.Error("An evofile does not exist for a poke - {Name}", evo.Identifier);
+            else if (val.EvolvedSpeciesId == 0)
+                return (false, null, false);
+            else
+                potentialEvos.Add(ToDictionary(val));
+        }
+
+        if (!potentialEvos.Any())
+            return (false, null, false);
+
+        // Prep items
+        int? activeItemId = null;
+        if (activeItem != null)
+        {
+            var item = await _mongo.Items.Find(i => i.Identifier == activeItem).FirstOrDefaultAsync();
+            activeItemId = item?.ItemId;
+            if (activeItemId == null)
+                Log.Error("A poke is trying to use an active item that is not in the mongo table - {Item}", activeItem);
+        }
+
+        int? heldItemId = null;
+        if (!string.IsNullOrEmpty(pokemon.HeldItem))
+        {
+            var item = await _mongo.Items.Find(i => i.Identifier == pokemon.HeldItem.ToLower()).FirstOrDefaultAsync();
+            heldItemId = item?.ItemId;
+        }
+
+        // Get owner's region
+        var owner = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == pokemon.Owner);
+        if (owner?.Region == null)
+            return (false, null, false);
+
+        // Filter valid evos
+        var validEvos = new List<Dictionary<string, object>>();
+        foreach (var evoReq in potentialEvos)
+            if (await CheckEvoReqs(pokemon, heldItemId, activeItemId, owner.Region, evoReq, overrideLvl100))
+                validEvos.Add(evoReq);
+
+        if (!validEvos.Any())
+            return (false, null, false);
+
+        var (evoId, evoReqs) = PickEvo(validEvos);
+        var evoTwo = await _mongo.PFile.Find(p => p.EvolutionChainId == evoId).FirstOrDefaultAsync();
+        if (evoTwo == null)
+            return (false, null, false);
+
+        var evoName = evoTwo.Identifier.Capitalize();
+
+        // Update the Pokemon
+        await db.UserPokemon.Where(p => p.Id == pokemonId)
+            .ExecuteUpdateAsync(p => p
+                .SetProperty(x => x.PokemonName, evoName));
+
+        if (channel != null)
+            try
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Congratulations!!!")
+                    .WithDescription($"Your {originalName} has evolved into {evoName}!")
+                    .WithColor(Color.Blue); // Replace with your random color logic
+
+                await channel.SendMessageAsync(embed: embed.Build());
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to send evolution message");
+            }
+
+        return (true, evoId, evoReqs.UsedActiveItem());
+    }
+
+    public async Task<bool> Devolve(ulong userId, long pokemonId)
+    {
+        await using var db = await _dbProvider.GetContextAsync();
+        var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+        if (pokemon == null || pokemon.Radiant.GetValueOrDefault())
+            return false;
+
+        var pokeData = await _mongo.PFile.Find(p => p.Identifier == pokemon.PokemonName.ToLower())
+            .FirstOrDefaultAsync();
+        if (pokeData?.EvolvesFromSpeciesId == null)
+            return false;
+
+        var preEvo = await _mongo.PFile.Find(p => p.EvolvesFromSpeciesId == pokeData.EvolvesFromSpeciesId)
+            .FirstOrDefaultAsync();
+        if (preEvo == null)
+            return false;
+
+        var newName = preEvo.Identifier.Capitalize();
+        await db.UserPokemon.Where(p => p.Id == pokemonId)
+            .ExecuteUpdateAsync(p => p
+                .SetProperty(x => x.PokemonName, newName));
+
+        return true;
+    }
+
+    public Dictionary<string, object> ToDictionary(object obj)
+    {
+        var dictionary = new Dictionary<string, object>();
+        var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        foreach (var property in properties) dictionary[property.Name] = property.GetValue(obj);
+
+        return dictionary;
+    }
+}
+
+public record PokemonListEntry(
+    int botId,
+    string Name,
+    int Number,
+    int Level,
+    double IvPercent,
+    bool Shiny,
+    bool Radiant,
+    string Skin,
+    string Gender,
+    string Nickname
+);
+
+public enum SortOrder
+{
+    Iv,
+    Level,
+    Ev,
+    Name,
+    Default
 }
 
 public class DetailedPokemonInfo

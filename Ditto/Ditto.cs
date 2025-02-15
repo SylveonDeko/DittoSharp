@@ -249,17 +249,7 @@ public class Ditto
 
     private static Task Client_Log(LogMessage arg)
     {
-        var severity = arg.Severity switch
-        {
-            LogSeverity.Critical => LogEventLevel.Fatal,
-            LogSeverity.Error => LogEventLevel.Error,
-            LogSeverity.Warning => LogEventLevel.Warning,
-            LogSeverity.Info => LogEventLevel.Information,
-            LogSeverity.Verbose => LogEventLevel.Verbose,
-            LogSeverity.Debug => LogEventLevel.Debug,
-            _ => LogEventLevel.Information
-        };
-        Log.Write(severity, arg.Exception, "[{Source}] {Message}", arg.Source, arg.Message);
+        Log.Information(arg.ToString());
         return Task.CompletedTask;
     }
 }

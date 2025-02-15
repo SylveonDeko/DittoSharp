@@ -12,7 +12,7 @@ public class TournamentTeam
     
     [Column("team", TypeName = "character varying[]")]
     [Required]
-    public string[] Team { get; set; } = Array.Empty<string>();
+    public string[] Team { get; set; } = [];
     
     [Column("u_id")]
     [Required]
