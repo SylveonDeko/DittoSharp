@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Ditto.Common.Constants;
 
 public static class SpawnMessages

@@ -1,7 +1,4 @@
-﻿using Discord;
-using Discord.WebSocket;
-
-namespace Ditto.Common.ModuleBehaviors;
+﻿namespace Ditto.Common.ModuleBehaviors;
 
 /// <summary>
 ///     Interface to be implemented by modules which block execution before anything is executed.

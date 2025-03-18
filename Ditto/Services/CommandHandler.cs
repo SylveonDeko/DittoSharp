@@ -7,7 +7,6 @@ using Ditto.Common.Collections;
 using Ditto.Database.DbContextStuff;
 using Serilog;
 using ExecuteResult = Discord.Commands.ExecuteResult;
-using IResult = Discord.Commands.IResult;
 
 namespace Ditto.Services;
 

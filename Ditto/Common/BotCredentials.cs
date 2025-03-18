@@ -1,5 +1,4 @@
 ﻿using System.Collections.Immutable;
-using Microsoft.Extensions.Configuration;
 
 namespace Ditto.Common;
 

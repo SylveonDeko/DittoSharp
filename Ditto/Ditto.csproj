@@ -34,4 +34,18 @@
       </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\abilities.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\forms.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\items.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\moves.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\natures.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\pfile.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\pokemon_stats.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\poke_abilities.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\ptypes.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\stat_types.json" />
+      <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\type_effectiveness.json" />
+    </ItemGroup>
+
 </Project>

@@ -1,9 +1,6 @@
-using Discord;
 using Discord.Interactions;
-using Ditto.Common.Attributes.Interactions;
 using Ditto.Common.ModuleBases;
 using Ditto.Modules.Items.Services;
-using System.Collections.Generic;
 
 namespace Ditto.Modules.Items;
 

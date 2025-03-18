@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 namespace Ditto.Common.Constants;
 
 public static class PokemonConstants

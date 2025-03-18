@@ -1,7 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using Discord;
-using Discord.WebSocket;
 using Ditto.Common.Constants;
 using Ditto.Database.DbContextStuff;
 using Ditto.Database.Models.Mongo.Discord;

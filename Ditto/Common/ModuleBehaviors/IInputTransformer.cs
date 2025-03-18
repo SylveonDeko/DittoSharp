@@ -1,6 +1,4 @@
-﻿using Discord;
-
-namespace Ditto.Common.ModuleBehaviors;
+﻿namespace Ditto.Common.ModuleBehaviors;
 
 /// <summary>
 ///     Interface to be implemented by modules that transform user input.

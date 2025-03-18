@@ -1,4 +1,3 @@
-using Discord.Interactions;
 using Ditto.Common.ModuleBases;
 using SpawnService = Ditto.Modules.Spawn.Services.SpawnService;
 

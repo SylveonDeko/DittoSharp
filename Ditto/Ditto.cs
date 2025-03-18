@@ -1,19 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
-using System.Text.Json;
-using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
 using Discord.Interactions;
-using Ditto.Common;
 using Ditto.Common.ModuleBehaviors;
 using Ditto.Database.DbContextStuff;
-using Ditto.Database.Models;
 using Ditto.Database.Models.Mongo.Discord;
-using Ditto.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using Serilog.Events;
 using TypeReader = Discord.Commands.TypeReader;
 
 namespace Ditto;

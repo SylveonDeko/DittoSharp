@@ -1,8 +1,5 @@
 using System.Text.Json;
-using Discord;
 using Ditto.Database.DbContextStuff;
-using Ditto.Database.Models.Mongo.Pokemon;
-using Ditto.Database.Models.PostgreSQL.Bot;
 using Ditto.Database.Models.PostgreSQL.Game;
 using Ditto.Modules.Pokemon.Services;
 using Ditto.Services.Impl;

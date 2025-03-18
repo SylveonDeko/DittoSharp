@@ -1,9 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Threading.Channels;
-using Discord;
-using Ditto.Common;
 using Ditto.Database.Models.Mongo.Discord;
-using Ditto.Database.Models.Mongo.Game;
 using Ditto.Services.Impl;
 using MongoDB.Driver;
 using Serilog;

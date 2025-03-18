@@ -1,4 +1,3 @@
-using Ditto.Database.Models.Mongo.Game;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
