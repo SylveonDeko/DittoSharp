@@ -46,7 +46,7 @@ public static class Extensions
         => await interaction.FollowupAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), ephemeral: true, components: new ComponentBuilder()
             .WithButton(label: "Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto").Build()).ConfigureAwait(false);
 
-    public static List<ulong> GetGuildIds(this DiscordSocketClient client) => client.Guilds.Select(x => x.Id).ToList();
+    public static List<ulong> GetGuildIds(this DiscordShardedClient client) => client.Guilds.Select(x => x.Id).ToList();
 
     // ReSharper disable once InvalidXmlDocComment
     /// Generates a string in the format 00:mm:ss if timespan is less than 2m.

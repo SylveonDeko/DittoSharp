@@ -10,7 +10,7 @@ public class ShopItem
     public string Id { get; set; }
 
     [BsonElement("item")]
-    public string Item { get; set; }
+    public string? Item { get; set; }
 
     [BsonElement("price")]
     public int Price { get; set; }

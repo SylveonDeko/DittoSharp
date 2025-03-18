@@ -1,4 +1,4 @@
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// Some effect that has a specific amount of time it is active.
@@ -52,23 +52,17 @@ namespace Duels
     /// -sun
     /// -h-wind
     /// </summary>
-    public class Weather : ExpiringEffect
+    public class Weather(Battle battle) : ExpiringEffect(0)
     {
-        private string _weatherType = "";
-        private Battle _battle;
-
-        public Weather(Battle battle) : base(0)
-        {
-            _battle = battle;
-        }
+        public string? WeatherType = "";
 
         /// <summary>
         /// Clear the current weather and update Castform forms.
         /// </summary>
         private void _ExpireWeather()
         {
-            _weatherType = "";
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            WeatherType = "";
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
@@ -98,11 +92,11 @@ namespace Duels
         public bool RecheckAbilityWeather()
         {
             var maintainWeather = false;
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
-                switch (_weatherType)
+                switch (WeatherType)
                 {
                     case "h-wind" when poke.Ability() == Ability.DELTA_STREAM:
                     case "h-sun" when poke.Ability() == Ability.DESOLATE_LAND:
@@ -112,7 +106,7 @@ namespace Duels
                 }
             }
 
-            if (new[] { "h-wind", "h-sun", "h-rain" }.Contains(_weatherType) && !maintainWeather)
+            if (new[] { "h-wind", "h-sun", "h-rain" }.Contains(WeatherType) && !maintainWeather)
             {
                 _ExpireWeather();
                 return true;
@@ -123,16 +117,16 @@ namespace Duels
         /// <summary>
         /// Get the current weather type.
         /// </summary>
-        public string Get()
+        public string? Get()
         {
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
                 if (poke.Ability() == Ability.CLOUD_NINE || poke.Ability() == Ability.AIR_LOCK)
                     return "";
             }
-            return _weatherType;
+            return WeatherType;
         }
 
         /// <summary>
@@ -146,13 +140,13 @@ namespace Duels
             ElementType? element = null;
             string castform = null;
 
-            if (_weatherType == weather)
+            if (WeatherType == weather)
                 return "";
 
             switch (weather)
             {
                 case "hail":
-                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(_weatherType))
+                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(WeatherType))
                         return "";
                     turns = pokemon.HeldItem == "icy-rock" ? 8 : 5;
                     msg += "It starts to hail!\n";
@@ -160,7 +154,7 @@ namespace Duels
                     castform = "Castform-snowy";
                     break;
                 case "sandstorm":
-                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(_weatherType))
+                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(WeatherType))
                         return "";
                     turns = pokemon.HeldItem == "smooth-rock" ? 8 : 5;
                     msg += "A sandstorm is brewing up!\n";
@@ -168,7 +162,7 @@ namespace Duels
                     castform = "Castform";
                     break;
                 case "rain":
-                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(_weatherType))
+                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(WeatherType))
                         return "";
                     turns = pokemon.HeldItem == "damp-rock" ? 8 : 5;
                     msg += "It starts to rain!\n";
@@ -176,7 +170,7 @@ namespace Duels
                     castform = "Castform-rainy";
                     break;
                 case "sun":
-                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(_weatherType))
+                    if (new[] { "h-rain", "h-sun", "h-wind" }.Contains(WeatherType))
                         return "";
                     turns = pokemon.HeldItem == "heat-rock" ? 8 : 5;
                     msg += "The sunlight is strong!\n";
@@ -204,7 +198,7 @@ namespace Duels
 
             // Forecast
             var t = element.ToString().ToLower();
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
@@ -218,7 +212,7 @@ namespace Duels
                 }
             }
 
-            _weatherType = weather;
+            WeatherType = weather;
             SetTurns(turns);
             return msg;
         }
@@ -227,15 +221,10 @@ namespace Duels
     /// <summary>
     /// A multi-turn move that a pokemon is locked into.
     /// </summary>
-    public class LockedMove : ExpiringEffect
+    public class LockedMove(Move move, int turnsToExpire) : ExpiringEffect(turnsToExpire)
     {
-        public Move Move { get; private set; }
+        public Move Move { get; private set; } = move;
         public int Turn { get; private set; } = 0;
-
-        public LockedMove(Move move, int turnsToExpire) : base(turnsToExpire)
-        {
-            Move = move;
-        }
 
         /// <summary>
         /// Progresses the move a turn.
@@ -259,13 +248,9 @@ namespace Duels
     /// <summary>
     /// An expiration timer with some data.
     /// </summary>
-    public class ExpiringItem : ExpiringEffect
+    public class ExpiringItem() : ExpiringEffect(0)
     {
         public object Item { get; private set; }
-
-        public ExpiringItem() : base(0)
-        {
-        }
 
         /// <summary>
         /// Progresses the effect a turn.
@@ -302,15 +287,8 @@ namespace Duels
     /// <summary>
     /// The terrain of the battle
     /// </summary>
-    public class Terrain : ExpiringItem
+    public class Terrain(Battle battle) : ExpiringItem
     {
-        private Battle _battle;
-
-        public Terrain(Battle battle) : base()
-        {
-            _battle = battle;
-        }
-
         /// <summary>
         /// Progresses the effect a turn.
         /// </summary>
@@ -355,7 +333,7 @@ namespace Duels
                     break;
             }
 
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
@@ -396,7 +374,7 @@ namespace Duels
         {
             base.End();
             // Mimicry
-            foreach (var poke in new[] { _battle.Trainer1.CurrentPokemon, _battle.Trainer2.CurrentPokemon })
+            foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
                 if (poke == null)
                     continue;
@@ -411,13 +389,9 @@ namespace Duels
     /// <summary>
     /// Stores the HP and when to heal for the move Wish.
     /// </summary>
-    public class ExpiringWish : ExpiringEffect
+    public class ExpiringWish() : ExpiringEffect(0)
     {
         public int? Hp { get; private set; }
-
-        public ExpiringWish() : base(0)
-        {
-        }
 
         /// <summary>
         /// Progresses the effect a turn.
@@ -447,18 +421,11 @@ namespace Duels
     /// <summary>
     /// The current non volatile effect status.
     /// </summary>
-    public class NonVolatileEffect
+    public class NonVolatileEffect(DuelPokemon pokemon)
     {
         public string Current { get; set; } = "";
-        private DuelPokemon _pokemon;
-        public ExpiringEffect SleepTimer { get; private set; }
+        public ExpiringEffect SleepTimer { get; private set; } = new(0);
         public int BadlyPoisonedTurn { get; set; } = 0;
-
-        public NonVolatileEffect(DuelPokemon pokemon)
-        {
-            _pokemon = pokemon;
-            SleepTimer = new ExpiringEffect(0);
-        }
 
         /// <summary>
         /// Progresses this status by a turn.
@@ -474,18 +441,18 @@ namespace Duels
                 BadlyPoisonedTurn++;
             }
 
-            if (_pokemon.Ability() == Ability.HYDRATION && new[] { "rain", "h-rain" }.Contains(battle.Weather.Get()))
+            if (pokemon.Ability() == Ability.HYDRATION && new[] { "rain", "h-rain" }.Contains(battle.Weather.Get()))
             {
                 var removed = Current;
                 Reset();
-                return $"{_pokemon.Name}'s hydration cured its {removed}!\n";
+                return $"{pokemon.Name}'s hydration cured its {removed}!\n";
             }
 
-            if (_pokemon.Ability() == Ability.SHED_SKIN && new Random().Next(3) == 0)
+            if (pokemon.Ability() == Ability.SHED_SKIN && new Random().Next(3) == 0)
             {
                 var removed = Current;
                 Reset();
-                return $"{_pokemon.Name}'s shed skin cured its {removed}!\n";
+                return $"{pokemon.Name}'s shed skin cured its {removed}!\n";
             }
 
             switch (Current)
@@ -493,33 +460,33 @@ namespace Duels
                 // The poke still has a status effect, apply damage
                 case "burn":
                 {
-                    var damage = Math.Max(1, _pokemon.StartingHp / 16);
-                    if (_pokemon.Ability() == Ability.HEATPROOF)
+                    var damage = Math.Max(1, pokemon.StartingHp / 16);
+                    if (pokemon.Ability() == Ability.HEATPROOF)
                     {
                         damage /= 2;
                     }
-                    return _pokemon.Damage(damage, battle, source: "its burn");
+                    return pokemon.Damage(damage, battle, source: "its burn");
                 }
                 case "b-poison":
                 {
-                    if (_pokemon.Ability() == Ability.POISON_HEAL)
+                    if (pokemon.Ability() == Ability.POISON_HEAL)
                     {
-                        return _pokemon.Heal(_pokemon.StartingHp / 8, source: "its poison heal");
+                        return pokemon.Heal(pokemon.StartingHp / 8, source: "its poison heal");
                     }
-                    var damage = Math.Max(1, _pokemon.StartingHp / 16 * Math.Min(15, BadlyPoisonedTurn));
-                    return _pokemon.Damage(damage, battle, source: "its bad poison");
+                    var damage = Math.Max(1, pokemon.StartingHp / 16 * Math.Min(15, BadlyPoisonedTurn));
+                    return pokemon.Damage(damage, battle, source: "its bad poison");
                 }
                 case "poison":
                 {
-                    if (_pokemon.Ability() == Ability.POISON_HEAL)
+                    if (pokemon.Ability() == Ability.POISON_HEAL)
                     {
-                        return _pokemon.Heal(_pokemon.StartingHp / 8, source: "its poison heal");
+                        return pokemon.Heal(pokemon.StartingHp / 8, source: "its poison heal");
                     }
-                    var damage = Math.Max(1, _pokemon.StartingHp / 8);
-                    return _pokemon.Damage(damage, battle, source: "its poison");
+                    var damage = Math.Max(1, pokemon.StartingHp / 8);
+                    return pokemon.Damage(damage, battle, source: "its poison");
                 }
-                case "sleep" when _pokemon.Nightmare:
-                    return _pokemon.Damage(_pokemon.StartingHp / 4, battle, source: "its nightmare");
+                case "sleep" when pokemon.Nightmare:
+                    return pokemon.Damage(pokemon.StartingHp / 4, battle, source: "its nightmare");
                 default:
                     return "";
             }
@@ -538,7 +505,7 @@ namespace Duels
         /// </summary>
         public bool Sleep()
         {
-            if (_pokemon.Ability() == Ability.COMATOSE)
+            if (pokemon.Ability() == Ability.COMATOSE)
             {
                 return true;
             }
@@ -583,45 +550,45 @@ namespace Duels
 
             if (!string.IsNullOrEmpty(Current) && !force)
             {
-                return $"{_pokemon.Name} already has a status, it can't get {status} too!\n";
+                return $"{pokemon.Name} already has a status, it can't get {status} too!\n";
             }
 
-            if (_pokemon.Ability(attacker: attacker, move: move) == Ability.COMATOSE)
+            if (pokemon.Ability(attacker: attacker, move: move) == Ability.COMATOSE)
             {
-                return $"{_pokemon.Name} already has a status, it can't get {status} too!\n";
+                return $"{pokemon.Name} already has a status, it can't get {status} too!\n";
             }
 
-            if (_pokemon.Ability(attacker: attacker, move: move) == Ability.PURIFYING_SALT)
+            if (pokemon.Ability(attacker: attacker, move: move) == Ability.PURIFYING_SALT)
             {
-                return $"{_pokemon.Name}'s purifying salt protects it from being inflicted with {status}!\n";
+                return $"{pokemon.Name}'s purifying salt protects it from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Ability(attacker: attacker, move: move) == Ability.LEAF_GUARD && new[] { "sun", "h-sun" }.Contains(battle.Weather.Get()))
+            if (pokemon.Ability(attacker: attacker, move: move) == Ability.LEAF_GUARD && new[] { "sun", "h-sun" }.Contains(battle.Weather.Get()))
             {
-                return $"{_pokemon.Name}'s leaf guard protects it from being inflicted with {status}!\n";
+                return $"{pokemon.Name}'s leaf guard protects it from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Substitute > 0 && attacker != _pokemon && (move == null || move.IsAffectedBySubstitute()))
+            if (pokemon.Substitute > 0 && attacker != pokemon && (move == null || move.IsAffectedBySubstitute()))
             {
-                return $"{_pokemon.Name}'s substitute protects it from being inflicted with {status}!\n";
+                return $"{pokemon.Name}'s substitute protects it from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Owner.Safeguard.Active() && attacker != _pokemon && (attacker == null || attacker.Ability() != Ability.INFILTRATOR))
+            if (pokemon.Owner.Safeguard.Active() && attacker != pokemon && (attacker == null || attacker.Ability() != Ability.INFILTRATOR))
             {
-                return $"{_pokemon.Name}'s safeguard protects it from being inflicted with {status}!\n";
+                return $"{pokemon.Name}'s safeguard protects it from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Grounded(battle, attacker: attacker, move: move) && battle.Terrain.Item?.ToString() == "misty")
+            if (pokemon.Grounded(battle, attacker: attacker, move: move) && battle.Terrain.Item?.ToString() == "misty")
             {
-                return $"The misty terrain protects {_pokemon.Name} from being inflicted with {status}!\n";
+                return $"The misty terrain protects {pokemon.Name} from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Ability(attacker: attacker, move: move) == Ability.FLOWER_VEIL && _pokemon.TypeIds.Contains(ElementType.GRASS))
+            if (pokemon.Ability(attacker: attacker, move: move) == Ability.FLOWER_VEIL && pokemon.TypeIds.Contains(ElementType.GRASS))
             {
-                return $"{_pokemon.Name}'s flower veil protects it from being inflicted with {status}!\n";
+                return $"{pokemon.Name}'s flower veil protects it from being inflicted with {status}!\n";
             }
 
-            if (_pokemon.Name == "Minior")
+            if (pokemon.Name == "Minior")
             {
                 return "Minior's hard shell protects it from status effects!\n";
             }
@@ -629,121 +596,121 @@ namespace Duels
             switch (status)
             {
                 case "burn":
-                    if (_pokemon.TypeIds.Contains(ElementType.FIRE))
+                    if (pokemon.TypeIds.Contains(ElementType.FIRE))
                     {
-                        return $"{_pokemon.Name} is a fire type and can't be burned!\n";
+                        return $"{pokemon.Name} is a fire type and can't be burned!\n";
                     }
-                    if (_pokemon.Ability(attacker: attacker, move: move) == Ability.WATER_VEIL ||
-                        _pokemon.Ability(attacker: attacker, move: move) == Ability.WATER_BUBBLE)
+                    if (pokemon.Ability(attacker: attacker, move: move) == Ability.WATER_VEIL ||
+                        pokemon.Ability(attacker: attacker, move: move) == Ability.WATER_BUBBLE)
                     {
-                        var abilityName = ((Ability)_pokemon.AbilityId).GetPrettyName();
-                        return $"{_pokemon.Name}'s {abilityName} prevents it from getting burned!\n";
+                        var abilityName = ((Ability)pokemon.AbilityId).GetPrettyName();
+                        return $"{pokemon.Name}'s {abilityName} prevents it from getting burned!\n";
                     }
                     Current = status;
-                    msg += $"{_pokemon.Name} was burned{source}!\n";
+                    msg += $"{pokemon.Name} was burned{source}!\n";
                     break;
 
                 case "sleep":
                     var sleepImmunities = new[] { Ability.INSOMNIA, Ability.VITAL_SPIRIT, Ability.SWEET_VEIL };
-                    if (sleepImmunities.Contains(_pokemon.Ability(attacker: attacker, move: move)))
+                    if (sleepImmunities.Contains(pokemon.Ability(attacker: attacker, move: move)))
                     {
-                        var abilityName = ((Ability)_pokemon.AbilityId).GetPrettyName();
-                        return $"{_pokemon.Name}'s {abilityName} keeps it awake!\n";
+                        var abilityName = ((Ability)pokemon.AbilityId).GetPrettyName();
+                        return $"{pokemon.Name}'s {abilityName} keeps it awake!\n";
                     }
-                    if (_pokemon.Grounded(battle, attacker: attacker, move: move) && battle.Terrain.Item?.ToString() == "electric")
+                    if (pokemon.Grounded(battle, attacker: attacker, move: move) && battle.Terrain.Item?.ToString() == "electric")
                     {
-                        return $"The terrain is too electric for {_pokemon.Name} to fall asleep!\n";
+                        return $"The terrain is too electric for {pokemon.Name} to fall asleep!\n";
                     }
                     if (battle.Trainer1.CurrentPokemon != null && battle.Trainer1.CurrentPokemon.Uproar.Active())
                     {
-                        return $"An uproar keeps {_pokemon.Name} from falling asleep!\n";
+                        return $"An uproar keeps {pokemon.Name} from falling asleep!\n";
                     }
                     if (battle.Trainer2.CurrentPokemon != null && battle.Trainer2.CurrentPokemon.Uproar.Active())
                     {
-                        return $"An uproar keeps {_pokemon.Name} from falling asleep!\n";
+                        return $"An uproar keeps {pokemon.Name} from falling asleep!\n";
                     }
 
                     if (turns == null)
                     {
                         turns = new Random().Next(2, 5);
                     }
-                    if (_pokemon.Ability(attacker: attacker, move: move) == Ability.EARLY_BIRD)
+                    if (pokemon.Ability(attacker: attacker, move: move) == Ability.EARLY_BIRD)
                     {
                         turns /= 2;
                     }
                     Current = status;
                     SleepTimer.SetTurns(turns);
-                    msg += $"{_pokemon.Name} fell asleep{source}!\n";
+                    msg += $"{pokemon.Name} fell asleep{source}!\n";
                     break;
 
                 case "poison":
                 case "b-poison":
                     if (attacker == null || attacker.Ability() != Ability.CORROSION)
                     {
-                        if (_pokemon.TypeIds.Contains(ElementType.STEEL))
+                        if (pokemon.TypeIds.Contains(ElementType.STEEL))
                         {
-                            return $"{_pokemon.Name} is a steel type and can't be poisoned!\n";
+                            return $"{pokemon.Name} is a steel type and can't be poisoned!\n";
                         }
-                        if (_pokemon.TypeIds.Contains(ElementType.POISON))
+                        if (pokemon.TypeIds.Contains(ElementType.POISON))
                         {
-                            return $"{_pokemon.Name} is a poison type and can't be poisoned!\n";
+                            return $"{pokemon.Name} is a poison type and can't be poisoned!\n";
                         }
                     }
-                    if (_pokemon.Ability(attacker: attacker, move: move) == Ability.IMMUNITY ||
-                        _pokemon.Ability(attacker: attacker, move: move) == Ability.PASTEL_VEIL)
+                    if (pokemon.Ability(attacker: attacker, move: move) == Ability.IMMUNITY ||
+                        pokemon.Ability(attacker: attacker, move: move) == Ability.PASTEL_VEIL)
                     {
-                        var abilityName = ((Ability)_pokemon.AbilityId).GetPrettyName();
-                        return $"{_pokemon.Name}'s {abilityName} keeps it from being poisoned!\n";
+                        var abilityName = ((Ability)pokemon.AbilityId).GetPrettyName();
+                        return $"{pokemon.Name}'s {abilityName} keeps it from being poisoned!\n";
                     }
                     Current = status;
                     var bad = status == "b-poison" ? " badly" : "";
-                    msg += $"{_pokemon.Name} was{bad} poisoned{source}!\n";
+                    msg += $"{pokemon.Name} was{bad} poisoned{source}!\n";
 
                     if (move != null && attacker != null && attacker.Ability() == Ability.POISON_PUPPETEER)
                     {
-                        msg += _pokemon.Confuse(attacker: attacker, source: $"{attacker.Name}'s poison puppeteer");
+                        msg += pokemon.Confuse(attacker: attacker, source: $"{attacker.Name}'s poison puppeteer");
                     }
                     break;
 
                 case "paralysis":
-                    if (_pokemon.TypeIds.Contains(ElementType.ELECTRIC))
+                    if (pokemon.TypeIds.Contains(ElementType.ELECTRIC))
                     {
-                        return $"{_pokemon.Name} is an electric type and can't be paralyzed!\n";
+                        return $"{pokemon.Name} is an electric type and can't be paralyzed!\n";
                     }
-                    if (_pokemon.Ability(attacker: attacker, move: move) == Ability.LIMBER)
+                    if (pokemon.Ability(attacker: attacker, move: move) == Ability.LIMBER)
                     {
-                        return $"{_pokemon.Name}'s limber keeps it from being paralyzed!\n";
+                        return $"{pokemon.Name}'s limber keeps it from being paralyzed!\n";
                     }
                     Current = status;
-                    msg += $"{_pokemon.Name} was paralyzed{source}!\n";
+                    msg += $"{pokemon.Name} was paralyzed{source}!\n";
                     break;
 
                 case "freeze":
-                    if (_pokemon.TypeIds.Contains(ElementType.ICE))
+                    if (pokemon.TypeIds.Contains(ElementType.ICE))
                     {
-                        return $"{_pokemon.Name} is an ice type and can't be frozen!\n";
+                        return $"{pokemon.Name} is an ice type and can't be frozen!\n";
                     }
-                    if (_pokemon.Ability(attacker: attacker, move: move) == Ability.MAGMA_ARMOR)
+                    if (pokemon.Ability(attacker: attacker, move: move) == Ability.MAGMA_ARMOR)
                     {
-                        return $"{_pokemon.Name}'s magma armor keeps it from being frozen!\n";
+                        return $"{pokemon.Name}'s magma armor keeps it from being frozen!\n";
                     }
                     if (new[] { "sun", "h-sun" }.Contains(battle.Weather.Get()))
                     {
-                        return $"It's too sunny to freeze {_pokemon.Name}!\n";
+                        return $"It's too sunny to freeze {pokemon.Name}!\n";
                     }
                     Current = status;
-                    msg += $"{_pokemon.Name} was frozen solid{source}!\n";
+                    msg += $"{pokemon.Name} was frozen solid{source}!\n";
                     break;
             }
 
-            if (_pokemon.Ability(attacker: attacker, move: move) == Ability.SYNCHRONIZE && attacker != null)
+            if (pokemon.Ability(attacker: attacker, move: move) == Ability.SYNCHRONIZE && attacker != null)
             {
-                msg += attacker.NonVolatileEffect.ApplyStatus(status, battle, attacker: _pokemon, source: $"{_pokemon.Name}'s synchronize");
+                msg += attacker.NonVolatileEffect.ApplyStatus(status, battle, attacker: pokemon, source: $"{pokemon.Name}'s synchronize");
             }
 
-            if (_pokemon.HeldItem.ShouldEatBerryStatus(attacker))
+            if (pokemon.HeldItem.ShouldEatBerryStatus(attacker))
             {
-                msg += _pokemon.HeldItem.EatBerry(attacker: attacker, move: move);
+                msg += pokemon.HeldItem.EatBerry(attacker: attacker, move: move);
             }
 
             return msg;
@@ -757,7 +724,7 @@ namespace Duels
             Current = "";
             BadlyPoisonedTurn = 0;
             SleepTimer.SetTurns(0);
-            _pokemon.Nightmare = false;
+            pokemon.Nightmare = false;
         }
     }
 
@@ -810,20 +777,12 @@ namespace Duels
     /// <summary>
     /// Stores information about an item.
     /// </summary>
-    public class Item
+    public class Item(IDictionary<string, object> itemData)
     {
-        public string Name { get; }
-        public int Id { get; }
-        public int? Power { get; }
-        public int? Effect { get; }
-
-        public Item(IDictionary<string, object> itemData)
-        {
-            Name = (string)itemData["identifier"];
-            Id = Convert.ToInt32(itemData["id"]);
-            Power = itemData["fling_power"] as int?;
-            Effect = itemData["fling_effect_id"] as int?;
-        }
+        public string Name { get; } = (string)itemData["identifier"];
+        public int Id { get; } = Convert.ToInt32(itemData["id"]);
+        public int? Power { get; } = itemData["fling_power"] as int?;
+        public int? Effect { get; } = itemData["fling_effect_id"] as int?;
     }
 
     /// <summary>
@@ -831,13 +790,13 @@ namespace Duels
     /// </summary>
     public class HeldItem
     {
-        private Item _item;
+        private Database.Models.Mongo.Pokemon.Item _item;
         private DuelPokemon _owner;
         public Battle Battle { get; set; }
-        public Item LastUsed { get; set; }
+        public Database.Models.Mongo.Pokemon.Item LastUsed { get; set; }
         public bool EverHadItem { get; set; }
 
-        public HeldItem(Item itemData, DuelPokemon owner)
+        public HeldItem(Database.Models.Mongo.Pokemon.Item itemData, DuelPokemon owner)
         {
             _item = itemData;
             _owner = owner;
@@ -847,7 +806,7 @@ namespace Duels
         /// <summary>
         /// Get the current held item identifier.
         /// </summary>
-        public string Get()
+        public string? Get()
         {
             if (_item == null)
             {
@@ -855,7 +814,7 @@ namespace Duels
             }
             if (!CanRemove())
             {
-                return _item.Name;
+                return _item.Identifier;
             }
             if (_owner.Embargo.Active())
             {
@@ -873,7 +832,7 @@ namespace Duels
             {
                 return null;
             }
-            return _item.Name;
+            return _item.Identifier;
         }
 
         /// <summary>
@@ -906,7 +865,7 @@ namespace Duels
                 "mega-stone", "mega-stone-x", "mega-stone-y",
             };
 
-            return _item == null || !nonRemovableItems.Contains(_item.Name);
+            return _item == null || !nonRemovableItems.Contains(_item.Identifier);
         }
 
         /// <summary>
@@ -1269,10 +1228,10 @@ namespace Duels
         }
 
         // Properties to access the item's properties
-        public string Name => _item?.Name;
-        public int? Power => _item?.Power;
-        public int? Id => _item?.Id;
-        public int? Effect => _item?.Effect;
+        public string? Name => _item?.Identifier;
+        public int? Power => _item?.FlingPower;
+        public int? Id => _item?.ItemId;
+        public int? Effect => _item?.FlingEffectId;
 
         // Operator overloads for comparison
         public static bool operator ==(HeldItem item, string other)
@@ -1303,56 +1262,30 @@ namespace Duels
     /// <summary>
     /// Stores the necessary data from a pokemon to baton pass to another pokemon.
     /// </summary>
-    public class BatonPass
+    public class BatonPass(DuelPokemon poke)
     {
-        public int AttackStage { get; }
-        public int DefenseStage { get; }
-        public int SpAtkStage { get; }
-        public int SpDefStage { get; }
-        public int SpeedStage { get; }
-        public int EvasionStage { get; }
-        public int AccuracyStage { get; }
-        public ExpiringEffect Confusion { get; }
-        public bool FocusEnergy { get; }
-        public ExpiringItem MindReader { get; }
-        public bool LeechSeed { get; }
-        public bool Curse { get; }
-        public int Substitute { get; }
-        public bool Ingrain { get; }
-        public bool PowerTrick { get; }
-        public bool PowerShift { get; }
-        public ExpiringEffect HealBlock { get; }
-        public ExpiringEffect Embargo { get; }
-        public ExpiringEffect PerishSong { get; }
-        public ExpiringEffect MagnetRise { get; }
-        public bool AquaRing { get; }
-        public ExpiringEffect Telekinesis { get; }
-
-        public BatonPass(DuelPokemon poke)
-        {
-            AttackStage = poke.AttackStage;
-            DefenseStage = poke.DefenseStage;
-            SpAtkStage = poke.SpAtkStage;
-            SpDefStage = poke.SpDefStage;
-            SpeedStage = poke.SpeedStage;
-            EvasionStage = poke.EvasionStage;
-            AccuracyStage = poke.AccuracyStage;
-            Confusion = poke.Confusion;
-            FocusEnergy = poke.FocusEnergy;
-            MindReader = poke.MindReader;
-            LeechSeed = poke.LeechSeed;
-            Curse = poke.Curse;
-            Substitute = poke.Substitute;
-            Ingrain = poke.Ingrain;
-            PowerTrick = poke.PowerTrick;
-            PowerShift = poke.PowerShift;
-            HealBlock = poke.HealBlock;
-            Embargo = poke.Embargo;
-            PerishSong = poke.PerishSong;
-            MagnetRise = poke.MagnetRise;
-            AquaRing = poke.AquaRing;
-            Telekinesis = poke.Telekinesis;
-        }
+        public int AttackStage { get; } = poke.AttackStage;
+        public int DefenseStage { get; } = poke.DefenseStage;
+        public int SpAtkStage { get; } = poke.SpAtkStage;
+        public int SpDefStage { get; } = poke.SpDefStage;
+        public int SpeedStage { get; } = poke.SpeedStage;
+        public int EvasionStage { get; } = poke.EvasionStage;
+        public int AccuracyStage { get; } = poke.AccuracyStage;
+        public ExpiringEffect Confusion { get; } = poke.Confusion;
+        public bool FocusEnergy { get; } = poke.FocusEnergy;
+        public ExpiringItem MindReader { get; } = poke.MindReader;
+        public bool LeechSeed { get; } = poke.LeechSeed;
+        public bool Curse { get; } = poke.Curse;
+        public int Substitute { get; } = poke.Substitute;
+        public bool Ingrain { get; } = poke.Ingrain;
+        public bool PowerTrick { get; } = poke.PowerTrick;
+        public bool PowerShift { get; } = poke.PowerShift;
+        public ExpiringEffect HealBlock { get; } = poke.HealBlock;
+        public ExpiringEffect Embargo { get; } = poke.Embargo;
+        public ExpiringEffect PerishSong { get; } = poke.PerishSong;
+        public ExpiringEffect MagnetRise { get; } = poke.MagnetRise;
+        public bool AquaRing { get; } = poke.AquaRing;
+        public ExpiringEffect Telekinesis { get; } = poke.Telekinesis;
 
         /// <summary>
         /// Push this objects data to a poke.

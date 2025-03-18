@@ -156,7 +156,7 @@ public class SpawnService : INService
 
     private (int Legend, int Ub, int Pseudo, int Starter) CalculateSpawnChances(Honey? honey)
     {
-        double honeyValue = honey?.Type is "ghost" or "cheer" ? 0.0 : honey?.Type == null ? 0.0 : 50.0;
+        var honeyValue = honey?.Type is "ghost" or "cheer" ? 0.0 : honey?.Type == null ? 0.0 : 50.0;
 
         var legendBase = 4000 - (7600 * honeyValue / 100.0);
         var ubBase = 3000 - (5700 * honeyValue / 100.0);
@@ -726,9 +726,9 @@ public class SpawnService : INService
         if (berryChance >= 8)
             return (null, null);
 
-        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ?? new Dictionary<string, int>();
+        Dictionary<string?, int> items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ?? new Dictionary<string?, int>();
 
-        string berry;
+        string? berry;
         if (berryChance == 1)
         {
             var cheapItems = await _mongoDb.Shop

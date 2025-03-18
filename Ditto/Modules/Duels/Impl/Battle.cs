@@ -1,6 +1,10 @@
+using Ditto.Database.Models.Mongo.Pokemon;
 using Ditto.Services.Impl;
+using MongoDB.Driver;
+using MongoDB.Driver.Linq;
+using SkiaSharp;
 
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// Represents a battle between two trainers and their pokemon.
@@ -63,6 +67,42 @@ namespace Duels
         }
 
         /// <summary>
+        /// Generates and sends the main battle message with the UI, similar to the Python generate_main_battle_message
+        /// </summary>
+        public async Task<IUserMessage> GenerateMainBattleMessage(BattleRenderer renderer)
+        {
+            // Create embed for battle
+            var embed = new EmbedBuilder()
+                .WithTitle($"Battle between {Trainer1.Name} and {Trainer2.Name}")
+                .WithColor(new Color(255, 182, 193))
+                .WithFooter("Who Wins!?")
+                .WithImageUrl("attachment://battle.png");
+
+            // Using local BattleRenderer instead of HTTP service
+            using var battleImage = await renderer.GenerateBattleImage(this);
+            using var memoryStream = new MemoryStream();
+            battleImage.Encode(SKEncodedImageFormat.Png, 100).SaveTo(memoryStream);
+            memoryStream.Position = 0;
+
+            // Create button for viewing actions
+            var components = new ComponentBuilder()
+                .WithButton("View your actions", "battle:actions")
+                .Build();
+
+            // Update battle interaction turn
+            this.SetCurrentInteractionTurn(Turn);
+
+            // Create the file to send
+            var fileAttachment = new FileAttachment(memoryStream, "battle.png");
+
+            // Send the message with embed, file attachment, and components
+            return await Channel.SendFileAsync(
+                fileAttachment,
+                embed: embed.Build(),
+                components: components);
+        }
+
+        /// <summary>
         /// Runs the duel.
         /// </summary>
         public async Task<Trainer> Run()
@@ -93,18 +133,21 @@ namespace Duels
             var ignoredIds = immuneIds.Union(uncodedIds).ToList();
 
             // Load move data and type effectiveness
-            MetronomeMoves = await DataHandler.Find(Context, "moves", new Dictionary<string, object>
-            {
-                ["id"] = new Dictionary<string, object> { ["$nin"] = ignoredIds }
-            });
+            var moves = await _mongoService.Moves.AsQueryable()
+                .Where(m => !ignoredIds.Contains(m.MoveId))
+                .ToListAsync();
+            // Convert to dynamic list for compatibility with existing code
+            MetronomeMoves = moves.Cast<dynamic>().ToList();
 
-            var typeEffectivenessData = await DataHandler.Find(Context, "type_effectiveness", new Dictionary<string, object>());
+            var typeEffectivenessData = await _mongoService.TypeEffectiveness.Find(Builders<TypeEffectiveness>.Filter.Empty).ToListAsync();
+
+            // Populate the type effectiveness dictionary
             foreach (var te in typeEffectivenessData)
             {
                 TypeEffectiveness[(
-                    (ElementType)te["damage_type_id"],
-                    (ElementType)te["target_type_id"]
-                )] = te["damage_factor"];
+                    (ElementType)te.DamageTypeId,
+                    (ElementType)te.TargetTypeId
+                )] = te.DamageFactor;
             }
 
             // Initial Pokemon send-out
@@ -226,10 +269,11 @@ namespace Duels
                     ((NPCTrainer)Trainer2).Move(Trainer1.CurrentPokemon, this);
                 }
 
-                var battleView = await DataHandler.GenerateMainBattleMessage(this);
+                var renderer = new BattleRenderer();
+
+                var battleView = await GenerateMainBattleMessage(renderer);
                 await Trainer1.Event.Task;
                 await Trainer2.Event.Task;
-                battleView.StopAsync();
 
                 // Check for forfeits
                 if (Trainer1.SelectedAction == null && Trainer2.SelectedAction == null)
@@ -656,64 +700,127 @@ namespace Duels
         /// </summary>
         public async Task SendMsg()
         {
-            await DataHandler.GenerateTextBattleMessage(this);
+            if (string.IsNullOrEmpty(Msg))
+                return;
+
+            var page = "";
+            var pages = new List<Embed>();
+            var baseEmbed = new EmbedBuilder().WithColor(new Color(255, 182, 193));
+            var rawLines = Msg.Trim().Split('\n');
+
+            foreach (var part in rawLines)
+            {
+                if (page.Length + part.Length > 2000)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithColor(new Color(255, 182, 193))
+                        .WithDescription(page.Trim());
+                    pages.Add(embed.Build());
+                    page = "";
+                }
+                page += part + "\n";
+            }
+
+            page = page.Trim();
+            if (!string.IsNullOrEmpty(page))
+            {
+                var embed = new EmbedBuilder()
+                    .WithColor(new Color(255, 182, 193))
+                    .WithDescription(page);
+                pages.Add(embed.Build());
+            }
+
+            foreach (var embedPage in pages)
+            {
+                await Channel.SendMessageAsync(embed: embedPage);
+            }
+
+            Msg = ""; // Clear the message after sending
         }
 
         /// <summary>
-        /// Called when swapper does not have a pokemon selected, and needs a new one.
-        /// Prompts the swapper to pick a pokemon.
-        /// If midTurn is set to True, the pokemon is being swapped in the middle of a turn (NOT at the start of a turn).
-        /// Returns null if the trainer swapped, and the trainer that won if they did not.
-        /// </summary>
-        public async Task<Trainer> RunSwap(Trainer swapper, Trainer otherTrainer, bool midTurn = false)
+/// Called when swapper does not have a pokemon selected, and needs a new one.
+/// Prompts the swapper to pick a pokemon.
+/// If midTurn is set to True, the pokemon is being swapped in the middle of a turn (NOT at the start of a turn).
+/// Returns null if the trainer swapped, and the trainer that won if they did not.
+/// </summary>
+public async Task<Trainer> RunSwap(Trainer swapper, Trainer otherTrainer, bool midTurn = false)
+{
+    await SendMsg();
+
+    swapper.Event = new TaskCompletionSource<bool>();
+
+    if (swapper.IsHuman())
+    {
+        // Cast to MemberTrainer to get access to the Discord user ID
+        var memberTrainer = swapper as MemberTrainer;
+        if (memberTrainer == null)
         {
-            await SendMsg();
-
-            swapper.Event = new TaskCompletionSource<bool>();
-            if (swapper.IsHuman())
-            {
-                SwapPromptView swapView = new SwapPromptView(swapper, otherTrainer, this, midTurn);
-                await Channel.SendMessageAsync(
-                    $"{swapper.Name}, pick a pokemon to swap to!",
-                    components: swapView.Build());
-            }
-            else
-            {
-                ((NPCTrainer)swapper).Swap(otherTrainer.CurrentPokemon, this, midTurn);
-            }
-
-            try
-            {
-                await swapper.Event.Task.WaitAsync(TimeSpan.FromSeconds(60)); // 60 second timeout
-            }
-            catch (TimeoutException)
-            {
-                Msg += $"{swapper.Name} did not select a poke, {otherTrainer.Name} wins!\n";
-                return otherTrainer;
-            }
-
-            if (swapper.IsHuman())
-            {
-                // Stop the view (implementation pending)
-            }
-
-            if (swapper.CurrentPokemon == null)
-            {
-                Msg += $"{swapper.Name} did not select a poke, {otherTrainer.Name} wins!\n";
-                return otherTrainer;
-            }
-
-            if (midTurn)
-            {
-                Msg += swapper.CurrentPokemon.SendOut(otherTrainer.CurrentPokemon, this);
-                if (swapper.CurrentPokemon != null)
-                {
-                    swapper.CurrentPokemon.HasMoved = true;
-                }
-            }
-
-            return null;
+            Msg += $"{swapper.Name} is not properly set up as a member trainer, {otherTrainer.Name} wins!\n";
+            return otherTrainer;
         }
+
+        // Set the current swap turn and mid-turn flag for component handlers to check
+        this.SetCurrentSwapTurn(Turn);
+        this.SetCurrentMidTurn(midTurn);
+
+        // Build component buttons for each Pokemon in the party
+        var components = new ComponentBuilder();
+        var validSwaps = swapper.ValidSwaps(otherTrainer.CurrentPokemon, this, midTurn);
+
+        for (var i = 0; i < swapper.Party.Count; i++)
+        {
+            var pokemon = swapper.Party[i];
+            components.WithButton(
+                $"{pokemon.Name} | {pokemon.Hp}hp",
+                $"battle:mid_swap:{i}",
+                ButtonStyle.Secondary,
+                disabled: !validSwaps.Contains(i),
+                row: i / 2);
+        }
+
+        // Send the message with Pokemon options
+        await Channel.SendMessageAsync(
+            $"{swapper.Name}, pick a pokemon to swap to!",
+            components: components.Build());
+    }
+    else
+    {
+        // NPC trainers use their own swap logic
+        ((NPCTrainer)swapper).Swap(otherTrainer.CurrentPokemon, this, midTurn);
+    }
+
+    try
+    {
+        // Wait for the trainer to make a selection (via ComponentInteraction)
+        // The timeout is handled by the WaitAsync method
+        await swapper.Event.Task.WaitAsync(TimeSpan.FromSeconds(60));
+    }
+    catch (TimeoutException)
+    {
+        Msg += $"{swapper.Name} did not select a poke, {otherTrainer.Name} wins!\n";
+        return otherTrainer;
+    }
+
+    // Check if a Pokemon was actually selected
+    if (swapper.CurrentPokemon == null)
+    {
+        Msg += $"{swapper.Name} did not select a poke, {otherTrainer.Name} wins!\n";
+        return otherTrainer;
+    }
+
+    // Handle mid-turn effects
+    if (midTurn)
+    {
+        Msg += swapper.CurrentPokemon.SendOut(otherTrainer.CurrentPokemon, this);
+        if (swapper.CurrentPokemon != null)
+        {
+            swapper.CurrentPokemon.HasMoved = true;
+        }
+    }
+
+    return null;
+}
 
         /// <summary>
         /// Handle mega evolving pokemon who mega evolve this turn.

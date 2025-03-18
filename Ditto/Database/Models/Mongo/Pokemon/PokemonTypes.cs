@@ -18,12 +18,7 @@ public class PokemonTypes
 }
 
 [AttributeUsage(AttributeTargets.Class)]
-public class BsonCollectionAttribute : Attribute
+public class BsonCollectionAttribute(string collectionName) : Attribute
 {
-    public string CollectionName { get; }
-
-    public BsonCollectionAttribute(string collectionName)
-    {
-        CollectionName = collectionName;
-    }
+    public string CollectionName { get; } = collectionName;
 }

@@ -7,10 +7,8 @@ using Ditto.Database.Models.PostgreSQL.Game;
 
 namespace Ditto.Database;
 
-public class DittoContext : DbContext
+public class DittoContext(DbContextOptions<DittoContext> options) : DbContext(options)
 {
-    public DittoContext(DbContextOptions<DittoContext> options) : base(options) { }
-
     #region Pokemon Models
     /// <summary>
     /// Represents player achievements in the game

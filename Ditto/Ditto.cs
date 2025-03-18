@@ -74,10 +74,10 @@ public class Ditto
         Client.Log += Client_Log;
         var clientReady = new TaskCompletionSource<bool>();
 
-        Task SetClientReady(DiscordSocketClient shard)
+        Task SetClientReady(DiscordSocketClient discordSocketClient)
         {
             ReadyCount++;
-            Log.Information($"Shard {shard.ShardId} is ready");
+            Log.Information($"Shard {discordSocketClient.ShardId} is ready");
             Log.Information($"{ReadyCount}/{Client.Shards.Count} shards connected");
             if (ReadyCount != Client.Shards.Count)
                 return Task.CompletedTask;

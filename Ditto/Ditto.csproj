@@ -21,11 +21,14 @@
       <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
       <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1-dev-02308" />
       <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+      <PackageReference Include="SkiaSharp" Version="3.118.0-preview.2.3" />
+      <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.118.0-preview.2.3" />
       <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
     </ItemGroup>
 
     <ItemGroup>
       <Folder Include="Database\Models\PostgreSQL\" />
+      <Folder Include="Modules\Duels\Services\" />
     </ItemGroup>
 
     <ItemGroup>

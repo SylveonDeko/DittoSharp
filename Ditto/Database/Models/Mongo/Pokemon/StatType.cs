@@ -1,3 +1,4 @@
+using Ditto.Common.Mongo;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -13,7 +14,8 @@ public class StatType
     public int StatId { get; set; }
 
     [BsonElement("damage_class_id")]
-    public string DamageClassId { get; set; }
+    [BsonSerializer(typeof(NullableIntSerializer))]
+    public int? DamageClassId { get; set; }
 
     [BsonElement("identifier")]
     public string Identifier { get; set; }

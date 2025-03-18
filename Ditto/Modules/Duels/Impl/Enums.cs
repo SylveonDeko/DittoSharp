@@ -1,4 +1,4 @@
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// Helper enum for ability ids to make them more readable.

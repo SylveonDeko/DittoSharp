@@ -10,13 +10,15 @@ using Serilog;
 
 namespace Ditto.Modules.Items.Services;
 
-public class ItemsService : INService
+public class ItemsService(
+    IMongoService mongoDb,
+    DbContextProvider dbContextProvider,
+    PokemonService pokemonService,
+    IDataCache cache)
+    : INService
 {
-    private readonly IMongoService _mongoDb;
-    private readonly DbContextProvider _dbContextProvider;
     private readonly Random _random = new();
-    private readonly PokemonService _pokemonService;
-    private readonly IDataCache _cache;
+    private readonly IDataCache _cache = cache;
 
     private const int MaxMarketSlots = 10;
     private readonly HashSet<string> _activeItemList =
@@ -50,18 +52,6 @@ public class ItemsService : INService
         "kee-berry", "maranga-berry"
     ];
 
-    public ItemsService(
-        IMongoService mongoDb,
-        DbContextProvider dbContextProvider,
-        PokemonService pokemonService,
-        IDataCache cache)
-    {
-        _mongoDb = mongoDb;
-        _dbContextProvider = dbContextProvider;
-        _pokemonService = pokemonService;
-        _cache = cache;
-    }
-
     private bool IsFormed(string pokemonName)
     {
         return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
@@ -73,7 +63,7 @@ public class ItemsService : INService
     public async Task<(bool Success, string Message, string HeldItem, string PokemonName, Dictionary<string, int> Items)>
         PrepItemRemove(ulong userId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
 
         var data = await (
             from poke in db.UserPokemon
@@ -117,7 +107,7 @@ public class ItemsService : INService
             return new CommandResult { Message = prepResult.Message };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         prepResult.Items[prepResult.HeldItem] = prepResult.Items.GetValueOrDefault(prepResult.HeldItem, 0) + 1;
 
         var serializedItems = JsonSerializer.Serialize(prepResult.Items);
@@ -145,7 +135,7 @@ public class ItemsService : INService
             return new CommandResult { Message = prepResult.Message };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         await db.UserPokemon.Where(p => p.Id == (
                 db.Users.Where(u => u.UserId == userId)
                     .Select(u => u.Selected)
@@ -165,7 +155,7 @@ public class ItemsService : INService
             return new CommandResult { Message = prepResult.Message };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
         if (user == null || pokemonNumber <= 0 || pokemonNumber > user.Pokemon.Length)
         {
@@ -201,7 +191,7 @@ public class ItemsService : INService
     {
         itemName = string.Join("-", itemName.Split()).ToLower();
 
-        var itemInfo = await _mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
+        var itemInfo = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
 
         if (itemName == "nature-capsule")
         {
@@ -218,7 +208,7 @@ public class ItemsService : INService
             return new CommandResult { Message = $"That item cannot be equipped! Use it on your poke with `/apply {itemName}`." };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
         if (user == null)
         {
@@ -267,10 +257,10 @@ public class ItemsService : INService
 
         if (itemName == "ability-capsule")
         {
-            var formInfo = await _mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
+            var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
                 .FirstOrDefaultAsync();
 
-            var abilityIds = await _mongoDb.PokeAbilities
+            var abilityIds = await mongoDb.PokeAbilities
                 .Find(a => a.PokemonId == formInfo.PokemonId)
                 .ToListAsync();
 
@@ -286,7 +276,7 @@ public class ItemsService : INService
                 .ExecuteUpdateAsync(p => p
                     .SetProperty(x => x.AbilityIndex, newIndex));
 
-            var newAbility = await _mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
+            var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
 
             serializedItems = JsonSerializer.Serialize(items);
 
@@ -409,7 +399,7 @@ public class ItemsService : INService
         await db.Users.Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(u => u
                 .SetProperty(x => x.Items, serializedItems));
-        var evolveResult = await _pokemonService.TryEvolve(selectedPokemon.Id);
+        var evolveResult = await pokemonService.TryEvolve(selectedPokemon.Id);
 
         return new CommandResult { Message = $"You have successfully given your selected Pokemon a {itemName}" };
     }
@@ -428,7 +418,7 @@ public class ItemsService : INService
             return new CommandResult { Message = $"That item cannot be used on a poke! Try equipping it with `/equip {itemName}`." };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
         if (user == null)
         {
@@ -465,7 +455,7 @@ public class ItemsService : INService
             return new CommandResult { Message = $"Your {itemName} was consumed!" };
         }
 
-        var evolveResult = await _pokemonService.TryEvolve(selectedPokemon.Id, itemName);
+        var evolveResult = await pokemonService.TryEvolve(selectedPokemon.Id, itemName);
         if (!evolveResult.Success)
         {
             return new CommandResult { Message = $"The {itemName} had no effect!" };
@@ -489,14 +479,14 @@ public class ItemsService : INService
             return new CommandResult { Message = "Use `/buy daycare`, not `/buy item daycare-space`." };
         }
 
-        var item = await _mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
+        var item = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
         if (item == null)
         {
             return new CommandResult { Message = "That Item is not in the market" };
         }
 
         var price = (ulong)item.Price;
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
 
         var data = await (
             from user in db.Users
@@ -603,10 +593,10 @@ public class ItemsService : INService
 
         if (itemName == "ability-capsule")
         {
-            var formInfo = await _mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
+            var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
                 .FirstOrDefaultAsync();
 
-            var abilityIds = await _mongoDb.PokeAbilities
+            var abilityIds = await mongoDb.PokeAbilities
                 .Find(a => a.PokemonId == formInfo.PokemonId)
                 .ToListAsync();
 
@@ -622,7 +612,7 @@ public class ItemsService : INService
                 .ExecuteUpdateAsync(p => p
                     .SetProperty(x => x.AbilityIndex, newIndex));
 
-            var newAbility = await _mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
+            var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
 
             await db.Users.Where(u => u.UserId == userId)
                 .ExecuteUpdateAsync(u => u
@@ -667,7 +657,7 @@ public class ItemsService : INService
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.HeldItem, itemName));
 
-        var evolveResult = await _pokemonService.TryEvolve(selectedPokemon.Id);
+        var evolveResult = await pokemonService.TryEvolve(selectedPokemon.Id);
 
         return new CommandResult { Message = $"You have successfully bought the {itemName} for your {selectedPokemon.PokemonName}" };
     }
@@ -680,7 +670,7 @@ public class ItemsService : INService
         }
 
         var price = (ulong)(10000 * amount);
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var balance = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => u.MewCoins)
@@ -712,13 +702,13 @@ public class ItemsService : INService
     {
         amount = Math.Max(0, amount);
         itemName = itemName.Trim();
-        var itemInfo = await _mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
+        var itemInfo = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
         if (itemInfo == null)
         {
             return new CommandResult { Message = "That Item is not in the market" };
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var totalPrice = (ulong)(amount * 100);
         var selectedId = await db.Users
             .Where(u => u.UserId == userId)
@@ -782,7 +772,7 @@ public class ItemsService : INService
 
     public async Task<CommandResult> BuyCandy(ulong userId, int amount)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await dbContextProvider.GetContextAsync();
         var selectedId = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => u.Selected)
@@ -829,7 +819,7 @@ public class ItemsService : INService
                     .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
 
             var newLevel = selectedPokemon.Level + useAmount;
-            var evolveResult = await _pokemonService.TryEvolve(selectedId.GetValueOrDefault(), overrideLvl100: true);
+            var evolveResult = await pokemonService.TryEvolve(selectedId.GetValueOrDefault(), overrideLvl100: true);
 
             return new CommandResult
             {
@@ -888,7 +878,7 @@ public class ItemsService : INService
     };
 
     var price = (ulong)prices[cor][ct];
-    await using var db = await _dbContextProvider.GetContextAsync();
+    await using var db = await dbContextProvider.GetContextAsync();
     var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
     if (user == null)
     {
@@ -1006,7 +996,7 @@ public class ItemsService : INService
         return new CommandResult { Message = "Nice try..." };
     }
 
-    await using var db = await _dbContextProvider.GetContextAsync();
+    await using var db = await dbContextProvider.GetContextAsync();
     var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
     if (user == null)
     {

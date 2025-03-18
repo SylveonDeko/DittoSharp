@@ -1,4 +1,4 @@
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// Represents an instance of a move.
@@ -13,7 +13,7 @@ namespace Duels
         public int StartingPP { get; private set; }
         public int? Accuracy { get; private set; }
         public int Priority { get; private set; }
-        public ElementType Type { get; private set; }
+        public ElementType Type { get; set; }
         public DamageClass DamageClass { get; private set; }
         public int Effect { get; private set; }
         public int? EffectChance { get; private set; }
@@ -29,7 +29,7 @@ namespace Duels
         {
             Id = Convert.ToInt32(moveData["id"]);
             Name = (string)moveData["identifier"];
-            PrettyName = Name.Substring(0, 1).ToUpper() + Name.Substring(1).Replace("-", " ");
+            PrettyName = Name[..1].ToUpper() + Name[1..].Replace("-", " ");
             Power = moveData["power"] as int?;
             PP = Convert.ToInt32(moveData["pp"]);
             StartingPP = PP;
@@ -45,6 +45,55 @@ namespace Duels
             MaxHits = moveData["max_hits"] as int?;
             Used = false;
         }
+
+        /// <summary>
+        /// Constructor that takes a MongoDB Move model and converts it to a game Move object
+        /// </summary>
+        public Move(Database.Models.Mongo.Pokemon.Move moveData)
+        {
+            Id = moveData.MoveId;
+            Name = moveData.Identifier;
+            PrettyName = Name[..1].ToUpper() + Name[1..].Replace("-", " ");
+            Power = moveData.Power;
+            PP = moveData.PP;
+            StartingPP = PP;
+            Accuracy = moveData.Accuracy;
+            Priority = moveData.Priority;
+            Type = (ElementType)moveData.TypeId;
+            DamageClass = (DamageClass)moveData.DamageClassId;
+            Effect = moveData.EffectId;
+            EffectChance = moveData.EffectChance;
+            Target = (MoveTarget)moveData.TargetId;
+            CritRate = moveData.CritRate;
+            MinHits = moveData.MinHits;
+            MaxHits = moveData.MaxHits;
+            Used = false;
+        }
+
+        /// <summary>
+        /// Copy constructor that can also override the Type property
+        /// </summary>
+        public Move(Move other)
+        {
+            Id = other.Id;
+            Name = other.Name;
+            PrettyName = other.PrettyName;
+            Power = other.Power;
+            PP = other.PP;
+            StartingPP = other.StartingPP;
+            Accuracy = other.Accuracy;
+            Priority = other.Priority;
+            Type = other.Type;
+            DamageClass = other.DamageClass;
+            Effect = other.Effect;
+            EffectChance = other.EffectChance;
+            Target = other.Target;
+            CritRate = other.CritRate;
+            MinHits = other.MinHits;
+            MaxHits = other.MaxHits;
+            Used = other.Used;
+        }
+
 
         /// <summary>
         /// Sets up anything this move needs to do prior to normal move execution.

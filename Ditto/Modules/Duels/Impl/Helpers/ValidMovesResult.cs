@@ -1,4 +1,4 @@
-namespace Duels.Helpers;
+namespace Ditto.Modules.Duels.Impl.Helpers;
 
 public class ValidMovesResult
 {

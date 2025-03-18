@@ -5,18 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ditto.Modules.Pokemon.Services;
 
-public class ResurrectService : INService
+public class ResurrectService(DbContextProvider dbProvider) : INService
 {
-    private readonly DbContextProvider _dbProvider;
-
-    public ResurrectService(DbContextProvider dbProvider)
-    {
-        _dbProvider = dbProvider;
-    }
-
     public async Task<List<DeadPokemon>> GetDeadPokemon(ulong userId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         
         // Get the user's pokemon IDs
         var user = await dbContext.Users
@@ -48,7 +41,7 @@ public class ResurrectService : INService
 
     public async Task ResurrectPokemon(int pokemonId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         
         // Move pokemon from dead_pokes to pokes table
         await dbContext.Database.ExecuteSqlRawAsync(

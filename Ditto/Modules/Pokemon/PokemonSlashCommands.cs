@@ -10,9 +10,8 @@ using Serilog;
 namespace Ditto.Modules.Pokemon;
 
 [Group("pokemon", "Pokemon related commands")]
-public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
+public class PokemonSlashCommands(InteractiveService interactivity) : DittoSlashModuleBase<PokemonService>
 {
-    private readonly InteractiveService _interactivity;
     private readonly Random _random = new();
 
     private readonly string[] _footers =
@@ -24,11 +23,6 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         "Take a look at one of our partners bots! Mewdeko - discord.gg/mewdeko, we think its the best all-purpose bot around!",
         "We are always looking for new help! Art Team, Staff Team, and Dev team-ask in the official server!"
     ];
-
-    public PokemonSlashCommands(InteractiveService interactivity)
-    {
-        _interactivity = interactivity;
-    }
 
     [SlashCommand("select", "Select a pokemon by ID number")]
     [RequireContext(ContextType.Guild)]
@@ -97,7 +91,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             .WithFooter(PaginatorFooter.PageNumber)
             .Build();
 
-        await _interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10),
+        await interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10),
             InteractionResponseType.DeferredUpdateMessage);
     }
 
@@ -151,7 +145,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                 .WithFooter(PaginatorFooter.PageNumber)
                 .Build();
 
-            await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10),
+            await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10),
                 InteractionResponseType.DeferredUpdateMessage);
         }
     }
@@ -396,7 +390,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                 .WithFooter(PaginatorFooter.PageNumber)
                 .Build();
 
-            await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10),
+            await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10),
                 InteractionResponseType.DeferredUpdateMessage);
         }
         catch (Exception e)
@@ -464,7 +458,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             .WithFooter(PaginatorFooter.PageNumber)
             .Build();
 
-        await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
+        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
     }
 
     [SlashCommand("release", "Release a pokemon permanently")]
@@ -584,15 +578,8 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
     }
 
     [Group("filter", "Filter your Pokemon in various ways")]
-    public class FilterCommands : DittoSlashSubmodule<PokemonService>
+    public class FilterCommands(InteractiveService interactivity) : DittoSlashSubmodule<PokemonService>
     {
-        private readonly InteractiveService _interactivity;
-
-        public FilterCommands(InteractiveService interactivity)
-        {
-            _interactivity = interactivity;
-        }
-
         [SlashCommand("legendary", "Show all your legendary Pokemon")]
         public async Task FilterLegendaryAsync()
         {
@@ -755,7 +742,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
                 .WithFooter(PaginatorFooter.PageNumber)
                 .Build();
 
-            await _interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10), InteractionResponseType.DeferredUpdateMessage);
+            await interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10), InteractionResponseType.DeferredUpdateMessage);
         }
 
         private string GetPokemonEmoji(bool shiny, bool radiant, string skin)
@@ -811,7 +798,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
         switch (action)
         {
             case "more":
-                var pokemonId = int.Parse(param);
+                var pokemonId = ulong.Parse(param);
                 var pokemon = pokemonId != 0 ? await Service.GetPokemonById(pokemonId) : null;
                 var pokemonName = pokemon?.PokemonName ?? interaction.Message.Embeds.First().Title.Split(' ').Last();
 
@@ -911,7 +898,7 @@ public class PokemonSlashCommands : DittoSlashModuleBase<PokemonService>
             .WithFooter(PaginatorFooter.PageNumber)
             .Build();
 
-        await _interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
+        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
     }
 
 

@@ -14,12 +14,14 @@ using Serilog;
 
 namespace Ditto.Modules.Pokemon.Services;
 
-public class PokemonService : INService
+public class PokemonService(
+    DiscordShardedClient client,
+    DbContextProvider dbProvider,
+    IMongoService mongo,
+    RedisCache redis)
+    : INService
 {
-    private readonly DiscordShardedClient _client;
-    private readonly DbContextProvider _dbProvider;
-    private readonly IMongoService _mongo;
-    private readonly RedisCache _redis;
+    private readonly DiscordShardedClient _client = client;
 
     private const string HP_DISPLAY = "`HP:`";
     private const string ATK_DISPLAY = "`ATK:`";
@@ -47,21 +49,9 @@ public class PokemonService : INService
         "Missingno"
     ];
 
-    public PokemonService(
-        DiscordShardedClient client,
-        DbContextProvider dbProvider,
-        IMongoService mongo,
-        RedisCache redis)
-    {
-        _client = client;
-        _dbProvider = dbProvider;
-        _mongo = mongo;
-        _redis = redis;
-    }
-
     public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetUserPokemons(ulong userId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         var pokeIds = dbContext.UserPokemon.Where(x => x.Owner == userId);
 
         if (!pokeIds.Any())
@@ -70,11 +60,11 @@ public class PokemonService : INService
         return await pokeIds.ToListAsyncEF();
     }
 
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetPokemonById(int pokemonId)
+    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetPokemonById(ulong pokemonId)
     {
         try
         {
-            await using var dbContext = await _dbProvider.GetContextAsync();
+            await using var dbContext = await dbProvider.GetContextAsync();
             return await dbContext.UserPokemon
                 .FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
         }
@@ -85,13 +75,13 @@ public class PokemonService : INService
         }
     }
 
-    private async Task<string> GetKids(List<PokemonFile> rawEvos, int speciesId = -1, string prefix = null)
+    private async Task<string> GetKids(List<PokemonFile> rawEvos, int speciesId, string prefix = null)
     {
         var result = "";
         foreach (var poke in rawEvos.Where(poke => poke.EvolvesFromSpeciesId == speciesId))
         {
             var reqs = "";
-            if (speciesId != -1) reqs = await GetReqs(poke.PokemonId.Value);
+            reqs = await GetReqs(poke.PokemonId.Value);
             result += $"{prefix}├─{poke.Identifier} {reqs}\n";
             result += await GetKids(rawEvos, poke.PokemonId.Value, $"{prefix}│ ");
         }
@@ -103,7 +93,7 @@ public class PokemonService : INService
     {
         var reqs = new List<string>();
 
-        var evoReq = await _mongo.Evolution
+        var evoReq = await mongo.Evolution
             .Find(e => e.EvolvedSpeciesId == pokeId)
             .FirstOrDefaultAsync();
 
@@ -111,7 +101,7 @@ public class PokemonService : INService
 
         if (evoReq.TriggerItemId.HasValue)
         {
-            var item = await _mongo.Items
+            var item = await mongo.Items
                 .Find(i => i.ItemId == evoReq.TriggerItemId)
                 .FirstOrDefaultAsync();
             if (item != null)
@@ -120,7 +110,7 @@ public class PokemonService : INService
 
         if (evoReq.HeldItemId.HasValue)
         {
-            var item = await _mongo.Items
+            var item = await mongo.Items
                 .Find(i => i.ItemId == evoReq.HeldItemId)
                 .FirstOrDefaultAsync();
             if (item != null)
@@ -133,7 +123,7 @@ public class PokemonService : INService
 
         if (evoReq.KnownMoveId.HasValue)
         {
-            var move = await _mongo.Moves
+            var move = await mongo.Moves
                 .Find(m => m.MoveId == evoReq.KnownMoveId)
                 .FirstOrDefaultAsync();
             if (move != null)
@@ -176,14 +166,14 @@ public class PokemonService : INService
                     ? pokemonName.ToLower().Replace(formSuffix, "").TrimEnd('-')
                     : pokemonName.ToLower();
 
-            var pfile = await _mongo.PFile
+            var pfile = await mongo.PFile
                 .Find(p => p.Identifier == baseName)
                 .FirstOrDefaultAsync();
 
             if (pfile == null)
                 return "";
 
-            var rawEvos = await _mongo.PFile
+            var rawEvos = await mongo.PFile
                 .Find(p => p.EvolutionChainId == pfile.EvolutionChainId)
                 .ToListAsync();
 
@@ -203,14 +193,14 @@ public class PokemonService : INService
     {
         try
         {
-            var formInfo = await _mongo.Forms
+            var formInfo = await mongo.Forms
                 .Find(f => f.Identifier.Equals(identifier, StringComparison.CurrentCultureIgnoreCase))
                 .FirstOrDefaultAsync();
 
             if (formInfo == null)
                 return null;
 
-            var pokemonTypes = await _mongo.PokemonTypes
+            var pokemonTypes = await mongo.PokemonTypes
                 .Find(t => t.PokemonId == formInfo.PokemonId)
                 .FirstOrDefaultAsync();
 
@@ -220,22 +210,22 @@ public class PokemonService : INService
             var typeNames = new List<string>();
             foreach (var typeId in pokemonTypes.Types)
             {
-                var type = await _mongo.Types
+                var type = await mongo.Types
                     .Find(t => t.TypeId == typeId)
                     .FirstOrDefaultAsync();
                 typeNames.Add(type?.Identifier ?? "unknown");
             }
 
-            var stats = await _mongo.PokemonStats
+            var stats = await mongo.PokemonStats
                 .Find(s => s.PokemonId == formInfo.PokemonId)
                 .FirstOrDefaultAsync();
 
             // Get abilities
             var abilities = new List<string>();
-            var abilityCursor = _mongo.PokeAbilities.Find(a => a.PokemonId == formInfo.PokemonId);
+            var abilityCursor = mongo.PokeAbilities.Find(a => a.PokemonId == formInfo.PokemonId);
             await abilityCursor.ForEachAsync(async abilityRef =>
             {
-                var ability = await _mongo.Abilities.Find(a => a.AbilityId == abilityRef.AbilityId)
+                var ability = await mongo.Abilities.Find(a => a.AbilityId == abilityRef.AbilityId)
                     .FirstOrDefaultAsync();
                 if (ability != null)
                     abilities.Add(ability.Identifier);
@@ -243,10 +233,10 @@ public class PokemonService : INService
 
             // Get egg groups
             var eggGroups = new List<string>();
-            var eggGroupsCursor = _mongo.EggGroups.Find(e => e.SpeciesId == formInfo.PokemonId);
+            var eggGroupsCursor = mongo.EggGroups.Find(e => e.SpeciesId == formInfo.PokemonId);
             await eggGroupsCursor.ForEachAsync(async eggGroupRef =>
             {
-                var eggGroup = await _mongo.EggGroupsInfo.Find(e => e.Id == eggGroupRef.Id).FirstOrDefaultAsync();
+                var eggGroup = await mongo.EggGroupsInfo.Find(e => e.Id == eggGroupRef.Id).FirstOrDefaultAsync();
                 if (eggGroup != null)
                     eggGroups.Add(eggGroup.Identifier);
             });
@@ -291,7 +281,7 @@ public class PokemonService : INService
         if (specialPrefixes.Any(prefix => form.StartsWith(prefix + "-"))) return form;
 
         // Direct match check
-        var identifierMatch = await _mongo.Forms
+        var identifierMatch = await mongo.Forms
             .Find(f => f.Identifier == form)
             .FirstOrDefaultAsync();
         if (identifierMatch != null) return form;
@@ -299,7 +289,7 @@ public class PokemonService : INService
         // Check for specific formed identifiers
         if (formParts.Length > 1 && IsFormed(form))
         {
-            var formMatch = await _mongo.Forms
+            var formMatch = await mongo.Forms
                 .Find(f => f.FormIdentifier == formParts[formParts.Length - 1])
                 .FirstOrDefaultAsync();
             if (formMatch != null) return form;
@@ -318,13 +308,13 @@ public class PokemonService : INService
     public async Task<string> GetEvolutionChain(int pokemonId)
     {
         var sb = new StringBuilder();
-        var evolutionData = await _mongo.Evolution.Find(e => e.EvolutionId == pokemonId).ToListAsync();
+        var evolutionData = await mongo.Evolution.Find(e => e.EvolutionId == pokemonId).ToListAsync();
 
         foreach (var evo in evolutionData)
         {
             sb.AppendLine($"Evolves from: {evo.EvolvedSpeciesId}");
             if (!evo.TriggerItemId.HasValue) continue;
-            var item = await _mongo.Items.Find(i => i.Id == evo.Id).FirstOrDefaultAsync();
+            var item = await mongo.Items.Find(i => i.Id == evo.Id).FirstOrDefaultAsync();
             sb.AppendLine($"Using item: {item?.Identifier ?? "Unknown"}");
             // Add other evolution conditions
         }
@@ -334,7 +324,7 @@ public class PokemonService : INService
 
     public async Task<(bool Success, string Message)> SelectPokemon(ulong userId, int pokeNumber)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
 
         var user = await dbContext.Users
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
@@ -361,7 +351,7 @@ public class PokemonService : INService
     {
         try
         {
-            await using var dbContext = await _dbProvider.GetContextAsync();
+            await using var dbContext = await dbProvider.GetContextAsync();
 
             var selectedId = await dbContext.Users
                 .Where(u => u.UserId == userId)
@@ -383,7 +373,7 @@ public class PokemonService : INService
 
     public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetNewestPokemon(ulong userId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
 
         var user = await dbContext.Users
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
@@ -401,14 +391,14 @@ public class PokemonService : INService
 
     public async Task<List<PokemonFile>> GetAllPokemon()
     {
-        return await _mongo.PFile
-            .Find(x => x.PokemonId > -1)
+        return await mongo.PFile
+            .Find(x => x.PokemonId >= 0)
             .ToListAsync();
     }
 
     public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> GetPokemonByNumber(ulong userId, int number)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         var user = await dbContext.Users
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
@@ -419,9 +409,9 @@ public class PokemonService : INService
             .FirstOrDefaultAsyncEF(p => p.Id == user.Pokemon[number - 1]);
     }
 
-    public async Task RemoveUserPokemon(ulong userId, int pokemonId, bool releasePokemon = false)
+    public async Task RemoveUserPokemon(ulong userId, ulong pokemonId, bool releasePokemon = false)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         var user = await dbContext.Users
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
@@ -458,19 +448,19 @@ public class PokemonService : INService
 
     public async Task<int> GetUserSoulGauge(ulong userId)
     {
-        var value = await _redis.Redis.GetDatabase().StringGetAsync($"soul_gauge:{userId}");
+        var value = await redis.Redis.GetDatabase().StringGetAsync($"soul_gauge:{userId}");
         return value.HasValue ? (int)value : 0;
     }
 
     public async Task IncrementSoulGauge(ulong userId, double increment)
     {
         var key = $"soul_gauge:{userId}";
-        await _redis.Redis.GetDatabase().StringIncrementAsync(key, increment);
+        await redis.Redis.GetDatabase().StringIncrementAsync(key, increment);
 
         // Cap at 1000
-        var current = await _redis.Redis.GetDatabase().StringGetAsync(key);
+        var current = await redis.Redis.GetDatabase().StringGetAsync(key);
         if (current.HasValue && (double)current > 1000)
-            await _redis.Redis.GetDatabase().StringSetAsync(key, 1000);
+            await redis.Redis.GetDatabase().StringSetAsync(key, 1000);
     }
 
     public async Task<string> GetEvolutionInfo(int pokemonId)
@@ -478,14 +468,14 @@ public class PokemonService : INService
         var sb = new StringBuilder();
 
         // Get evolution chain info
-        var baseForm = await _mongo.Forms
+        var baseForm = await mongo.Forms
             .Find(f => f.PokemonId == pokemonId)
             .FirstOrDefaultAsync();
 
         if (baseForm == null)
             return "No evolution information available";
 
-        var evolvedForms = await _mongo.Forms
+        var evolvedForms = await mongo.Forms
             .Find(f => f.BaseId == baseForm.FormId)
             .ToListAsync();
 
@@ -494,7 +484,7 @@ public class PokemonService : INService
             sb.AppendLine($"├─{evolution.Identifier}");
 
             // Get evolution requirements
-            var requirements = await _mongo.Evolution
+            var requirements = await mongo.Evolution
                 .Find(e => e.EvolutionId == evolution.PokemonId)
                 .FirstOrDefaultAsync();
 
@@ -504,7 +494,7 @@ public class PokemonService : INService
 
                 if (requirements.TriggerItemId.HasValue)
                 {
-                    var item = await _mongo.Items
+                    var item = await mongo.Items
                         .Find(i => i.ItemId == requirements.TriggerItemId.Value)
                         .FirstOrDefaultAsync();
                     if (item != null)
@@ -541,7 +531,7 @@ public class PokemonService : INService
             else
             {
                 // Get forms from MongoDB
-                var cursor = _mongo.Forms.Find(
+                var cursor = mongo.Forms.Find(
                     Builders<Form>.Filter.Regex(f => f.Identifier, new BsonRegularExpression($".*{val}.*", "i"))
                 );
 
@@ -567,7 +557,7 @@ public class PokemonService : INService
 
     public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetSpecialPokemon(ulong userId, string variant)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         var userPokemon = await GetUserPokemons(userId);
 
         return variant switch
@@ -582,7 +572,7 @@ public class PokemonService : INService
 
     public async Task<bool> CheckUserHasAncientUnlock(ulong userId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         var user = await dbContext.Users
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
@@ -608,7 +598,7 @@ public class PokemonService : INService
     public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string pokemonName, bool shiny = false,
         bool radiant = false, string skin = null)
     {
-        var identifier = await _mongo.Forms
+        var identifier = await mongo.Forms
             .Find(f => f.Identifier.Equals(pokemonName.ToLower(), StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
@@ -624,7 +614,7 @@ public class PokemonService : INService
             formId = (int)(identifier.FormOrder - 1)!;
             var formName = pokemonName[..^(suffix.Length + 1)];
 
-            var pokemonIdentifier = await _mongo.Forms
+            var pokemonIdentifier = await mongo.Forms
                 .Find(f => f.Identifier.Equals(formName, StringComparison.CurrentCultureIgnoreCase))
                 .FirstOrDefaultAsync();
 
@@ -648,7 +638,7 @@ public class PokemonService : INService
         }
 
         // Assuming you have a radiant_placeholder_pokes collection
-        var isPlaceholder = await _mongo.RadiantPlaceholders
+        var isPlaceholder = await mongo.RadiantPlaceholders
             .Find(p => p.Name.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
@@ -669,14 +659,14 @@ public class PokemonService : INService
 
     public async Task<DetailedPokemonInfo> GetDetailedPokemonInfo(string identifier)
     {
-        var formInfo = await _mongo.Forms
+        var formInfo = await mongo.Forms
             .Find(f => f.Identifier.Equals(identifier, StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
         if (formInfo == null)
             return null;
 
-        var pokemonTypes = await _mongo.PokemonTypes
+        var pokemonTypes = await mongo.PokemonTypes
             .Find(t => t.PokemonId == formInfo.PokemonId)
             .FirstOrDefaultAsync();
 
@@ -686,21 +676,21 @@ public class PokemonService : INService
         var types = new List<string>();
         foreach (var typeId in pokemonTypes.Types)
         {
-            var type = await _mongo.Types
+            var type = await mongo.Types
                 .Find(t => t.TypeId == typeId)
                 .FirstOrDefaultAsync();
             if (type != null)
                 types.Add(type.Identifier);
         }
 
-        var eggGroupIds = (await _mongo.EggGroups
+        var eggGroupIds = (await mongo.EggGroups
             .Find(e => e.SpeciesId == formInfo.PokemonId)
             .FirstOrDefaultAsync())?.Groups ?? [15];
 
         var eggGroups = new List<string>();
         foreach (var eggGroupId in eggGroupIds)
         {
-            var eggGroup = await _mongo.EggGroupsInfo
+            var eggGroup = await mongo.EggGroupsInfo
                 .Find(e => e.GroupId == eggGroupId)
                 .FirstOrDefaultAsync();
             if (eggGroup != null)
@@ -708,12 +698,12 @@ public class PokemonService : INService
         }
 
         var abilities = new List<string>();
-        var abilityCursor = _mongo.PokeAbilities.Find(a => a.PokemonId == formInfo.PokemonId);
+        var abilityCursor = mongo.PokeAbilities.Find(a => a.PokemonId == formInfo.PokemonId);
         await abilityCursor.ForEachAsync(async abilityRef =>
         {
             if (abilityRef.AbilityId != null)
             {
-                var ability = await _mongo.Abilities
+                var ability = await mongo.Abilities
                     .Find(a => a.AbilityId == abilityRef.AbilityId)
                     .FirstOrDefaultAsync();
                 if (ability != null)
@@ -721,7 +711,7 @@ public class PokemonService : INService
             }
         });
 
-        var stats = await _mongo.PokemonStats
+        var stats = await mongo.PokemonStats
             .Find(s => s.PokemonId == formInfo.PokemonId)
             .FirstOrDefaultAsync();
 
@@ -801,7 +791,7 @@ public class PokemonService : INService
 
     public async Task<List<DeadPokemon>> GetDeadPokemon(ulong userId)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
 
         // First get all dead Pokemon that match user's Pokemon array in one query
         return await dbContext.DeadPokemon
@@ -815,7 +805,7 @@ public class PokemonService : INService
 
     public async Task ResurrectPokemon(List<DeadPokemon> deadPokemon)
     {
-        await using var dbContext = await _dbProvider.GetContextAsync();
+        await using var dbContext = await dbProvider.GetContextAsync();
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
         try
@@ -895,7 +885,7 @@ private static Database.Models.PostgreSQL.Pokemon.Pokemon MapDeadToLivePokemon(D
 
 public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByLevel(ulong userId, int minLevel, int maxLevel)
 {
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     return await dbContext.UserPokemon
         .AsNoTracking()  // Add this since we're only reading
         .Where(p => p.Owner == userId && p.Level >= minLevel && p.Level <= maxLevel)
@@ -908,7 +898,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
     var minIvSum = (int)(minIvPercent * 186);
     var maxIvSum = (int)(maxIvPercent * 186);
 
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     return await dbContext.UserPokemon
         .AsNoTracking()
         .Where(p => p.Owner == userId)
@@ -923,9 +913,9 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
         .ToListAsyncEF();
 }
 
-public async Task<int> GetPokemonIndex(ulong userId, int pokemonId)
+public async Task<int> GetPokemonIndex(ulong userId, ulong pokemonId)
 {
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     var user = await dbContext.Users
         .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
@@ -939,7 +929,7 @@ public async Task<int> GetPokemonIndex(ulong userId, int pokemonId)
 public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByType(ulong userId, string type)
 {
     // Get type info from MongoDB - do this first to fail fast if type is invalid
-    var typeInfo = await _mongo.Types
+    var typeInfo = await mongo.Types
         .Find(t => t.Identifier.Equals(type.ToLower()))
         .FirstOrDefaultAsync();
 
@@ -947,12 +937,12 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
         return [];
 
     // Get Pokemon IDs and forms in parallel
-    var typeTask = _mongo.PokemonTypes
+    var typeTask = mongo.PokemonTypes
         .Find(pt => pt.Types.Contains(typeInfo.TypeId))
         .Project(p => p.PokemonId)
         .ToListAsync();
 
-    var formsTask = _mongo.Forms
+    var formsTask = mongo.Forms
         .Find(Builders<Form>.Filter.Empty)
         .Project(f => new { f.PokemonId, f.Identifier })
         .ToListAsync();
@@ -968,7 +958,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
         .ToHashSet(); // HashSet for more efficient lookup
 
     // Query PostgreSQL
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     return await dbContext.UserPokemon
         .AsNoTracking()
         .Where(p => p.Owner == userId && pokemonNames.Contains(p.PokemonName))
@@ -977,7 +967,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
 
 public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByName(ulong userId, string name)
 {
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     return await dbContext.UserPokemon
         .AsNoTracking()
         .Where(p => p.Owner == userId &&
@@ -987,7 +977,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonBy
 
 public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredPokemon(ulong userId, string filter)
 {
-    await using var dbContext = await _dbProvider.GetContextAsync();
+    await using var dbContext = await dbProvider.GetContextAsync();
     var query = dbContext.UserPokemon
         .AsNoTracking()
         .Where(p => p.Owner == userId);
@@ -1009,7 +999,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
 {
     try
     {
-        await using var db = await _dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetContextAsync();
 
         // Get user and their Pokemon array
         var user = await db.Users
@@ -1174,7 +1164,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         // Check known move
         if (evoReq.GetValueOrDefault("known_move_id") is int moveId)
         {
-            var move = await _mongo.Moves.Find(m => m.MoveId == moveId).FirstOrDefaultAsync();
+            var move = await mongo.Moves.Find(m => m.MoveId == moveId).FirstOrDefaultAsync();
             if (move == null || !pokemon.Moves.Contains(move.Identifier))
                 return false;
         }
@@ -1243,12 +1233,12 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
     }
 
     public async Task<(bool Success, int? NewSpeciesId, bool UsedActiveItem)> TryEvolve(
-        int pokemonId,
+        ulong pokemonId,
         string activeItem = null,
         bool overrideLvl100 = false,
         IMessageChannel channel = null)
     {
-        await using var db = await _dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetContextAsync();
         var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
         if (pokemon == null) return (false, null, false);
 
@@ -1268,14 +1258,14 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
             return (false, null, false);
 
         // Get necessary info
-        var pokemonInfo = await _mongo.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
+        var pokemonInfo = await mongo.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
         if (pokemonInfo == null)
         {
             Log.Error("A poke exists that is not in the mongo forms table - {Name}", pokemonName);
             return (false, null, false);
         }
 
-        var rawPfile = await _mongo.PFile.Find(f => f.Identifier == pokemonInfo.Identifier).FirstOrDefaultAsync();
+        var rawPfile = await mongo.PFile.Find(f => f.Identifier == pokemonInfo.Identifier).FirstOrDefaultAsync();
         if (rawPfile == null)
         {
             Log.Error("A non-formed poke exists that is not in the mongo pfile table - {Name}", pokemonName);
@@ -1283,7 +1273,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         }
 
         // Get evolution line
-        var evoline = await _mongo.PFile
+        var evoline = await mongo.PFile
             .Find(f => f.EvolutionChainId == rawPfile.EvolutionChainId)
             .ToListAsync();
 
@@ -1296,7 +1286,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
             if (evo.EvolvesFromSpeciesId != pokemonInfo.PokemonId)
                 continue;
 
-            var val = await _mongo.Evolution.Find(e => e.EvolvedSpeciesId == evo.EvolvesFromSpeciesId)
+            var val = await mongo.Evolution.Find(e => e.EvolvedSpeciesId == evo.EvolvesFromSpeciesId)
                 .FirstOrDefaultAsync();
             if (val == null)
                 Log.Error("An evofile does not exist for a poke - {Name}", evo.Identifier);
@@ -1313,7 +1303,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         int? activeItemId = null;
         if (activeItem != null)
         {
-            var item = await _mongo.Items.Find(i => i.Identifier == activeItem).FirstOrDefaultAsync();
+            var item = await mongo.Items.Find(i => i.Identifier == activeItem).FirstOrDefaultAsync();
             activeItemId = item?.ItemId;
             if (activeItemId == null)
                 Log.Error("A poke is trying to use an active item that is not in the mongo table - {Item}", activeItem);
@@ -1322,7 +1312,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         int? heldItemId = null;
         if (!string.IsNullOrEmpty(pokemon.HeldItem))
         {
-            var item = await _mongo.Items.Find(i => i.Identifier == pokemon.HeldItem.ToLower()).FirstOrDefaultAsync();
+            var item = await mongo.Items.Find(i => i.Identifier == pokemon.HeldItem.ToLower()).FirstOrDefaultAsync();
             heldItemId = item?.ItemId;
         }
 
@@ -1341,7 +1331,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
             return (false, null, false);
 
         var (evoId, evoReqs) = PickEvo(validEvos);
-        var evoTwo = await _mongo.PFile.Find(p => p.EvolutionChainId == evoId).FirstOrDefaultAsync();
+        var evoTwo = await mongo.PFile.Find(p => p.EvolutionChainId == evoId).FirstOrDefaultAsync();
         if (evoTwo == null)
             return (false, null, false);
 
@@ -1370,19 +1360,19 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         return (true, evoId, evoReqs.UsedActiveItem());
     }
 
-    public async Task<bool> Devolve(ulong userId, long pokemonId)
+    public async Task<bool> Devolve(ulong userId, ulong pokemonId)
     {
-        await using var db = await _dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetContextAsync();
         var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
         if (pokemon == null || pokemon.Radiant.GetValueOrDefault())
             return false;
 
-        var pokeData = await _mongo.PFile.Find(p => p.Identifier == pokemon.PokemonName.ToLower())
+        var pokeData = await mongo.PFile.Find(p => p.Identifier == pokemon.PokemonName.ToLower())
             .FirstOrDefaultAsync();
         if (pokeData?.EvolvesFromSpeciesId == null)
             return false;
 
-        var preEvo = await _mongo.PFile.Find(p => p.EvolvesFromSpeciesId == pokeData.EvolvesFromSpeciesId)
+        var preEvo = await mongo.PFile.Find(p => p.EvolvesFromSpeciesId == pokeData.EvolvesFromSpeciesId)
             .FirstOrDefaultAsync();
         if (preEvo == null)
             return false;
@@ -1407,7 +1397,7 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
 }
 
 public record PokemonListEntry(
-    int botId,
+    ulong botId,
     string Name,
     int Number,
     int Level,

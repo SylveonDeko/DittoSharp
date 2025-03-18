@@ -1,3 +1,4 @@
+using Ditto.Common.Mongo;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -13,7 +14,7 @@ public class Item
     public int ItemId { get; set; }
 
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string? Identifier { get; set; }
 
     [BsonElement("category_id")]
     public int CategoryId { get; set; }

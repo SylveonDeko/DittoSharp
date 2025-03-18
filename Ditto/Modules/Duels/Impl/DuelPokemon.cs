@@ -1,6 +1,7 @@
-using Ditto.Database.Models.PostgreSQL.Pokemon;
+using Ditto.Services.Impl;
+using MongoDB.Driver;
 
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// An instance of a pokemon in a duel.
@@ -72,7 +73,7 @@ namespace Duels
         public bool Shiny { get; private set; }
         public bool Radiant { get; private set; }
         public string Skin { get; private set; }
-        public int Id { get; private set; }
+        public ulong Id { get; private set; }
         public HeldItem HeldItem { get; private set; }
         public int Happiness { get; private set; }
         public string Gender { get; private set; }
@@ -288,7 +289,7 @@ namespace Duels
         // Boolean - stores whether the ice face of this pokemon has been repaired.
         public bool IceRepaired { get; set; }
         // Optional[Item] - stores the last berry ate by this pokemon.
-        public Item LastBerry { get; set; }
+        public Database.Models.Mongo.Pokemon.Item LastBerry { get; set; }
         // ExpiringEffect - stores the number of turns until this pokemon attempts to recover & eat their last eaten berry.
         public ExpiringEffect CudChew { get; set; }
         // Boolean - stores whether booster_energy has been consumed this send out to activate the effects of Protosynthesis / Quark Drive.
@@ -298,11 +299,11 @@ namespace Duels
 
         public string DisplayName => Name;
 
-        public DuelPokemon(int pokemonId, string name, string nickname, Dictionary<string, List<int>> baseStats, int hp, 
+        public DuelPokemon(int pokemonId, string name, string nickname, Dictionary<string, List<int>> baseStats, int hp,
                           int hpIV, int atkIV, int defIV, int spatkIV, int spdefIV, int speedIV,
                           int hpEV, int atkEV, int defEV, int spatkEV, int spdefEV, int speedEV,
                           int level, Dictionary<string, double> natureStatDeltas, bool shiny, bool radiant, string skin,
-                          List<ElementType> typeIds, List<ElementType> megaTypeIds, int id, Item heldItemData,
+                          List<ElementType> typeIds, List<ElementType> megaTypeIds, ulong id, Database.Models.Mongo.Pokemon.Item heldItemData,
                           int happiness, List<Move> moves, int abilityId, int megaAbilityId, int weight,
                           string gender, bool canStillEvolve, string dislikedFlavor)
         {
@@ -503,7 +504,7 @@ namespace Duels
 
         /// <summary>
         /// Initialize a poke upon first sending it out.
-        /// 
+        ///
         /// otherpoke may be null, if two pokes are sent out at the same time and the first is killed in the send out process.
         /// Returns a formatted message.
         /// </summary>
@@ -517,8 +518,8 @@ namespace Duels
 
             // This has to go BEFORE the send out message, and not in send_out_ability as it only
             // applies on send out, not when abilities are changed, and it changes the send out msg.
-            List<DuelPokemon> illusionOptions = Owner.Party.Where(x => x != this && x.Hp > 0).ToList();
-            if (this.Ability() == Duels.Ability.ILLUSION && illusionOptions.Count > 0)
+            var illusionOptions = Owner.Party.Where(x => x != this && x.Hp > 0).ToList();
+            if (this.Ability() == Impl.Ability.ILLUSION && illusionOptions.Count > 0)
             {
                 _illusionName = _name;
                 _illusionDisplayName = Name;
@@ -702,93 +703,93 @@ namespace Duels
             var msg = "";
 
             // Imposter (sus)
-            if (this.Ability() == Duels.Ability.IMPOSTER && otherpoke is { Substitute: 0, _illusionDisplayName: null })
+            if (this.Ability() == Impl.Ability.IMPOSTER && otherpoke is { Substitute: 0, _illusionDisplayName: null })
             {
                 msg += $"{Name} transformed into {otherpoke._name}!\n";
                 Transform(otherpoke);
             }
 
             // Weather
-            if (this.Ability() == Duels.Ability.DRIZZLE)
+            if (this.Ability() == Impl.Ability.DRIZZLE)
             {
                 msg += battle.Weather.Set("rain", this);
             }
-            if (this.Ability() == Duels.Ability.PRIMORDIAL_SEA)
+            if (this.Ability() == Impl.Ability.PRIMORDIAL_SEA)
             {
                 msg += battle.Weather.Set("h-rain", this);
             }
-            if (this.Ability() == Duels.Ability.SAND_STREAM)
+            if (this.Ability() == Impl.Ability.SAND_STREAM)
             {
                 msg += battle.Weather.Set("sandstorm", this);
             }
-            if (this.Ability() == Duels.Ability.SNOW_WARNING)
+            if (this.Ability() == Impl.Ability.SNOW_WARNING)
             {
                 msg += battle.Weather.Set("hail", this);
             }
-            if (this.Ability() == Duels.Ability.DROUGHT || this.Ability() == Duels.Ability.ORICHALCUM_PULSE)
+            if (this.Ability() == Impl.Ability.DROUGHT || this.Ability() == Impl.Ability.ORICHALCUM_PULSE)
             {
                 msg += battle.Weather.Set("sun", this);
             }
-            if (this.Ability() == Duels.Ability.DESOLATE_LAND)
+            if (this.Ability() == Impl.Ability.DESOLATE_LAND)
             {
                 msg += battle.Weather.Set("h-sun", this);
             }
-            if (this.Ability() == Duels.Ability.DELTA_STREAM)
+            if (this.Ability() == Impl.Ability.DELTA_STREAM)
             {
                 msg += battle.Weather.Set("h-wind", this);
             }
 
             // Terrain
-            if (this.Ability() == Duels.Ability.GRASSY_SURGE)
+            if (this.Ability() == Impl.Ability.GRASSY_SURGE)
             {
                 msg += battle.Terrain.Set("grassy", this);
             }
-            if (this.Ability() == Duels.Ability.MISTY_SURGE)
+            if (this.Ability() == Impl.Ability.MISTY_SURGE)
             {
                 msg += battle.Terrain.Set("misty", this);
             }
-            if (this.Ability() == Duels.Ability.ELECTRIC_SURGE || this.Ability() == Duels.Ability.HADRON_ENGINE)
+            if (this.Ability() == Impl.Ability.ELECTRIC_SURGE || this.Ability() == Impl.Ability.HADRON_ENGINE)
             {
                 msg += battle.Terrain.Set("electric", this);
             }
-            if (this.Ability() == Duels.Ability.PSYCHIC_SURGE)
+            if (this.Ability() == Impl.Ability.PSYCHIC_SURGE)
             {
                 msg += battle.Terrain.Set("psychic", this);
             }
 
             // Message only
-            if (this.Ability() == Duels.Ability.MOLD_BREAKER)
+            if (this.Ability() == Impl.Ability.MOLD_BREAKER)
             {
                 msg += $"{Name} breaks the mold!\n";
             }
-            if (this.Ability() == Duels.Ability.TURBOBLAZE)
+            if (this.Ability() == Impl.Ability.TURBOBLAZE)
             {
                 msg += $"{Name} is radiating a blazing aura!\n";
             }
-            if (this.Ability() == Duels.Ability.TERAVOLT)
+            if (this.Ability() == Impl.Ability.TERAVOLT)
             {
                 msg += $"{Name} is radiating a bursting aura!\n";
             }
 
-            if (this.Ability() == Duels.Ability.INTIMIDATE && otherpoke != null)
+            if (this.Ability() == Impl.Ability.INTIMIDATE && otherpoke != null)
             {
-                if (otherpoke.Ability() == Duels.Ability.OBLIVIOUS)
+                if (otherpoke.Ability() == Impl.Ability.OBLIVIOUS)
                 {
                     msg += $"{otherpoke.Name} is too oblivious to be intimidated!\n";
                 }
-                else if (otherpoke.Ability() == Duels.Ability.OWN_TEMPO)
+                else if (otherpoke.Ability() == Impl.Ability.OWN_TEMPO)
                 {
                     msg += $"{otherpoke.Name} keeps walking on its own tempo, and is not intimidated!\n";
                 }
-                else if (otherpoke.Ability() == Duels.Ability.INNER_FOCUS)
+                else if (otherpoke.Ability() == Impl.Ability.INNER_FOCUS)
                 {
                     msg += $"{otherpoke.Name} is too focused to be intimidated!\n";
                 }
-                else if (otherpoke.Ability() == Duels.Ability.SCRAPPY)
+                else if (otherpoke.Ability() == Impl.Ability.SCRAPPY)
                 {
                     msg += $"{otherpoke.Name} is too scrappy to be intimidated!\n";
                 }
-                else if (otherpoke.Ability() == Duels.Ability.GUARD_DOG)
+                else if (otherpoke.Ability() == Impl.Ability.GUARD_DOG)
                 {
                     msg += $"{otherpoke.Name}'s guard dog keeps it from being intimidated!\n";
                     msg += otherpoke.AppendAttack(1, attacker: otherpoke, source: "its guard dog");
@@ -800,13 +801,13 @@ namespace Duels
                     {
                         msg += otherpoke.AppendSpeed(1, attacker: otherpoke, source: "its adrenaline orb");
                     }
-                    if (otherpoke.Ability() == Duels.Ability.RATTLED)
+                    if (otherpoke.Ability() == Impl.Ability.RATTLED)
                     {
                         msg += otherpoke.AppendSpeed(1, attacker: otherpoke, source: "its rattled");
                     }
                 }
             }
-            if (this.Ability() == Duels.Ability.SCREEN_CLEANER)
+            if (this.Ability() == Impl.Ability.SCREEN_CLEANER)
             {
                 battle.Trainer1.AuroraVeil.SetTurns(0);
                 battle.Trainer1.LightScreen.SetTurns(0);
@@ -816,22 +817,22 @@ namespace Duels
                 battle.Trainer2.Reflect.SetTurns(0);
                 msg += $"{Name}'s screen cleaner removed barriers from both sides of the field!\n";
             }
-            if (this.Ability() == Duels.Ability.INTREPID_SWORD)
+            if (this.Ability() == Impl.Ability.INTREPID_SWORD)
             {
                 msg += AppendAttack(1, attacker: this, source: "its intrepid sword");
             }
-            if (this.Ability() == Duels.Ability.DAUNTLESS_SHIELD)
+            if (this.Ability() == Impl.Ability.DAUNTLESS_SHIELD)
             {
                 msg += AppendDefense(1, attacker: this, source: "its dauntless shield");
             }
-            if (this.Ability() == Duels.Ability.TRACE && otherpoke != null && otherpoke.AbilityGiveable())
+            if (this.Ability() == Impl.Ability.TRACE && otherpoke != null && otherpoke.AbilityGiveable())
             {
                 AbilityId = otherpoke.AbilityId;
                 msg += $"{Name} traced {otherpoke.Name}'s ability!\n";
                 msg += SendOutAbility(otherpoke, battle);
                 return msg;
             }
-            if (this.Ability() == Duels.Ability.DOWNLOAD && otherpoke != null)
+            if (this.Ability() == Impl.Ability.DOWNLOAD && otherpoke != null)
             {
                 if (otherpoke.GetSpDef(battle) > otherpoke.GetDefense(battle))
                 {
@@ -842,7 +843,7 @@ namespace Duels
                     msg += AppendSpAtk(1, attacker: this, source: "its download");
                 }
             }
-            if (this.Ability() == Duels.Ability.ANTICIPATION && otherpoke != null)
+            if (this.Ability() == Impl.Ability.ANTICIPATION && otherpoke != null)
             {
                 var shuddered = false;
                 foreach (var move in otherpoke.Moves)
@@ -861,9 +862,9 @@ namespace Duels
                     }
                 }
             }
-            if (this.Ability() == Duels.Ability.FOREWARN && otherpoke != null)
+            if (this.Ability() == Impl.Ability.FOREWARN && otherpoke != null)
             {
-                List<Move> bestMoves = new List<Move>();
+                var bestMoves = new List<Move>();
                 var bestPower = 0;
                 foreach (var move in otherpoke.Moves)
                 {
@@ -900,11 +901,11 @@ namespace Duels
                     msg += $"{Name} is forewarned about {otherpoke.Name}'s {move.PrettyName}!\n";
                 }
             }
-            if (this.Ability() == Duels.Ability.FRISK && otherpoke != null && otherpoke.HeldItem.HasItem())
+            if (this.Ability() == Impl.Ability.FRISK && otherpoke != null && otherpoke.HeldItem.HasItem())
             {
                 msg += $"{Name} senses that {otherpoke.Name} is holding a {otherpoke.HeldItem.Name} using its frisk!\n";
             }
-            if (this.Ability() == Duels.Ability.MULTITYPE)
+            if (this.Ability() == Impl.Ability.MULTITYPE)
             {
                 ElementType? e = null;
                 string f = null;
@@ -1000,7 +1001,7 @@ namespace Duels
                     msg += $"{Name} transformed into a {t} type using its multitype!\n";
                 }
             }
-            if (this.Ability() == Duels.Ability.RKS_SYSTEM && _name == "Silvally")
+            if (this.Ability() == Impl.Ability.RKS_SYSTEM && _name == "Silvally")
             {
                 ElementType? e = null;
                 if (HeldItem.Get() == "dragon-memory")
@@ -1129,11 +1130,11 @@ namespace Duels
                     msg += $"{Name} transformed into a {t} type using its rks system!\n";
                 }
             }
-            if (this.Ability() == Duels.Ability.TRUANT)
+            if (this.Ability() == Impl.Ability.TRUANT)
             {
                 TruantTurn = 0;
             }
-            if (this.Ability() == Duels.Ability.FORECAST && _name is "Castform" or "Castform-snowy" or "Castform-rainy" or "Castform-sunny")
+            if (this.Ability() == Impl.Ability.FORECAST && _name is "Castform" or "Castform-snowy" or "Castform-rainy" or "Castform-sunny")
             {
                 var weather = battle.Weather.Get();
                 ElementType? element = null;
@@ -1183,7 +1184,7 @@ namespace Duels
                     msg += $"{Name} transformed into a {t} type using its forecast!\n";
                 }
             }
-            if (this.Ability() == Duels.Ability.MIMICRY && battle.Terrain.Item != null)
+            if (this.Ability() == Impl.Ability.MIMICRY && battle.Terrain.Item != null)
             {
                 ElementType element;
                 var terrain = battle.Terrain.Item.ToString();
@@ -1207,11 +1208,11 @@ namespace Duels
                 var t = element.ToString().ToLower();
                 msg += $"{Name} transformed into a {t} type using its mimicry!\n";
             }
-            if (this.Ability() == Duels.Ability.WIND_RIDER && Owner.Tailwind.Active())
+            if (this.Ability() == Impl.Ability.WIND_RIDER && Owner.Tailwind.Active())
             {
                 msg += AppendAttack(1, attacker: this, source: "its wind rider");
             }
-            if (this.Ability() == Duels.Ability.SUPERSWEET_SYRUP && !SupersweetSyrup && otherpoke != null)
+            if (this.Ability() == Impl.Ability.SUPERSWEET_SYRUP && !SupersweetSyrup && otherpoke != null)
             {
                 msg += otherpoke.AppendEvasion(-1, attacker: this, source: $"{Name}'s supersweet syrup");
             }
@@ -1229,16 +1230,16 @@ namespace Duels
             var msg = "";
             if (!fainted)
             {
-                if (Ability() == Duels.Ability.NATURAL_CURE && !string.IsNullOrEmpty(NonVolatileEffect.Current))
+                if (Ability() == Impl.Ability.NATURAL_CURE && !string.IsNullOrEmpty(NonVolatileEffect.Current))
                 {
                     msg += $"{Name}'s {NonVolatileEffect.Current} was cured by its natural cure!\n";
                     NonVolatileEffect.Reset();
                 }
-                if (Ability() == Duels.Ability.REGENERATOR)
+                if (Ability() == Impl.Ability.REGENERATOR)
                 {
                     msg += Heal(StartingHp / 3, source: "its regenerator");
                 }
-                if (Ability() == Duels.Ability.ZERO_TO_HERO)
+                if (Ability() == Impl.Ability.ZERO_TO_HERO)
                 {
                     if (Form("Palafin-hero"))
                     {
@@ -1534,7 +1535,7 @@ namespace Duels
                 Encore.End();
                 msg += $"{Name}'s encore is over!\n";
             }
-            if (CudChew.NextTurn() && HeldItem.LastUsed != null && HeldItem.LastUsed.Name.EndsWith("-berry"))
+            if (CudChew.NextTurn() && HeldItem.LastUsed != null && HeldItem.LastUsed.Identifier.EndsWith("-berry"))
             {
                 HeldItem.Recover(HeldItem);
                 msg += HeldItem.EatBerry();
@@ -1611,47 +1612,47 @@ namespace Duels
             }
 
             // Abilities
-            if (Ability() == Duels.Ability.SPEED_BOOST && !SwappedIn)
+            if (Ability() == Impl.Ability.SPEED_BOOST && !SwappedIn)
             {
                 msg += AppendSpeed(1, attacker: this, source: "its Speed boost");
             }
-            if (Ability() == Duels.Ability.LIMBER && NonVolatileEffect.Paralysis())
+            if (Ability() == Impl.Ability.LIMBER && NonVolatileEffect.Paralysis())
             {
                 NonVolatileEffect.Reset();
                 msg += $"{Name}'s limber cured it of its paralysis!\n";
             }
-            if (Ability() == Duels.Ability.INSOMNIA && NonVolatileEffect.Sleep())
+            if (Ability() == Impl.Ability.INSOMNIA && NonVolatileEffect.Sleep())
             {
                 NonVolatileEffect.Reset();
                 msg += $"{Name}'s insomnia woke it up!\n";
             }
-            if (Ability() == Duels.Ability.VITAL_SPIRIT && NonVolatileEffect.Sleep())
+            if (Ability() == Impl.Ability.VITAL_SPIRIT && NonVolatileEffect.Sleep())
             {
                 NonVolatileEffect.Reset();
                 msg += $"{Name}'s vital spirit woke it up!\n";
             }
-            if (Ability() == Duels.Ability.IMMUNITY && NonVolatileEffect.Poison())
+            if (Ability() == Impl.Ability.IMMUNITY && NonVolatileEffect.Poison())
             {
                 NonVolatileEffect.Reset();
                 msg += $"{Name}'s immunity cured it of its poison!\n";
             }
-            if (Ability() == Duels.Ability.MAGMA_ARMOR && NonVolatileEffect.Freeze())
+            if (Ability() == Impl.Ability.MAGMA_ARMOR && NonVolatileEffect.Freeze())
             {
                 NonVolatileEffect.Reset();
                 msg += $"{Name}'s magma armor cured it of thawed it!\n";
             }
-            if ((Ability() == Duels.Ability.WATER_VEIL || Ability() == Duels.Ability.WATER_BUBBLE) && NonVolatileEffect.Burn())
+            if ((Ability() == Impl.Ability.WATER_VEIL || Ability() == Impl.Ability.WATER_BUBBLE) && NonVolatileEffect.Burn())
             {
                 NonVolatileEffect.Reset();
                 var abilityName = ((Ability)AbilityId).GetPrettyName();
                 msg += $"{Name}'s {abilityName} cured it of its burn!\n";
             }
-            if (Ability() == Duels.Ability.OWN_TEMPO && Confusion.Active())
+            if (Ability() == Impl.Ability.OWN_TEMPO && Confusion.Active())
             {
                 Confusion.SetTurns(0);
                 msg += $"{Name}'s tempo cured it of its confusion!\n";
             }
-            if (Ability() == Duels.Ability.OBLIVIOUS)
+            if (Ability() == Impl.Ability.OBLIVIOUS)
             {
                 if (Infatuated != null)
                 {
@@ -1664,15 +1665,15 @@ namespace Duels
                     msg += $"{Name} stopped caring about being taunted because of its obliviousness!\n";
                 }
             }
-            if (Ability() == Duels.Ability.RAIN_DISH && (battle.Weather.Get() == "rain" || battle.Weather.Get() == "h-rain"))
+            if (Ability() == Impl.Ability.RAIN_DISH && (battle.Weather.Get() == "rain" || battle.Weather.Get() == "h-rain"))
             {
                 msg += Heal(StartingHp / 16, source: "its rain dish");
             }
-            if (Ability() == Duels.Ability.ICE_BODY && battle.Weather.Get() == "hail")
+            if (Ability() == Impl.Ability.ICE_BODY && battle.Weather.Get() == "hail")
             {
                 msg += Heal(StartingHp / 16, source: "its ice body");
             }
-            if (Ability() == Duels.Ability.DRY_SKIN)
+            if (Ability() == Impl.Ability.DRY_SKIN)
             {
                 if (battle.Weather.Get() == "rain" || battle.Weather.Get() == "h-rain")
                 {
@@ -1683,13 +1684,13 @@ namespace Duels
                     msg += Damage(StartingHp / 8, battle, source: "its dry skin");
                 }
             }
-            if (Ability() == Duels.Ability.SOLAR_POWER && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.SOLAR_POWER && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 msg += Damage(StartingHp / 8, battle, source: "its solar power");
             }
-            if (Ability() == Duels.Ability.MOODY)
+            if (Ability() == Impl.Ability.MOODY)
             {
-                List<Tuple<int, string>> stats = new List<Tuple<int, string>>
+                var stats = new List<Tuple<int, string>>
                 {
                     new Tuple<int, string>(AttackStage, "attack"),
                     new Tuple<int, string>(DefenseStage, "defense"),
@@ -1729,12 +1730,12 @@ namespace Duels
                     msg += AppendStat(-1, this, null, removeStat.Item2, "its moodiness");
                 }
             }
-            if (Ability() == Duels.Ability.PICKUP && !HeldItem.HasItem() && otherpoke is { HeldItem.LastUsed: not null })
+            if (Ability() == Impl.Ability.PICKUP && !HeldItem.HasItem() && otherpoke is { HeldItem.LastUsed: not null })
             {
                 HeldItem.Recover(otherpoke.HeldItem);
                 msg += $"{Name} picked up a {HeldItem.Name}!\n";
             }
-            if (Ability() == Duels.Ability.ICE_FACE && !IceRepaired && _name == "Eiscue-noice" && battle.Weather.Get() == "hail")
+            if (Ability() == Impl.Ability.ICE_FACE && !IceRepaired && _name == "Eiscue-noice" && battle.Weather.Get() == "hail")
             {
                 if (Form("Eiscue"))
                 {
@@ -1742,7 +1743,7 @@ namespace Duels
                     msg += $"{Name}'s ice face was restored by the hail!\n";
                 }
             }
-            if (Ability() == Duels.Ability.HARVEST && LastBerry != null && !HeldItem.HasItem())
+            if (Ability() == Impl.Ability.HARVEST && LastBerry != null && !HeldItem.HasItem())
             {
                 if (new Random().Next(2) == 0)
                 {
@@ -1751,7 +1752,7 @@ namespace Duels
                     msg += $"{Name} harvested a {HeldItem.Name}!\n";
                 }
             }
-            if (Ability() == Duels.Ability.ZEN_MODE && _name == "Darmanitan" && Hp < StartingHp / 2)
+            if (Ability() == Impl.Ability.ZEN_MODE && _name == "Darmanitan" && Hp < StartingHp / 2)
             {
                 if (Form("Darmanitan-zen"))
                 {
@@ -1762,7 +1763,7 @@ namespace Duels
                     msg += $"{Name} enters a zen state.\n";
                 }
             }
-            if (Ability() == Duels.Ability.ZEN_MODE && _name == "Darmanitan-galar" && Hp < StartingHp / 2)
+            if (Ability() == Impl.Ability.ZEN_MODE && _name == "Darmanitan-galar" && Hp < StartingHp / 2)
             {
                 if (Form("Darmanitan-zen-galar"))
                 {
@@ -1773,7 +1774,7 @@ namespace Duels
                     msg += $"{Name} enters a zen state.\n";
                 }
             }
-            if (Ability() == Duels.Ability.ZEN_MODE && _name == "Darmanitan-zen" && Hp >= StartingHp / 2)
+            if (Ability() == Impl.Ability.ZEN_MODE && _name == "Darmanitan-zen" && Hp >= StartingHp / 2)
             {
                 if (Form("Darmanitan"))
                 {
@@ -1784,7 +1785,7 @@ namespace Duels
                     msg += $"{Name}'s zen state ends!\n";
                 }
             }
-            if (Ability() == Duels.Ability.ZEN_MODE && _name == "Darmanitan-zen-galar" && Hp >= StartingHp / 2)
+            if (Ability() == Impl.Ability.ZEN_MODE && _name == "Darmanitan-zen-galar" && Hp >= StartingHp / 2)
             {
                 if (Form("Darmanitan-galar"))
                 {
@@ -1795,7 +1796,7 @@ namespace Duels
                     msg += $"{Name}'s zen state ends!\n";
                 }
             }
-            if (Ability() == Duels.Ability.SHIELDS_DOWN && _name == "Minior" && Hp < StartingHp / 2)
+            if (Ability() == Impl.Ability.SHIELDS_DOWN && _name == "Minior" && Hp < StartingHp / 2)
             {
                 string newForm;
                 switch (Id % 7)
@@ -1827,28 +1828,28 @@ namespace Duels
                     msg += $"{Name}'s core was exposed!\n";
                 }
             }
-            if (Ability() == Duels.Ability.SHIELDS_DOWN && _name.StartsWith("Minior-") && _name != "Minior" && Hp >= StartingHp / 2)
+            if (Ability() == Impl.Ability.SHIELDS_DOWN && _name.StartsWith("Minior-") && _name != "Minior" && Hp >= StartingHp / 2)
             {
                 if (Form("Minior"))
                 {
                     msg += $"{Name}'s shell returned!\n";
                 }
             }
-            if (Ability() == Duels.Ability.SCHOOLING && _name == "Wishiwashi-school" && Hp < StartingHp / 4)
+            if (Ability() == Impl.Ability.SCHOOLING && _name == "Wishiwashi-school" && Hp < StartingHp / 4)
             {
                 if (Form("Wishiwashi"))
                 {
                     msg += $"{Name}'s school is gone!\n";
                 }
             }
-            if (Ability() == Duels.Ability.SCHOOLING && _name == "Wishiwashi" && Hp >= StartingHp / 4 && Level >= 20)
+            if (Ability() == Impl.Ability.SCHOOLING && _name == "Wishiwashi" && Hp >= StartingHp / 4 && Level >= 20)
             {
                 if (Form("Wishiwashi-school"))
                 {
                     msg += $"{Name} schools together!\n";
                 }
             }
-            if (Ability() == Duels.Ability.POWER_CONSTRUCT && _name is "Zygarde" or "Zygarde-10" && Hp < StartingHp / 2 && Hp > 0)
+            if (Ability() == Impl.Ability.POWER_CONSTRUCT && _name is "Zygarde" or "Zygarde-10" && Hp < StartingHp / 2 && Hp > 0)
             {
                 if (Form("Zygarde-complete"))
                 {
@@ -1859,7 +1860,7 @@ namespace Duels
                     StartingHp = newHp;
                 }
             }
-            if (Ability() == Duels.Ability.HUNGER_SWITCH)
+            if (Ability() == Impl.Ability.HUNGER_SWITCH)
             {
                 switch (_name)
                 {
@@ -1871,17 +1872,17 @@ namespace Duels
                         break;
                 }
             }
-            if (Ability() == Duels.Ability.FLOWER_GIFT && _name == "Cherrim" && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.FLOWER_GIFT && _name == "Cherrim" && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 Form("Cherrim-sunshine");
             }
-            if (Ability() == Duels.Ability.FLOWER_GIFT && _name == "Cherrim-sunshine" && battle.Weather.Get() != "sun" && battle.Weather.Get() != "h-sun")
+            if (Ability() == Impl.Ability.FLOWER_GIFT && _name == "Cherrim-sunshine" && battle.Weather.Get() != "sun" && battle.Weather.Get() != "h-sun")
             {
                 Form("Cherrim");
             }
 
             // Bad Dreams
-            if (otherpoke != null && otherpoke.Ability() == Duels.Ability.BAD_DREAMS && NonVolatileEffect.Sleep())
+            if (otherpoke != null && otherpoke.Ability() == Impl.Ability.BAD_DREAMS && NonVolatileEffect.Sleep())
             {
                 msg += Damage(StartingHp / 8, battle, source: $"{otherpoke.Name}'s bad dreams");
             }
@@ -1903,7 +1904,7 @@ namespace Duels
             }
 
             // Weather damages
-            if (Ability() == Duels.Ability.OVERCOAT)
+            if (Ability() == Impl.Ability.OVERCOAT)
             {
                 // No damage from weather
             }
@@ -1914,14 +1915,14 @@ namespace Duels
             else if (battle.Weather.Get() == "sandstorm")
             {
                 if (!TypeIds.Contains(ElementType.ROCK) && !TypeIds.Contains(ElementType.GROUND) && !TypeIds.Contains(ElementType.STEEL)
-                    && Ability() != Duels.Ability.SAND_RUSH && Ability() != Duels.Ability.SAND_VEIL && Ability() != Duels.Ability.SAND_FORCE)
+                    && Ability() != Impl.Ability.SAND_RUSH && Ability() != Impl.Ability.SAND_VEIL && Ability() != Impl.Ability.SAND_FORCE)
                 {
                     msg += Damage(StartingHp / 16, battle, source: "the sandstorm");
                 }
             }
             else if (battle.Weather.Get() == "hail")
             {
-                if (!TypeIds.Contains(ElementType.ICE) && Ability() != Duels.Ability.SNOW_CLOAK && Ability() != Duels.Ability.ICE_BODY)
+                if (!TypeIds.Contains(ElementType.ICE) && Ability() != Impl.Ability.SNOW_CLOAK && Ability() != Impl.Ability.ICE_BODY)
                 {
                     msg += Damage(StartingHp / 16, battle, source: "the hail");
                 }
@@ -2001,7 +2002,7 @@ namespace Duels
             {
                 msg += attacker.Faint(battle, source: $"{Name}'s destiny bond");
             }
-            if (move != null && attacker is { _name: "Greninja" } && attacker.Ability() == Duels.Ability.BATTLE_BOND)
+            if (move != null && attacker is { _name: "Greninja" } && attacker.Ability() == Impl.Ability.BATTLE_BOND)
             {
                 if (attacker.Form("Greninja-ash"))
                 {
@@ -2013,17 +2014,17 @@ namespace Duels
                 move.PP = 0;
                 msg += $"{move.PrettyName}'s pp was depleted!\n";
             }
-            if (attacker != null && (attacker.Ability() == Duels.Ability.CHILLING_NEIGH || attacker.Ability() == Duels.Ability.AS_ONE_ICE))
+            if (attacker != null && (attacker.Ability() == Impl.Ability.CHILLING_NEIGH || attacker.Ability() == Impl.Ability.AS_ONE_ICE))
             {
                 msg += attacker.AppendAttack(1, attacker: attacker, source: "its chilling neigh");
             }
-            if (attacker != null && (attacker.Ability() == Duels.Ability.GRIM_NEIGH || attacker.Ability() == Duels.Ability.AS_ONE_SHADOW))
+            if (attacker != null && (attacker.Ability() == Impl.Ability.GRIM_NEIGH || attacker.Ability() == Impl.Ability.AS_ONE_SHADOW))
             {
                 msg += attacker.AppendSpAtk(1, attacker: attacker, source: "its grim neigh");
             }
             foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
-                if (poke != null && poke != this && poke.Ability() == Duels.Ability.SOUL_HEART)
+                if (poke != null && poke != this && poke.Ability() == Impl.Ability.SOUL_HEART)
                 {
                     msg += poke.AppendSpAtk(1, attacker: poke, source: "its soul heart");
                 }
@@ -2064,13 +2065,13 @@ namespace Duels
             damage = Math.Max(1, damage);
 
             // Magic guard
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.MAGIC_GUARD && move == null && attacker != this)
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.MAGIC_GUARD && move == null && attacker != this)
             {
                 return new Tuple<string, int>($"{Name}'s magic guard protected it from damage!\n", 0);
             }
 
             // Substitute
-            if (Substitute > 0 && move != null && move.IsAffectedBySubstitute() && !move.IsSoundBased() && (attacker == null || attacker.Ability() != Duels.Ability.INFILTRATOR))
+            if (Substitute > 0 && move != null && move.IsAffectedBySubstitute() && !move.IsSoundBased() && (attacker == null || attacker.Ability() != Impl.Ability.INFILTRATOR))
             {
                 // IsAffectedBySubstitute should be a superset of IsSoundBased, but it's better to check both to be sure.
                 msg += $"{Name}'s substitute took {damage} damage{source}!\n";
@@ -2087,7 +2088,7 @@ namespace Duels
             // Damage blocking forms / abilities
             if (move != null)
             {
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.DISGUISE && _name == "Mimikyu")
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.DISGUISE && _name == "Mimikyu")
                 {
                     if (Form("Mimikyu-busted"))
                     {
@@ -2096,7 +2097,7 @@ namespace Duels
                         return new Tuple<string, int>(msg, 0);
                     }
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.ICE_FACE && _name == "Eiscue" && move.DamageClass == DamageClass.PHYSICAL)
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.ICE_FACE && _name == "Eiscue" && move.DamageClass == DamageClass.PHYSICAL)
                 {
                     if (Form("Eiscue-noice"))
                     {
@@ -2115,7 +2116,7 @@ namespace Duels
                     msg += $"{Name} endured the hit!\n";
                     damage = Hp - 1;
                 }
-                else if (Hp == StartingHp && Ability(attacker: attacker, move: move) == Duels.Ability.STURDY)
+                else if (Hp == StartingHp && Ability(attacker: attacker, move: move) == Impl.Ability.STURDY)
                 {
                     msg += $"{Name} endured the hit with its Sturdy!\n";
                     damage = Hp - 1;
@@ -2158,7 +2159,7 @@ namespace Duels
                 {
                     heal = (int)(heal * 1.3);
                 }
-                if (Ability() == Duels.Ability.LIQUID_OOZE)
+                if (Ability() == Impl.Ability.LIQUID_OOZE)
                 {
                     msg += attacker.Damage(heal, battle, source: $"{Name}'s liquid ooze");
                 }
@@ -2174,15 +2175,15 @@ namespace Duels
             if (Hp == 0)
             {
                 msg += Faint(battle, move, attacker);
-                if (Ability() == Duels.Ability.AFTERMATH && attacker != null && attacker != this && attacker.Ability() != Duels.Ability.DAMP && move != null && move.MakesContact(attacker))
+                if (Ability() == Impl.Ability.AFTERMATH && attacker != null && attacker != this && attacker.Ability() != Impl.Ability.DAMP && move != null && move.MakesContact(attacker))
                 {
                     msg += attacker.Damage(attacker.StartingHp / 4, battle, source: $"{Name}'s aftermath");
                 }
-                if (attacker != null && attacker.Ability() == Duels.Ability.MOXIE)
+                if (attacker != null && attacker.Ability() == Impl.Ability.MOXIE)
                 {
                     msg += attacker.AppendAttack(1, attacker: attacker, source: "its moxie");
                 }
-                if (attacker != null && attacker.Ability() == Duels.Ability.BEAST_BOOST)
+                if (attacker != null && attacker.Ability() == Impl.Ability.BEAST_BOOST)
                 {
                     var stats = new List<Tuple<int, Func<int, DuelPokemon, Move, string, bool, string>>>
                     {
@@ -2195,7 +2196,7 @@ namespace Duels
                     var appendFunc = stats.OrderByDescending(s => s.Item1).First().Item2;
                     msg += appendFunc(1, attacker, null, "its beast boost", false);
                 }
-                if (attacker != null && Ability() == Duels.Ability.INNARDS_OUT)
+                if (attacker != null && Ability() == Impl.Ability.INNARDS_OUT)
                 {
                     msg += attacker.Damage(previousHp, battle, attacker: this, source: $"{Name}'s innards out");
                 }
@@ -2212,42 +2213,42 @@ namespace Duels
                     NonVolatileEffect.Reset();
                     msg += $"{Name} thawed out!\n";
                 }
-                if (Ability() == Duels.Ability.COLOR_CHANGE && !TypeIds.Contains(moveType.Value))
+                if (Ability() == Impl.Ability.COLOR_CHANGE && !TypeIds.Contains(moveType.Value))
                 {
                     TypeIds = new List<ElementType> { moveType.Value };
                     var t = moveType.Value.ToString().ToLower();
                     msg += $"{Name} changed its color, transforming into a {t} type!\n";
                 }
-                if (Ability() == Duels.Ability.ANGER_POINT && critical)
+                if (Ability() == Impl.Ability.ANGER_POINT && critical)
                 {
                     msg += AppendAttack(6, attacker: this, source: "its anger point");
                 }
-                if (Ability() == Duels.Ability.WEAK_ARMOR && move.DamageClass == DamageClass.PHYSICAL && attacker != this)
+                if (Ability() == Impl.Ability.WEAK_ARMOR && move.DamageClass == DamageClass.PHYSICAL && attacker != this)
                 {
                     msg += AppendDefense(-1, attacker: this, source: "its weak armor");
                     msg += AppendSpeed(2, attacker: this, source: "its weak armor");
                 }
-                if (Ability() == Duels.Ability.JUSTIFIED && moveType == ElementType.DARK)
+                if (Ability() == Impl.Ability.JUSTIFIED && moveType == ElementType.DARK)
                 {
                     msg += AppendAttack(1, attacker: this, source: "justified");
                 }
-                if (Ability() == Duels.Ability.RATTLED && moveType is ElementType.BUG or ElementType.DARK or ElementType.GHOST)
+                if (Ability() == Impl.Ability.RATTLED && moveType is ElementType.BUG or ElementType.DARK or ElementType.GHOST)
                 {
                     msg += AppendSpeed(1, attacker: this, source: "its rattled");
                 }
-                if (Ability() == Duels.Ability.STAMINA)
+                if (Ability() == Impl.Ability.STAMINA)
                 {
                     msg += AppendDefense(1, attacker: this, source: "its stamina");
                 }
-                if (Ability() == Duels.Ability.WATER_COMPACTION && moveType == ElementType.WATER)
+                if (Ability() == Impl.Ability.WATER_COMPACTION && moveType == ElementType.WATER)
                 {
                     msg += AppendDefense(2, attacker: this, source: "its water compaction");
                 }
-                if (Ability() == Duels.Ability.BERSERK && droppedBelowHalf)
+                if (Ability() == Impl.Ability.BERSERK && droppedBelowHalf)
                 {
                     msg += AppendSpAtk(1, attacker: this, source: "its berserk");
                 }
-                if (Ability() == Duels.Ability.ANGER_SHELL && droppedBelowHalf)
+                if (Ability() == Impl.Ability.ANGER_SHELL && droppedBelowHalf)
                 {
                     msg += AppendAttack(1, attacker: this, source: "its anger shell");
                     msg += AppendSpAtk(1, attacker: this, source: "its anger shell");
@@ -2255,41 +2256,41 @@ namespace Duels
                     msg += AppendDefense(-1, attacker: this, source: "its anger shell");
                     msg += AppendSpDef(-1, attacker: this, source: "its anger shell");
                 }
-                if (Ability() == Duels.Ability.STEAM_ENGINE && moveType is ElementType.FIRE or ElementType.WATER)
+                if (Ability() == Impl.Ability.STEAM_ENGINE && moveType is ElementType.FIRE or ElementType.WATER)
                 {
                     msg += AppendSpeed(6, attacker: this, source: "its steam engine");
                 }
-                if (Ability() == Duels.Ability.THERMAL_EXCHANGE && moveType == ElementType.FIRE)
+                if (Ability() == Impl.Ability.THERMAL_EXCHANGE && moveType == ElementType.FIRE)
                 {
                     msg += AppendAttack(1, attacker: this, source: "its thermal exchange");
                 }
-                if (Ability() == Duels.Ability.WIND_RIDER && move.IsWind())
+                if (Ability() == Impl.Ability.WIND_RIDER && move.IsWind())
                 {
                     msg += AppendAttack(1, attacker: this, source: "its wind rider");
                 }
-                if (Ability() == Duels.Ability.COTTON_DOWN && attacker != null)
+                if (Ability() == Impl.Ability.COTTON_DOWN && attacker != null)
                 {
                     msg += attacker.AppendSpeed(-1, attacker: this, source: $"{Name}'s cotton down");
                 }
-                if (Ability() == Duels.Ability.SAND_SPIT)
+                if (Ability() == Impl.Ability.SAND_SPIT)
                 {
                     msg += battle.Weather.Set("sandstorm", this);
                 }
-                if (Ability() == Duels.Ability.SEED_SOWER && battle.Terrain.Item == null)
+                if (Ability() == Impl.Ability.SEED_SOWER && battle.Terrain.Item == null)
                 {
                     msg += battle.Terrain.Set("grassy", this);
                 }
-                if (Ability() == Duels.Ability.ELECTROMORPHOSIS)
+                if (Ability() == Impl.Ability.ELECTROMORPHOSIS)
                 {
                     Charge.SetTurns(2);
                     msg += $"{Name} became charged by its electromorphosis!\n";
                 }
-                if (Ability() == Duels.Ability.WIND_POWER && move.IsWind())
+                if (Ability() == Impl.Ability.WIND_POWER && move.IsWind())
                 {
                     Charge.SetTurns(2);
                     msg += $"{Name} became charged by its wind power!\n";
                 }
-                if (Ability() == Duels.Ability.TOXIC_DEBRIS && move.DamageClass == DamageClass.PHYSICAL)
+                if (Ability() == Impl.Ability.TOXIC_DEBRIS && move.DamageClass == DamageClass.PHYSICAL)
                 {
                     if (attacker != null && attacker != this && attacker.Owner.ToxicSpikes < 2)
                     {
@@ -2325,9 +2326,9 @@ namespace Duels
                 }
                 if (attacker != null)
                 {
-                    if (Ability() == Duels.Ability.CURSED_BODY && !attacker.Disable.Active() && attacker.Moves.Contains(move) && new Random().Next(1, 101) <= 30)
+                    if (Ability() == Impl.Ability.CURSED_BODY && !attacker.Disable.Active() && attacker.Moves.Contains(move) && new Random().Next(1, 101) <= 30)
                     {
-                        if (attacker.Ability() == Duels.Ability.AROMA_VEIL)
+                        if (attacker.Ability() == Impl.Ability.AROMA_VEIL)
                         {
                             msg += $"{attacker.Name}'s aroma veil protects its move from being disabled!\n";
                         }
@@ -2337,19 +2338,19 @@ namespace Duels
                             msg += $"{attacker.Name}'s {move.PrettyName} was disabled by {Name}'s cursed body!\n";
                         }
                     }
-                    if (attacker.Ability() == Duels.Ability.MAGICIAN && !attacker.HeldItem.HasItem() && HeldItem.CanRemove())
+                    if (attacker.Ability() == Impl.Ability.MAGICIAN && !attacker.HeldItem.HasItem() && HeldItem.CanRemove())
                     {
                         HeldItem.Transfer(attacker.HeldItem);
                         msg += $"{attacker.Name} stole {attacker.HeldItem.Name} using its magician!\n";
                     }
-                    if (attacker.Ability() == Duels.Ability.TOXIC_CHAIN && new Random().Next(1, 101) <= 30)
+                    if (attacker.Ability() == Impl.Ability.TOXIC_CHAIN && new Random().Next(1, 101) <= 30)
                     {
                         msg += NonVolatileEffect.ApplyStatus("b-poison", battle, attacker: attacker, source: $"{attacker.Name}'s toxic chain");
                     }
                     if (attacker.HeldItem.Get() == "shell-bell")
                     {
                         // Shell bell does not trigger when a move is buffed by sheer force.
-                        if (attacker.Ability() != Duels.Ability.SHEER_FORCE || move.EffectChance == null)
+                        if (attacker.Ability() != Impl.Ability.SHEER_FORCE || move.EffectChance == null)
                         {
                             msg += attacker.Heal(damage / 8, source: "its shell bell");
                         }
@@ -2360,12 +2361,12 @@ namespace Duels
             // Retreat
             if (droppedBelowHalf && Owner.Party.Count(x => x.Hp > 0) > 1)
             {
-                if (Ability() == Duels.Ability.WIMP_OUT)
+                if (Ability() == Impl.Ability.WIMP_OUT)
                 {
                     msg += $"{Name} wimped out and retreated!\n";
                     msg += Remove(battle);
                 }
-                else if (Ability() == Duels.Ability.EMERGENCY_EXIT)
+                else if (Ability() == Impl.Ability.EMERGENCY_EXIT)
                 {
                     msg += $"{Name} used the emergency exit and retreated!\n";
                     msg += Remove(battle);
@@ -2407,65 +2408,65 @@ namespace Duels
                     {
                         msg += attacker.NonVolatileEffect.ApplyStatus("burn", battle, attacker: attacker, source: $"{Name}'s charging beak blast");
                     }
-                    if (Ability() == Duels.Ability.STATIC)
+                    if (Ability() == Impl.Ability.STATIC)
                     {
                         if (new Random().Next(1, 101) <= 30)
                         {
                             msg += attacker.NonVolatileEffect.ApplyStatus("paralysis", battle, attacker: attacker, source: $"{Name}'s static");
                         }
                     }
-                    if (Ability() == Duels.Ability.POISON_POINT)
+                    if (Ability() == Impl.Ability.POISON_POINT)
                     {
                         if (new Random().Next(1, 101) <= 30)
                         {
                             msg += attacker.NonVolatileEffect.ApplyStatus("poison", battle, attacker: attacker, source: $"{Name}'s poison point");
                         }
                     }
-                    if (Ability() == Duels.Ability.FLAME_BODY)
+                    if (Ability() == Impl.Ability.FLAME_BODY)
                     {
                         if (new Random().Next(1, 101) <= 30)
                         {
                             msg += attacker.NonVolatileEffect.ApplyStatus("burn", battle, attacker: attacker, source: $"{Name}'s flame body");
                         }
                     }
-                    if (Ability() == Duels.Ability.ROUGH_SKIN && Owner.HasAlivePokemon())
+                    if (Ability() == Impl.Ability.ROUGH_SKIN && Owner.HasAlivePokemon())
                     {
                         msg += attacker.Damage(attacker.StartingHp / 8, battle, source: $"{Name}'s rough skin");
                     }
-                    if (Ability() == Duels.Ability.IRON_BARBS && Owner.HasAlivePokemon())
+                    if (Ability() == Impl.Ability.IRON_BARBS && Owner.HasAlivePokemon())
                     {
                         msg += attacker.Damage(attacker.StartingHp / 8, battle, source: $"{Name}'s iron barbs");
                     }
-                    if (Ability() == Duels.Ability.EFFECT_SPORE)
+                    if (Ability() == Impl.Ability.EFFECT_SPORE)
                     {
-                        if (attacker.Ability() != Duels.Ability.OVERCOAT && !attacker.TypeIds.Contains(ElementType.GRASS) && attacker.HeldItem.Get() != "safety-glasses" && new Random().Next(1, 101) <= 30)
+                        if (attacker.Ability() != Impl.Ability.OVERCOAT && !attacker.TypeIds.Contains(ElementType.GRASS) && attacker.HeldItem.Get() != "safety-glasses" && new Random().Next(1, 101) <= 30)
                         {
                             string[] statuses = { "paralysis", "poison", "sleep" };
                             var status = statuses[new Random().Next(statuses.Length)];
                             msg += attacker.NonVolatileEffect.ApplyStatus(status, battle, attacker: attacker);
                         }
                     }
-                    if (Ability() == Duels.Ability.CUTE_CHARM && new Random().Next(1, 101) <= 30)
+                    if (Ability() == Impl.Ability.CUTE_CHARM && new Random().Next(1, 101) <= 30)
                     {
                         msg += attacker.Infatuate(this, source: $"{Name}'s cute charm");
                     }
-                    if (Ability() == Duels.Ability.MUMMY && attacker.Ability() != Duels.Ability.MUMMY && attacker.AbilityChangeable())
+                    if (Ability() == Impl.Ability.MUMMY && attacker.Ability() != Impl.Ability.MUMMY && attacker.AbilityChangeable())
                     {
-                        attacker.AbilityId = (int)Duels.Ability.MUMMY;
+                        attacker.AbilityId = (int)Impl.Ability.MUMMY;
                         msg += $"{attacker.Name} gained mummy from {Name}!\n";
                         msg += attacker.SendOutAbility(this, battle);
                     }
-                    if (Ability() == Duels.Ability.LINGERING_AROMA && attacker.Ability() != Duels.Ability.LINGERING_AROMA && attacker.AbilityChangeable())
+                    if (Ability() == Impl.Ability.LINGERING_AROMA && attacker.Ability() != Impl.Ability.LINGERING_AROMA && attacker.AbilityChangeable())
                     {
-                        attacker.AbilityId = (int)Duels.Ability.LINGERING_AROMA;
+                        attacker.AbilityId = (int)Impl.Ability.LINGERING_AROMA;
                         msg += $"{attacker.Name} gained lingering aroma from {Name}!\n";
                         msg += attacker.SendOutAbility(this, battle);
                     }
-                    if (Ability() == Duels.Ability.GOOEY)
+                    if (Ability() == Impl.Ability.GOOEY)
                     {
                         msg += attacker.AppendSpeed(-1, attacker: this, source: $"touching {Name}'s gooey body");
                     }
-                    if (Ability() == Duels.Ability.TANGLING_HAIR)
+                    if (Ability() == Impl.Ability.TANGLING_HAIR)
                     {
                         msg += attacker.AppendSpeed(-1, attacker: this, source: $"touching {Name}'s tangled hair");
                     }
@@ -2475,9 +2476,9 @@ namespace Duels
                     }
                 }
                 // Pickpocket is not included in the protective pads protection
-                if (Ability() == Duels.Ability.PICKPOCKET && !HeldItem.HasItem() && attacker.HeldItem.HasItem() && attacker.HeldItem.CanRemove())
+                if (Ability() == Impl.Ability.PICKPOCKET && !HeldItem.HasItem() && attacker.HeldItem.HasItem() && attacker.HeldItem.CanRemove())
                 {
-                    if (attacker.Ability() == Duels.Ability.STICKY_HOLD)
+                    if (attacker.Ability() == Impl.Ability.STICKY_HOLD)
                     {
                         msg += $"{attacker.Name}'s sticky hand kept hold of its item!\n";
                     }
@@ -2488,7 +2489,7 @@ namespace Duels
                     }
                 }
                 // Affects DEFENDER
-                if (attacker.Ability() == Duels.Ability.POISON_TOUCH)
+                if (attacker.Ability() == Impl.Ability.POISON_TOUCH)
                 {
                     if (new Random().Next(1, 101) <= 30)
                     {
@@ -2498,14 +2499,14 @@ namespace Duels
                 // Affects BOTH
                 if (attacker.HeldItem.Get() != "protective-pads")
                 {
-                    if (Ability() == Duels.Ability.PERISH_BODY && !attacker.PerishSong.Active())
+                    if (Ability() == Impl.Ability.PERISH_BODY && !attacker.PerishSong.Active())
                     {
                         attacker.PerishSong.SetTurns(4);
                         PerishSong.SetTurns(4);
                         msg += $"All pokemon will faint after 3 turns from {Name}'s perish body!\n";
                     }
                 }
-                if (Ability() == Duels.Ability.WANDERING_SPIRIT && attacker.AbilityChangeable() && attacker.AbilityGiveable())
+                if (Ability() == Impl.Ability.WANDERING_SPIRIT && attacker.AbilityChangeable() && attacker.AbilityGiveable())
                 {
                     msg += $"{attacker.Name} swapped abilities with {Name} because of {Name}'s wandering spirit!\n";
                     (AbilityId, attacker.AbilityId) = (attacker.AbilityId, AbilityId);
@@ -2570,7 +2571,7 @@ namespace Duels
             {
                 return "";
             }
-            if (Ability(move: move, attacker: attacker) == Duels.Ability.OWN_TEMPO)
+            if (Ability(move: move, attacker: attacker) == Impl.Ability.OWN_TEMPO)
             {
                 return "";
             }
@@ -2599,7 +2600,7 @@ namespace Duels
             {
                 return "";
             }
-            if (Ability(move: move, attacker: attacker) == Duels.Ability.INNER_FOCUS)
+            if (Ability(move: move, attacker: attacker) == Impl.Ability.INNER_FOCUS)
             {
                 return $"{Name} resisted the urge to flinch with its inner focus!\n";
             }
@@ -2609,7 +2610,7 @@ namespace Duels
                 source = $" from {source}";
             }
             msg += $"{Name} flinched{source}!\n";
-            if (Ability() == Duels.Ability.STEADFAST)
+            if (Ability() == Impl.Ability.STEADFAST)
             {
                 msg += AppendSpeed(1, attacker: this, source: "its steadfast");
             }
@@ -2636,11 +2637,11 @@ namespace Duels
             {
                 return "";
             }
-            if (Ability(move: move, attacker: attacker) == Duels.Ability.OBLIVIOUS)
+            if (Ability(move: move, attacker: attacker) == Impl.Ability.OBLIVIOUS)
             {
                 return $"{Name} is too oblivious to fall in love!\n";
             }
-            if (Ability(move: move, attacker: attacker) == Duels.Ability.AROMA_VEIL)
+            if (Ability(move: move, attacker: attacker) == Impl.Ability.AROMA_VEIL)
             {
                 return $"{Name}'s aroma veil protects it from being infatuated!\n";
             }
@@ -2776,35 +2777,35 @@ namespace Duels
             {
                 attack = CalculateStat(attack, AttackStage, crop: critical ? "bottom" : null);
             }
-            if (Ability() == Duels.Ability.GUTS && !string.IsNullOrEmpty(NonVolatileEffect.Current))
+            if (Ability() == Impl.Ability.GUTS && !string.IsNullOrEmpty(NonVolatileEffect.Current))
             {
                 attack *= 1.5;
             }
-            if (Ability() == Duels.Ability.SLOW_START && ActiveTurns < 5)
+            if (Ability() == Impl.Ability.SLOW_START && ActiveTurns < 5)
             {
                 attack *= 0.5;
             }
-            if (Ability() == Duels.Ability.HUGE_POWER || Ability() == Duels.Ability.PURE_POWER)
+            if (Ability() == Impl.Ability.HUGE_POWER || Ability() == Impl.Ability.PURE_POWER)
             {
                 attack *= 2;
             }
-            if (Ability() == Duels.Ability.HUSTLE)
+            if (Ability() == Impl.Ability.HUSTLE)
             {
                 attack *= 1.5;
             }
-            if (Ability() == Duels.Ability.DEFEATIST && Hp <= StartingHp / 2)
+            if (Ability() == Impl.Ability.DEFEATIST && Hp <= StartingHp / 2)
             {
                 attack *= 0.5;
             }
-            if (Ability() == Duels.Ability.GORILLA_TACTICS)
+            if (Ability() == Impl.Ability.GORILLA_TACTICS)
             {
                 attack *= 1.5;
             }
-            if (Ability() == Duels.Ability.FLOWER_GIFT && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.FLOWER_GIFT && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 attack *= 1.5;
             }
-            if (Ability() == Duels.Ability.ORICHALCUM_PULSE && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.ORICHALCUM_PULSE && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 attack *= 4.0/3;
             }
@@ -2822,19 +2823,19 @@ namespace Duels
             }
             foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
-                if (poke != null && poke != this && poke.Ability() == Duels.Ability.TABLETS_OF_RUIN)
+                if (poke != null && poke != this && poke.Ability() == Impl.Ability.TABLETS_OF_RUIN)
                 {
                     attack *= 0.75;
                 }
             }
             if (GetRawAttack() >= GetRawDefense() && GetRawAttack() >= GetRawSpAtk() && GetRawAttack() >= GetRawSpDef() && GetRawAttack() >= GetRawSpeed())
             {
-                if ((Ability() == Duels.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
-                    || (Ability() == Duels.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
+                if ((Ability() == Impl.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
+                    || (Ability() == Impl.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
                 {
                     attack *= 1.3;
                 }
-                else if ((Ability() == Duels.Ability.PROTOSYNTHESIS || Ability() == Duels.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
+                else if ((Ability() == Impl.Ability.PROTOSYNTHESIS || Ability() == Impl.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
                 {
                     HeldItem.Use();
                     BoosterEnergy = true;
@@ -2863,15 +2864,15 @@ namespace Duels
             {
                 defense = CalculateStat(defense, DefenseStage, crop: critical ? "top" : null);
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.MARVEL_SCALE && !string.IsNullOrEmpty(NonVolatileEffect.Current))
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.MARVEL_SCALE && !string.IsNullOrEmpty(NonVolatileEffect.Current))
             {
                 defense *= 1.5;
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.FUR_COAT)
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.FUR_COAT)
             {
                 defense *= 2;
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.GRASS_PELT && battle.Terrain.Item?.ToString() == "grassy")
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.GRASS_PELT && battle.Terrain.Item?.ToString() == "grassy")
             {
                 defense *= 1.5;
             }
@@ -2881,19 +2882,19 @@ namespace Duels
             }
             foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
-                if (poke != null && poke != this && poke.Ability() == Duels.Ability.SWORD_OF_RUIN)
+                if (poke != null && poke != this && poke.Ability() == Impl.Ability.SWORD_OF_RUIN)
                 {
                     defense *= 0.75;
                 }
             }
             if (GetRawDefense() > GetRawAttack() && GetRawDefense() >= GetRawSpAtk() && GetRawDefense() >= GetRawSpDef() && GetRawDefense() >= GetRawSpeed())
             {
-                if ((Ability() == Duels.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
-                    || (Ability() == Duels.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
+                if ((Ability() == Impl.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
+                    || (Ability() == Impl.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
                 {
                     defense *= 1.3;
                 }
-                else if ((Ability() == Duels.Ability.PROTOSYNTHESIS || Ability() == Duels.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
+                else if ((Ability() == Impl.Ability.PROTOSYNTHESIS || Ability() == Impl.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
                 {
                     HeldItem.Use();
                     BoosterEnergy = true;
@@ -2913,15 +2914,15 @@ namespace Duels
             {
                 spatk = CalculateStat(spatk, SpAtkStage, crop: critical ? "bottom" : null);
             }
-            if (Ability() == Duels.Ability.DEFEATIST && Hp <= StartingHp / 2)
+            if (Ability() == Impl.Ability.DEFEATIST && Hp <= StartingHp / 2)
             {
                 spatk *= 0.5;
             }
-            if (Ability() == Duels.Ability.SOLAR_POWER && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.SOLAR_POWER && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 spatk *= 1.5;
             }
-            if (Ability() == Duels.Ability.HADRON_ENGINE && battle.Terrain.Item?.ToString() == "grassy")
+            if (Ability() == Impl.Ability.HADRON_ENGINE && battle.Terrain.Item?.ToString() == "grassy")
             {
                 spatk *= 4.0/3;
             }
@@ -2939,19 +2940,19 @@ namespace Duels
             }
             foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
-                if (poke != null && poke != this && poke.Ability() == Duels.Ability.VESSEL_OF_RUIN)
+                if (poke != null && poke != this && poke.Ability() == Impl.Ability.VESSEL_OF_RUIN)
                 {
                     spatk *= 0.75;
                 }
             }
             if (GetRawSpAtk() >= GetRawSpDef() && GetRawSpAtk() >= GetRawSpeed() && GetRawSpAtk() > GetRawAttack() && GetRawSpAtk() > GetRawDefense())
             {
-                if ((Ability() == Duels.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
-                    || (Ability() == Duels.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
+                if ((Ability() == Impl.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
+                    || (Ability() == Impl.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
                 {
                     spatk *= 1.3;
                 }
-                else if ((Ability() == Duels.Ability.PROTOSYNTHESIS || Ability() == Duels.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
+                else if ((Ability() == Impl.Ability.PROTOSYNTHESIS || Ability() == Impl.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
                 {
                     HeldItem.Use();
                     BoosterEnergy = true;
@@ -2983,7 +2984,7 @@ namespace Duels
             {
                 spdef *= 1.5;
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.FLOWER_GIFT && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.FLOWER_GIFT && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 spdef *= 1.5;
             }
@@ -3001,19 +3002,19 @@ namespace Duels
             }
             foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
             {
-                if (poke != null && poke != this && poke.Ability() == Duels.Ability.BEADS_OF_RUIN)
+                if (poke != null && poke != this && poke.Ability() == Impl.Ability.BEADS_OF_RUIN)
                 {
                     spdef *= 0.75;
                 }
             }
             if (GetRawSpDef() >= GetRawSpeed() && GetRawSpDef() > GetRawAttack() && GetRawSpDef() > GetRawDefense() && GetRawSpDef() > GetRawSpAtk())
             {
-                if ((Ability() == Duels.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
-                    || (Ability() == Duels.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
+                if ((Ability() == Impl.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
+                    || (Ability() == Impl.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
                 {
                     spdef *= 1.3;
                 }
-                else if ((Ability() == Duels.Ability.PROTOSYNTHESIS || Ability() == Duels.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
+                else if ((Ability() == Impl.Ability.PROTOSYNTHESIS || Ability() == Impl.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
                 {
                     HeldItem.Use();
                     BoosterEnergy = true;
@@ -3030,7 +3031,7 @@ namespace Duels
         {
             // Always active stage changes
             var speed = CalculateStat(GetRawSpeed(), SpeedStage);
-            if (NonVolatileEffect.Paralysis() && Ability() != Duels.Ability.QUICK_FEET)
+            if (NonVolatileEffect.Paralysis() && Ability() != Impl.Ability.QUICK_FEET)
             {
                 speed /= 2;
             }
@@ -3042,35 +3043,35 @@ namespace Duels
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.SLUSH_RUSH && battle.Weather.Get() == "hail")
+            if (Ability() == Impl.Ability.SLUSH_RUSH && battle.Weather.Get() == "hail")
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.SAND_RUSH && battle.Weather.Get() == "sandstorm")
+            if (Ability() == Impl.Ability.SAND_RUSH && battle.Weather.Get() == "sandstorm")
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.SWIFT_SWIM && (battle.Weather.Get() == "rain" || battle.Weather.Get() == "h-rain"))
+            if (Ability() == Impl.Ability.SWIFT_SWIM && (battle.Weather.Get() == "rain" || battle.Weather.Get() == "h-rain"))
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.CHLOROPHYLL && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
+            if (Ability() == Impl.Ability.CHLOROPHYLL && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun"))
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.SLOW_START && ActiveTurns < 5)
+            if (Ability() == Impl.Ability.SLOW_START && ActiveTurns < 5)
             {
                 speed *= 0.5;
             }
-            if (Ability() == Duels.Ability.UNBURDEN && !HeldItem.HasItem() && HeldItem.EverHadItem)
+            if (Ability() == Impl.Ability.UNBURDEN && !HeldItem.HasItem() && HeldItem.EverHadItem)
             {
                 speed *= 2;
             }
-            if (Ability() == Duels.Ability.QUICK_FEET && !string.IsNullOrEmpty(NonVolatileEffect.Current))
+            if (Ability() == Impl.Ability.QUICK_FEET && !string.IsNullOrEmpty(NonVolatileEffect.Current))
             {
                 speed *= 1.5;
             }
-            if (Ability() == Duels.Ability.SURGE_SURFER && battle.Terrain.Item?.ToString() == "electric")
+            if (Ability() == Impl.Ability.SURGE_SURFER && battle.Terrain.Item?.ToString() == "electric")
             {
                 speed *= 2;
             }
@@ -3080,12 +3081,12 @@ namespace Duels
             }
             if (GetRawSpeed() > GetRawAttack() && GetRawSpeed() > GetRawDefense() && GetRawSpeed() > GetRawSpAtk() && GetRawSpeed() > GetRawSpDef())
             {
-                if ((Ability() == Duels.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
-                    || (Ability() == Duels.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
+                if ((Ability() == Impl.Ability.PROTOSYNTHESIS && (battle.Weather.Get() == "sun" || battle.Weather.Get() == "h-sun" || BoosterEnergy))
+                    || (Ability() == Impl.Ability.QUARK_DRIVE && (battle.Terrain.Item?.ToString() == "electric" || BoosterEnergy)))
                 {
                     speed *= 1.5;
                 }
-                else if ((Ability() == Duels.Ability.PROTOSYNTHESIS || Ability() == Duels.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
+                else if ((Ability() == Impl.Ability.PROTOSYNTHESIS || Ability() == Impl.Ability.QUARK_DRIVE) && HeldItem.Get() == "booster-energy")
                 {
                     HeldItem.Use();
                     BoosterEnergy = true;
@@ -3183,7 +3184,7 @@ namespace Duels
             {
                 source = $" from {source}";
             }
-            Dictionary<int, string> deltaMessages = new Dictionary<int, string>
+            var deltaMessages = new Dictionary<int, string>
             {
                 { -3, $"{Name}'s {stat} severely fell{source}!\n" },
                 { -2, $"{Name}'s {stat} harshly fell{source}!\n" },
@@ -3193,11 +3194,11 @@ namespace Duels
                 { 3, $"{Name}'s {stat} rose drastically{source}!\n" }
             };
             var delta = stageChange;
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.SIMPLE)
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.SIMPLE)
             {
                 delta *= 2;
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.CONTRARY)
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.CONTRARY)
             {
                 delta *= -1;
             }
@@ -3257,36 +3258,36 @@ namespace Duels
             // Prevent stat changes
             if (delta < 0 && attacker != this)
             {
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.CLEAR_BODY || Ability(attacker: attacker, move: move) == Duels.Ability.WHITE_SMOKE || Ability(attacker: attacker, move: move) == Duels.Ability.FULL_METAL_BODY)
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.CLEAR_BODY || Ability(attacker: attacker, move: move) == Impl.Ability.WHITE_SMOKE || Ability(attacker: attacker, move: move) == Impl.Ability.FULL_METAL_BODY)
                 {
                     var abilityName = ((Ability)AbilityId).GetPrettyName();
                     return $"{Name}'s {abilityName} prevented its {stat} from being lowered!\n";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.HYPER_CUTTER && stat == "attack")
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.HYPER_CUTTER && stat == "attack")
                 {
                     return $"{Name}'s claws stayed sharp because of its hyper cutter!\n";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.KEEN_EYE && stat == "accuracy")
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.KEEN_EYE && stat == "accuracy")
                 {
                     return $"{Name}'s aim stayed true because of its keen eye!\n";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.MINDS_EYE && stat == "accuracy")
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.MINDS_EYE && stat == "accuracy")
                 {
                     return $"{Name}'s aim stayed true because of its mind's eye!\n";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.BIG_PECKS && stat == "defense")
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.BIG_PECKS && stat == "defense")
                 {
                     return $"{Name}'s defense stayed strong because of its big pecks!\n";
                 }
-                if (Owner.Mist.Active() && (attacker == null || attacker.Ability() != Duels.Ability.INFILTRATOR))
+                if (Owner.Mist.Active() && (attacker == null || attacker.Ability() != Impl.Ability.INFILTRATOR))
                 {
                     return $"The mist around {Name}'s feet prevented its {stat} from being lowered!\n";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.FLOWER_VEIL && TypeIds.Contains(ElementType.GRASS))
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.FLOWER_VEIL && TypeIds.Contains(ElementType.GRASS))
                 {
                     return "";
                 }
-                if (Ability(attacker: attacker, move: move) == Duels.Ability.MIRROR_ARMOR && attacker != null && checkLooping)
+                if (Ability(attacker: attacker, move: move) == Impl.Ability.MIRROR_ARMOR && attacker != null && checkLooping)
                 {
                     msg += $"{Name} reflected the stat change with its mirror armor!\n";
                     msg += attacker.AppendStat(delta, this, null, stat, "", checkLooping: false);
@@ -3345,11 +3346,11 @@ namespace Duels
                 {
                     if (attacker != this)
                     {
-                        if (Ability(attacker: attacker, move: move) == Duels.Ability.DEFIANT)
+                        if (Ability(attacker: attacker, move: move) == Impl.Ability.DEFIANT)
                         {
                             msg += AppendAttack(2, attacker: this, source: "its defiance");
                         }
-                        if (Ability(attacker: attacker, move: move) == Duels.Ability.COMPETITIVE)
+                        if (Ability(attacker: attacker, move: move) == Impl.Ability.COMPETITIVE)
                         {
                             msg += AppendSpAtk(2, attacker: this, source: "its competitiveness");
                         }
@@ -3374,7 +3375,7 @@ namespace Duels
                 {
                     foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
                     {
-                        if (poke != null && poke != this && poke.Ability() == Duels.Ability.OPPORTUNIST && checkLooping)
+                        if (poke != null && poke != this && poke.Ability() == Impl.Ability.OPPORTUNIST && checkLooping)
                         {
                             msg += $"{poke.Name} seizes the opportunity to boost its stat with its opportunist!\n";
                             msg += poke.AppendStat(delta, poke, null, stat, "", checkLooping: false);
@@ -3410,7 +3411,7 @@ namespace Duels
             {
                 return false;
             }
-            if (Ability(attacker: attacker, move: move) == Duels.Ability.LEVITATE)
+            if (Ability(attacker: attacker, move: move) == Impl.Ability.LEVITATE)
             {
                 return false;
             }
@@ -3550,7 +3551,7 @@ namespace Duels
                 }
                 switch (attackerType)
                 {
-                    case ElementType.FIGHTING or ElementType.NORMAL when defenderType == ElementType.GHOST && attacker != null && (attacker.Ability() == Duels.Ability.SCRAPPY || attacker.Ability() == Duels.Ability.MINDS_EYE):
+                    case ElementType.FIGHTING or ElementType.NORMAL when defenderType == ElementType.GHOST && attacker != null && (attacker.Ability() == Impl.Ability.SCRAPPY || attacker.Ability() == Impl.Ability.MINDS_EYE):
                     case ElementType.GROUND when defenderType == ElementType.FLYING && Grounded(battle, attacker: attacker, move: move):
                         continue;
                 }
@@ -3583,7 +3584,7 @@ namespace Duels
             {
                 effectiveness *= 2;
             }
-            if (effectiveness >= 1 && Hp == StartingHp && Ability(attacker: attacker, move: move) == Duels.Ability.TERA_SHELL)
+            if (effectiveness >= 1 && Hp == StartingHp && Ability(attacker: attacker, move: move) == Impl.Ability.TERA_SHELL)
             {
                 effectiveness = 0.5;
             }
@@ -3601,10 +3602,10 @@ namespace Duels
             var curWeight = StartingWeight;
             switch (curAbility)
             {
-                case Duels.Ability.HEAVY_METAL:
+                case Impl.Ability.HEAVY_METAL:
                     curWeight *= 2;
                     break;
-                case Duels.Ability.LIGHT_METAL:
+                case Impl.Ability.LIGHT_METAL:
                     curWeight /= 2;
                     curWeight = Math.Max(1, curWeight);
                     break;
@@ -3639,8 +3640,8 @@ namespace Duels
             }
             switch (attacker.AbilityId)
             {
-                case (int)Duels.Ability.MOLD_BREAKER or (int)Duels.Ability.TURBOBLAZE or (int)Duels.Ability.TERAVOLT or (int)Duels.Ability.NEUTRALIZING_GAS:
-                case (int)Duels.Ability.MYCELIUM_MIGHT when move.DamageClass == DamageClass.STATUS:
+                case (int)Impl.Ability.MOLD_BREAKER or (int)Impl.Ability.TURBOBLAZE or (int)Impl.Ability.TERAVOLT or (int)Impl.Ability.NEUTRALIZING_GAS:
+                case (int)Impl.Ability.MYCELIUM_MIGHT when move.DamageClass == DamageClass.STATUS:
                     return 0;
                 default:
                     return (Ability)AbilityId;
@@ -3652,18 +3653,18 @@ namespace Duels
         /// </summary>
         public bool AbilityChangeable()
         {
-            return AbilityId != (int)Duels.Ability.MULTITYPE &&
-                   AbilityId != (int)Duels.Ability.STANCE_CHANGE &&
-                   AbilityId != (int)Duels.Ability.SCHOOLING &&
-                   AbilityId != (int)Duels.Ability.COMATOSE &&
-                   AbilityId != (int)Duels.Ability.SHIELDS_DOWN &&
-                   AbilityId != (int)Duels.Ability.DISGUISE &&
-                   AbilityId != (int)Duels.Ability.RKS_SYSTEM &&
-                   AbilityId != (int)Duels.Ability.BATTLE_BOND &&
-                   AbilityId != (int)Duels.Ability.POWER_CONSTRUCT &&
-                   AbilityId != (int)Duels.Ability.ICE_FACE &&
-                   AbilityId != (int)Duels.Ability.GULP_MISSILE &&
-                   AbilityId != (int)Duels.Ability.ZERO_TO_HERO;
+            return AbilityId != (int)Impl.Ability.MULTITYPE &&
+                   AbilityId != (int)Impl.Ability.STANCE_CHANGE &&
+                   AbilityId != (int)Impl.Ability.SCHOOLING &&
+                   AbilityId != (int)Impl.Ability.COMATOSE &&
+                   AbilityId != (int)Impl.Ability.SHIELDS_DOWN &&
+                   AbilityId != (int)Impl.Ability.DISGUISE &&
+                   AbilityId != (int)Impl.Ability.RKS_SYSTEM &&
+                   AbilityId != (int)Impl.Ability.BATTLE_BOND &&
+                   AbilityId != (int)Impl.Ability.POWER_CONSTRUCT &&
+                   AbilityId != (int)Impl.Ability.ICE_FACE &&
+                   AbilityId != (int)Impl.Ability.GULP_MISSILE &&
+                   AbilityId != (int)Impl.Ability.ZERO_TO_HERO;
         }
 
         /// <summary>
@@ -3671,21 +3672,21 @@ namespace Duels
         /// </summary>
         public bool AbilityGiveable()
         {
-            return AbilityId != (int)Duels.Ability.TRACE &&
-                   AbilityId != (int)Duels.Ability.FORECAST &&
-                   AbilityId != (int)Duels.Ability.FLOWER_GIFT &&
-                   AbilityId != (int)Duels.Ability.ZEN_MODE &&
-                   AbilityId != (int)Duels.Ability.ILLUSION &&
-                   AbilityId != (int)Duels.Ability.IMPOSTER &&
-                   AbilityId != (int)Duels.Ability.POWER_OF_ALCHEMY &&
-                   AbilityId != (int)Duels.Ability.RECEIVER &&
-                   AbilityId != (int)Duels.Ability.DISGUISE &&
-                   AbilityId != (int)Duels.Ability.STANCE_CHANGE &&
-                   AbilityId != (int)Duels.Ability.POWER_CONSTRUCT &&
-                   AbilityId != (int)Duels.Ability.ICE_FACE &&
-                   AbilityId != (int)Duels.Ability.HUNGER_SWITCH &&
-                   AbilityId != (int)Duels.Ability.GULP_MISSILE &&
-                   AbilityId != (int)Duels.Ability.ZERO_TO_HERO;
+            return AbilityId != (int)Impl.Ability.TRACE &&
+                   AbilityId != (int)Impl.Ability.FORECAST &&
+                   AbilityId != (int)Impl.Ability.FLOWER_GIFT &&
+                   AbilityId != (int)Impl.Ability.ZEN_MODE &&
+                   AbilityId != (int)Impl.Ability.ILLUSION &&
+                   AbilityId != (int)Impl.Ability.IMPOSTER &&
+                   AbilityId != (int)Impl.Ability.POWER_OF_ALCHEMY &&
+                   AbilityId != (int)Impl.Ability.RECEIVER &&
+                   AbilityId != (int)Impl.Ability.DISGUISE &&
+                   AbilityId != (int)Impl.Ability.STANCE_CHANGE &&
+                   AbilityId != (int)Impl.Ability.POWER_CONSTRUCT &&
+                   AbilityId != (int)Impl.Ability.ICE_FACE &&
+                   AbilityId != (int)Impl.Ability.HUNGER_SWITCH &&
+                   AbilityId != (int)Impl.Ability.GULP_MISSILE &&
+                   AbilityId != (int)Impl.Ability.ZERO_TO_HERO;
         }
 
         /// <summary>
@@ -3693,7 +3694,7 @@ namespace Duels
         /// </summary>
         public bool AbilityIgnorable()
         {
-            return AbilityId is (int)Duels.Ability.AROMA_VEIL or (int)Duels.Ability.BATTLE_ARMOR or (int)Duels.Ability.BIG_PECKS or (int)Duels.Ability.BULLETPROOF or (int)Duels.Ability.CLEAR_BODY or (int)Duels.Ability.CONTRARY or (int)Duels.Ability.DAMP or (int)Duels.Ability.DAZZLING or (int)Duels.Ability.DISGUISE or (int)Duels.Ability.DRY_SKIN or (int)Duels.Ability.FILTER or (int)Duels.Ability.FLASH_FIRE or (int)Duels.Ability.FLOWER_GIFT or (int)Duels.Ability.FLOWER_VEIL or (int)Duels.Ability.FLUFFY or (int)Duels.Ability.FRIEND_GUARD or (int)Duels.Ability.FUR_COAT or (int)Duels.Ability.HEATPROOF or (int)Duels.Ability.HEAVY_METAL or (int)Duels.Ability.HYPER_CUTTER or (int)Duels.Ability.ICE_FACE or (int)Duels.Ability.ICE_SCALES or (int)Duels.Ability.IMMUNITY or (int)Duels.Ability.INNER_FOCUS or (int)Duels.Ability.INSOMNIA or (int)Duels.Ability.KEEN_EYE or (int)Duels.Ability.LEAF_GUARD or (int)Duels.Ability.LEVITATE or (int)Duels.Ability.LIGHT_METAL or (int)Duels.Ability.LIGHTNING_ROD or (int)Duels.Ability.LIMBER or (int)Duels.Ability.MAGIC_BOUNCE or (int)Duels.Ability.MAGMA_ARMOR or (int)Duels.Ability.MARVEL_SCALE or (int)Duels.Ability.MIRROR_ARMOR or (int)Duels.Ability.MOTOR_DRIVE or (int)Duels.Ability.MULTISCALE or (int)Duels.Ability.OBLIVIOUS or (int)Duels.Ability.OVERCOAT or (int)Duels.Ability.OWN_TEMPO or (int)Duels.Ability.PASTEL_VEIL or (int)Duels.Ability.PUNK_ROCK or (int)Duels.Ability.QUEENLY_MAJESTY or (int)Duels.Ability.SAND_VEIL or (int)Duels.Ability.SAP_SIPPER or (int)Duels.Ability.SHELL_ARMOR or (int)Duels.Ability.SHIELD_DUST or (int)Duels.Ability.SIMPLE or (int)Duels.Ability.SNOW_CLOAK or (int)Duels.Ability.SOLID_ROCK or (int)Duels.Ability.SOUNDPROOF or (int)Duels.Ability.STICKY_HOLD or (int)Duels.Ability.STORM_DRAIN or (int)Duels.Ability.STURDY or (int)Duels.Ability.SUCTION_CUPS or (int)Duels.Ability.SWEET_VEIL or (int)Duels.Ability.TANGLED_FEET or (int)Duels.Ability.TELEPATHY or (int)Duels.Ability.THICK_FAT or (int)Duels.Ability.UNAWARE or (int)Duels.Ability.VITAL_SPIRIT or (int)Duels.Ability.VOLT_ABSORB or (int)Duels.Ability.WATER_ABSORB or (int)Duels.Ability.WATER_BUBBLE or (int)Duels.Ability.WATER_VEIL or (int)Duels.Ability.WHITE_SMOKE or (int)Duels.Ability.WONDER_GUARD or (int)Duels.Ability.WONDER_SKIN or (int)Duels.Ability.ARMOR_TAIL or (int)Duels.Ability.EARTH_EATER or (int)Duels.Ability.GOOD_AS_GOLD or (int)Duels.Ability.PURIFYING_SALT or (int)Duels.Ability.WELL_BAKED_BODY;
+            return AbilityId is (int)Impl.Ability.AROMA_VEIL or (int)Impl.Ability.BATTLE_ARMOR or (int)Impl.Ability.BIG_PECKS or (int)Impl.Ability.BULLETPROOF or (int)Impl.Ability.CLEAR_BODY or (int)Impl.Ability.CONTRARY or (int)Impl.Ability.DAMP or (int)Impl.Ability.DAZZLING or (int)Impl.Ability.DISGUISE or (int)Impl.Ability.DRY_SKIN or (int)Impl.Ability.FILTER or (int)Impl.Ability.FLASH_FIRE or (int)Impl.Ability.FLOWER_GIFT or (int)Impl.Ability.FLOWER_VEIL or (int)Impl.Ability.FLUFFY or (int)Impl.Ability.FRIEND_GUARD or (int)Impl.Ability.FUR_COAT or (int)Impl.Ability.HEATPROOF or (int)Impl.Ability.HEAVY_METAL or (int)Impl.Ability.HYPER_CUTTER or (int)Impl.Ability.ICE_FACE or (int)Impl.Ability.ICE_SCALES or (int)Impl.Ability.IMMUNITY or (int)Impl.Ability.INNER_FOCUS or (int)Impl.Ability.INSOMNIA or (int)Impl.Ability.KEEN_EYE or (int)Impl.Ability.LEAF_GUARD or (int)Impl.Ability.LEVITATE or (int)Impl.Ability.LIGHT_METAL or (int)Impl.Ability.LIGHTNING_ROD or (int)Impl.Ability.LIMBER or (int)Impl.Ability.MAGIC_BOUNCE or (int)Impl.Ability.MAGMA_ARMOR or (int)Impl.Ability.MARVEL_SCALE or (int)Impl.Ability.MIRROR_ARMOR or (int)Impl.Ability.MOTOR_DRIVE or (int)Impl.Ability.MULTISCALE or (int)Impl.Ability.OBLIVIOUS or (int)Impl.Ability.OVERCOAT or (int)Impl.Ability.OWN_TEMPO or (int)Impl.Ability.PASTEL_VEIL or (int)Impl.Ability.PUNK_ROCK or (int)Impl.Ability.QUEENLY_MAJESTY or (int)Impl.Ability.SAND_VEIL or (int)Impl.Ability.SAP_SIPPER or (int)Impl.Ability.SHELL_ARMOR or (int)Impl.Ability.SHIELD_DUST or (int)Impl.Ability.SIMPLE or (int)Impl.Ability.SNOW_CLOAK or (int)Impl.Ability.SOLID_ROCK or (int)Impl.Ability.SOUNDPROOF or (int)Impl.Ability.STICKY_HOLD or (int)Impl.Ability.STORM_DRAIN or (int)Impl.Ability.STURDY or (int)Impl.Ability.SUCTION_CUPS or (int)Impl.Ability.SWEET_VEIL or (int)Impl.Ability.TANGLED_FEET or (int)Impl.Ability.TELEPATHY or (int)Impl.Ability.THICK_FAT or (int)Impl.Ability.UNAWARE or (int)Impl.Ability.VITAL_SPIRIT or (int)Impl.Ability.VOLT_ABSORB or (int)Impl.Ability.WATER_ABSORB or (int)Impl.Ability.WATER_BUBBLE or (int)Impl.Ability.WATER_VEIL or (int)Impl.Ability.WHITE_SMOKE or (int)Impl.Ability.WONDER_GUARD or (int)Impl.Ability.WONDER_SKIN or (int)Impl.Ability.ARMOR_TAIL or (int)Impl.Ability.EARTH_EATER or (int)Impl.Ability.GOOD_AS_GOLD or (int)Impl.Ability.PURIFYING_SALT or (int)Impl.Ability.WELL_BAKED_BODY;
         }
 
         /// <summary>
@@ -3725,517 +3726,477 @@ namespace Duels
         }
 
         /// <summary>
-        /// Creates a new DuelPokemon object asynchronously using the raw data provided.
-        /// </summary>
-        public static async Task<DuelPokemon> Create(IInteractionContext ctx, Pokemon pokemon)
+/// Creates a new DuelPokemon object asynchronously using the raw data provided.
+/// </summary>
+public static async Task<DuelPokemon> Create(IInteractionContext ctx, Database.Models.PostgreSQL.Pokemon.Pokemon pokemon, IMongoService mongoService)
+{
+    var pn = pokemon.PokemonName;
+    var nick = pokemon.Nickname;
+    var hpiv = Math.Min(31, pokemon.HpIv);
+    var atkiv = Math.Min(31, pokemon.AttackIv);
+    var defiv = Math.Min(31, pokemon.DefenseIv);
+    var spatkiv = Math.Min(31, pokemon.SpecialAttackIv);
+    var spdefiv = Math.Min(31, pokemon.SpecialDefenseIv);
+    var speediv = Math.Min(31, pokemon.SpeedIv);
+    var hpev = pokemon.HpEv;
+    var atkev = pokemon.AttackEv;
+    var defev = pokemon.DefenseEv;
+    var spaev = pokemon.SpecialAttackEv;
+    var spdev = pokemon.SpecialDefenseEv;
+    var speedev = pokemon.SpeedEv;
+    var plevel = pokemon.Level;
+    var shiny = pokemon.Shiny;
+    var radiant = pokemon.Radiant;
+    var skin = pokemon.Skin;
+    var id = pokemon.Id;
+    var hitem = pokemon.HeldItem;
+    var happiness = pokemon.Happiness;
+    var moves = pokemon.Moves.ToList();
+    var abIndex = pokemon.AbilityIndex;
+    var nature = pokemon.Nature;
+    var gender = pokemon.Gender;
+
+    // Validate IVs
+    var totalIvs = hpiv + atkiv + defiv + spatkiv + spdefiv + speediv;
+    var ivPercentage = Math.Round(totalIvs / 186.0 * 100, 2);
+    if (ivPercentage > 100.0)
+    {
+        throw new ArgumentException($"IVs must be 100.0% or less, but got {ivPercentage}%");
+    }
+
+    // Get nature data
+    var natureData = await mongoService.Natures.Find(n => n.Identifier == nature.ToLower()).FirstOrDefaultAsync();
+    var decStatId = natureData.DecreasedStatId;
+    var incStatId = natureData.IncreasedStatId;
+
+    // Get stat types
+    var decStat = await mongoService.StatTypes.Find(s => s.StatId == decStatId).FirstOrDefaultAsync();
+    var incStat = await mongoService.StatTypes.Find(s => s.StatId == incStatId).FirstOrDefaultAsync();
+
+    var decStatName = decStat.Identifier.Capitalize().Replace("-", " ");
+    var incStatName = incStat.Identifier.Capitalize().Replace("-", " ");
+
+    var natureStatDeltas = new Dictionary<string, double>
+    {
+        { "Attack", 1.0 },
+        { "Defense", 1.0 },
+        { "Special Attack", 1.0 },
+        { "Special attack", 1.0 },
+        { "Special Defense", 1.0 },
+        { "Special defense", 1.0 },
+        { "Speed", 1.0 }
+    };
+
+    var flavorMap = new Dictionary<string, string>
+    {
+        { "Attack", "spicy" },
+        { "Defense", "sour" },
+        { "Speed", "sweet" },
+        { "Special Attack", "dry" },
+        { "Special attack", "dry" },
+        { "Special Defense", "bitter" },
+        { "Special defense", "bitter" },
+    };
+
+    var dislikedFlavor = "";
+    if (decStatName != incStatName)
+    {
+        natureStatDeltas[decStatName] = 0.9;
+        natureStatDeltas[incStatName] = 1.1;
+        dislikedFlavor = flavorMap[decStatName];
+    }
+
+    // Deform pokes that are formed into battle forms that they should not start off in
+    if (pn == "Mimikyu-busted")
+    {
+        pn = "Mimikyu";
+    }
+    if (pn is "Cramorant-gorging" or "Cramorant-gulping")
+    {
+        pn = "Cramorant";
+    }
+    if (pn == "Eiscue-noice")
+    {
+        pn = "Eiscue";
+    }
+    if (pn == "Darmanitan-zen")
+    {
+        pn = "Darmanitan";
+    }
+    if (pn == "Darmanitan-zen-galar")
+    {
+        pn = "Darmanitan-galar";
+    }
+    if (pn == "Aegislash-blade")
+    {
+        pn = "Aegislash";
+    }
+    if (pn is "Minior-red" or "Minior-orange" or "Minior-yellow" or "Minior-green" or "Minior-blue" or "Minior-indigo" or "Minior-violet")
+    {
+        pn = "Minior";
+    }
+    if (pn == "Wishiwashi" && plevel >= 20)
+    {
+        pn = "Wishiwashi-school";
+    }
+    if (pn == "Wishiwashi-school" && plevel < 20)
+    {
+        pn = "Wishiwashi";
+    }
+    if (pn == "Greninja-ash")
+    {
+        pn = "Greninja";
+    }
+    if (pn == "Zygarde-complete")
+    {
+        pn = "Zygarde";
+    }
+    if (pn == "Morpeko-hangry")
+    {
+        pn = "Morpeko";
+    }
+    if (pn == "Cherrim-sunshine")
+    {
+        pn = "Cherrim";
+    }
+    if (pn is "Castform-snowy" or "Castform-rainy" or "Castform-sunny")
+    {
+        pn = "Castform";
+    }
+    if (pn.StartsWith("Arceus-"))
+    {
+        pn = "Arceus";
+    }
+    if (pn.StartsWith("Silvally-"))
+    {
+        pn = "Silvally";
+    }
+    if (pn == "Palafin-hero")
+    {
+        pn = "Palafin";
+    }
+    if (pn.EndsWith("-mega-x") || pn.EndsWith("-mega-y"))
+    {
+        pn = pn[..^7]; // Equivalent to pn[:-7] in Python
+    }
+    if (pn.EndsWith("-mega"))
+    {
+        pn = pn[..^5]; // Equivalent to pn[:-5] in Python
+    }
+    // TODO: Meloetta, Shaymin
+
+    // Get form information
+    var formInfo = await mongoService.Forms.Find(f => f.Identifier == pn.ToLower()).FirstOrDefaultAsync();
+
+    // List of type ids
+    var typeData = await mongoService.PokemonTypes.Find(pt => pt.PokemonId == formInfo.PokemonId).FirstOrDefaultAsync();
+    var typeIds = typeData.Types.Select(t => (ElementType)t).ToList();
+
+    // 6 element list of stat values (int)
+    var statsData = await mongoService.PokemonStats.Find(ps => ps.PokemonId == formInfo.PokemonId).FirstOrDefaultAsync();
+    var stats = statsData.Stats.ToList();
+    var pokemonHp = stats[0];
+
+    // Store the base stats for all forms of this poke
+    var baseStats = new Dictionary<string, List<int>>
+    {
+        { pn, stats }
+    };
+
+    var extraForms = new List<string>();
+
+    switch (pn)
+    {
+        case "Mimikyu":
+            extraForms.Add("Mimikyu-busted");
+            break;
+        case "Cramorant":
+            extraForms.AddRange(new[] { "Cramorant-gorging", "Cramorant-gulping" });
+            break;
+        case "Eiscue":
+            extraForms.Add("Eiscue-noice");
+            break;
+        case "Darmanitan":
+            extraForms.Add("Darmanitan-zen");
+            break;
+        case "Darmanitan-galar":
+            extraForms.Add("Darmanitan-zen-galar");
+            break;
+        case "Aegislash":
+            extraForms.Add("Aegislash-blade");
+            break;
+        case "Minior":
+            extraForms.AddRange(new[] {
+                "Minior-red", "Minior-orange", "Minior-yellow", "Minior-green",
+                "Minior-blue", "Minior-indigo", "Minior-violet"
+            });
+            break;
+        case "Wishiwashi":
+            extraForms.Add("Wishiwashi-school");
+            break;
+        case "Wishiwashi-school":
+            extraForms.Add("Wishiwashi");
+            break;
+        case "Greninja":
+            extraForms.Add("Greninja-ash");
+            break;
+        case "Zygarde":
+        case "Zygarde-10":
+            extraForms.Add("Zygarde-complete");
+            break;
+        case "Morpeko":
+            extraForms.Add("Morpeko-hangry");
+            break;
+        case "Cherrim":
+            extraForms.Add("Cherrim-sunshine");
+            break;
+        case "Castform":
+            extraForms.AddRange(new[] { "Castform-snowy", "Castform-rainy", "Castform-sunny" });
+            break;
+        case "Arceus":
+            extraForms.AddRange(new[] {
+                "Arceus-dragon", "Arceus-dark", "Arceus-ground", "Arceus-fighting",
+                "Arceus-fire", "Arceus-ice", "Arceus-bug", "Arceus-steel",
+                "Arceus-grass", "Arceus-psychic", "Arceus-fairy", "Arceus-flying",
+                "Arceus-water", "Arceus-ghost", "Arceus-rock", "Arceus-poison",
+                "Arceus-electric"
+            });
+            break;
+        case "Silvally":
+            extraForms.AddRange(new[] {
+                "Silvally-psychic", "Silvally-fairy", "Silvally-flying", "Silvally-water",
+                "Silvally-ghost", "Silvally-rock", "Silvally-poison", "Silvally-electric",
+                "Silvally-dragon", "Silvally-dark", "Silvally-ground", "Silvally-fighting",
+                "Silvally-fire", "Silvally-ice", "Silvally-bug", "Silvally-steel",
+                "Silvally-grass"
+            });
+            break;
+        case "Palafin":
+            extraForms.Add("Palafin-hero");
+            break;
+    }
+
+    string megaForm = null;
+    var megaAbilityId = 0;
+    List<ElementType> megaTypeIds = null;
+
+    if (pn != "Rayquaza")
+    {
+        switch (hitem)
         {
-            var pn = pokemon.PokemonName;
-            var nick = pokemon.Nickname;
-            var hpiv = Math.Min(31, pokemon.HpIv);
-            var atkiv = Math.Min(31, pokemon.AttackIv);
-            var defiv = Math.Min(31, pokemon.DefenseIv);
-            var spatkiv = Math.Min(31, pokemon.SpecialAttackIv);
-            var spdefiv = Math.Min(31, pokemon.SpecialDefenseIv);
-            var speediv = Math.Min(31, pokemon.SpeedIv);
-            var hpev = pokemon.HpEv;
-            var atkev = pokemon.AttackEv;
-            var defev = pokemon.DefenseEv;
-            var spaev = pokemon.SpecialAttackEv;
-            var spdev = pokemon.SpecialDefenseEv;
-            var speedev = pokemon.SpeedEv;
-            var plevel = pokemon.Level;
-            var shiny = pokemon.Shiny;
-            var radiant = pokemon.Radiant;
-            var skin = pokemon.Skin;
-            var id = pokemon.Id;
-            var hitem = pokemon.HeldItem;
-            var happiness = pokemon.Happiness;
-            var moves = pokemon.Moves.ToList();
-            var abIndex = pokemon.AbilityIndex;
-            var nature = pokemon.Nature;
-            var gender = pokemon.Gender;
-
-            var natureData = await DataHandler.FindOne(ctx, "natures", new Dictionary<string, object>
-            {
-                ["identifier"] = nature.ToLower()
-            });
-            var decStatId = (int)natureData["decreased_stat_id"];
-            var incStatId = (int)natureData["increased_stat_id"];
-
-            var decStat = await DataHandler.FindOne(ctx, "stat_types", new Dictionary<string, object>
-            {
-                ["id"] = decStatId
-            });
-            var incStat = await DataHandler.FindOne(ctx, "stat_types", new Dictionary<string, object>
-            {
-                ["id"] = incStatId
-            });
-
-            string decStatName = ((string)decStat["identifier"]).Capitalize().Replace("-", " ");
-            string incStatName = ((string)incStat["identifier"]).Capitalize().Replace("-", " ");
-
-            var natureStatDeltas = new Dictionary<string, double>
-            {
-                { "Attack", 1.0 },
-                { "Defense", 1.0 },
-                { "Special attack", 1.0 },
-                { "Special defense", 1.0 },
-                { "Speed", 1.0 }
-            };
-
-            var flavorMap = new Dictionary<string, string>
-            {
-                { "Attack", "spicy" },
-                { "Defense", "sour" },
-                { "Speed", "sweet" },
-                { "Special attack", "dry" },
-                { "Special defense", "bitter" },
-            };
-
-            var dislikedFlavor = "";
-            if (decStatName != incStatName)
-            {
-                natureStatDeltas[decStatName] = 0.9;
-                natureStatDeltas[incStatName] = 1.1;
-                dislikedFlavor = flavorMap[decStatName];
-            }
-
-            // Deform pokes that are formed into battle forms that they should not start off in
-            if (pn == "Mimikyu-busted")
-            {
-                pn = "Mimikyu";
-            }
-            if (pn is "Cramorant-gorging" or "Cramorant-gulping")
-            {
-                pn = "Cramorant";
-            }
-            if (pn == "Eiscue-noice")
-            {
-                pn = "Eiscue";
-            }
-            if (pn == "Darmanitan-zen")
-            {
-                pn = "Darmanitan";
-            }
-            if (pn == "Darmanitan-zen-galar")
-            {
-                pn = "Darmanitan-galar";
-            }
-            if (pn == "Aegislash-blade")
-            {
-                pn = "Aegislash";
-            }
-            if (pn.StartsWith("Minior-"))
-            {
-                pn = "Minior";
-            }
-            if (pn == "Wishiwashi" && plevel >= 20)
-            {
-                pn = "Wishiwashi-school";
-            }
-            if (pn == "Wishiwashi-school" && plevel < 20)
-            {
-                pn = "Wishiwashi";
-            }
-            if (pn == "Greninja-ash")
-            {
-                pn = "Greninja";
-            }
-            if (pn == "Zygarde-complete")
-            {
-                pn = "Zygarde";
-            }
-            if (pn == "Morpeko-hangry")
-            {
-                pn = "Morpeko";
-            }
-            if (pn == "Cherrim-sunshine")
-            {
-                pn = "Cherrim";
-            }
-            if (pn.StartsWith("Castform-"))
-            {
-                pn = "Castform";
-            }
-            if (pn.StartsWith("Arceus-"))
-            {
-                pn = "Arceus";
-            }
-            if (pn.StartsWith("Silvally-"))
-            {
-                pn = "Silvally";
-            }
-            if (pn == "Palafin-hero")
-            {
-                pn = "Palafin";
-            }
-            if (pn.EndsWith("-mega-x") || pn.EndsWith("-mega-y"))
-            {
-                pn = pn.Substring(0, pn.Length - 7);
-            }
-            if (pn.EndsWith("-mega"))
-            {
-                pn = pn.Substring(0, pn.Length - 5);
-            }
-            // TODO: Meloetta, Shaymin
-
-            var formInfo = await DataHandler.FindOne(ctx, "forms", new Dictionary<string, object>
-            {
-                ["identifier"] = pn.ToLower()
-            });
-
-            // List of type ids
-            var typeData = await DataHandler.FindOne(ctx, "ptypes", new Dictionary<string, object>
-            {
-                ["id"] = formInfo["pokemon_id"]
-            });
-            var typeIds = (List<ElementType>)typeData["types"];
-
-            // 6 element list of stat values (int)
-            var statsData = await DataHandler.FindOne(ctx, "pokemon_stats", new Dictionary<string, object>
-            {
-                ["pokemon_id"] = formInfo["pokemon_id"]
-            });
-            var stats = (List<int>)statsData["stats"];
-            var pokemonHp = stats[0];
-
-            // Store the base stats for all forms of this poke
-            var baseStats = new Dictionary<string, List<int>>
-            {
-                { pn, stats }
-            };
-
-            var extraForms = new List<string>();
-            switch (pn)
-            {
-                case "Mimikyu":
-                    extraForms.Add("Mimikyu-busted");
-                    break;
-                case "Cramorant":
-                    extraForms.AddRange(new[] { "Cramorant-gorging", "Cramorant-gulping" });
-                    break;
-                case "Eiscue":
-                    extraForms.Add("Eiscue-noice");
-                    break;
-                case "Darmanitan":
-                    extraForms.Add("Darmanitan-zen");
-                    break;
-                case "Darmanitan-galar":
-                    extraForms.Add("Darmanitan-zen-galar");
-                    break;
-                case "Aegislash":
-                    extraForms.Add("Aegislash-blade");
-                    break;
-                case "Minior":
-                    extraForms.AddRange(new[] {
-                        "Minior-red", "Minior-orange", "Minior-yellow", "Minior-green",
-                        "Minior-blue", "Minior-indigo", "Minior-violet"
-                    });
-                    break;
-                case "Wishiwashi":
-                    extraForms.Add("Wishiwashi-school");
-                    break;
-                case "Wishiwashi-school":
-                    extraForms.Add("Wishiwashi");
-                    break;
-                case "Greninja":
-                    extraForms.Add("Greninja-ash");
-                    break;
-                case "Zygarde":
-                case "Zygarde-10":
-                    extraForms.Add("Zygarde-complete");
-                    break;
-                case "Morpeko":
-                    extraForms.Add("Morpeko-hangry");
-                    break;
-                case "Cherrim":
-                    extraForms.Add("Cherrim-sunshine");
-                    break;
-                case "Castform":
-                    extraForms.AddRange(new[] { "Castform-snowy", "Castform-rainy", "Castform-sunny" });
-                    break;
-                case "Arceus":
-                    extraForms.AddRange(new[] {
-                        "Arceus-dragon", "Arceus-dark", "Arceus-ground", "Arceus-fighting",
-                        "Arceus-fire", "Arceus-ice", "Arceus-bug", "Arceus-steel",
-                        "Arceus-grass", "Arceus-psychic", "Arceus-fairy", "Arceus-flying",
-                        "Arceus-water", "Arceus-ghost", "Arceus-rock", "Arceus-poison",
-                        "Arceus-electric"
-                    });
-                    break;
-                case "Silvally":
-                    extraForms.AddRange(new[] {
-                        "Silvally-psychic", "Silvally-fairy", "Silvally-flying", "Silvally-water",
-                        "Silvally-ghost", "Silvally-rock", "Silvally-poison", "Silvally-electric",
-                        "Silvally-dragon", "Silvally-dark", "Silvally-ground", "Silvally-fighting",
-                        "Silvally-fire", "Silvally-ice", "Silvally-bug", "Silvally-steel",
-                        "Silvally-grass"
-                    });
-                    break;
-                case "Palafin":
-                    extraForms.Add("Palafin-hero");
-                    break;
-            }
-
-            string megaForm = null;
-            var megaAbilityId = 0;
-            List<ElementType> megaTypeIds = null;
-
-            if (pn != "Rayquaza")
-            {
-                switch (hitem)
-                {
-                    case "mega-stone":
-                        megaForm = pn + "-mega";
-                        break;
-                    case "mega-stone-x":
-                        megaForm = pn + "-mega-x";
-                        break;
-                    case "mega-stone-y":
-                        megaForm = pn + "-mega-y";
-                        break;
-                }
-            }
-            else
-            {
-                if (moves.Contains("dragon-ascent"))
-                {
-                    megaForm = pn + "-mega";
-                }
-            }
-
-            if (megaForm != null)
-            {
-                var megaFormInfo = await DataHandler.FindOne(ctx, "forms", new Dictionary<string, object>
-                {
-                    ["identifier"] = megaForm.ToLower()
-                });
-
-                if (megaFormInfo != null)
-                {
-                    var megaAbility = await DataHandler.FindOne(ctx, "poke_abilities", new Dictionary<string, object>
-                    {
-                        ["pokemon_id"] = megaFormInfo["pokemon_id"]
-                    });
-
-                    if (megaAbility == null)
-                    {
-                        throw new InvalidOperationException("mega form missing ability in `poke_abilities`");
-                    }
-
-                    megaAbilityId = (int)megaAbility["ability_id"];
-
-                    var megaTypes = await DataHandler.FindOne(ctx, "ptypes", new Dictionary<string, object>
-                    {
-                        ["id"] = megaFormInfo["pokemon_id"]
-                    });
-
-                    if (megaTypes == null)
-                    {
-                        throw new InvalidOperationException("mega form missing types in `ptypes`");
-                    }
-
-                    megaTypeIds = (List<ElementType>)megaTypes["types"];
-                    extraForms.Add(megaForm);
-                }
-            }
-
-            foreach (var formName in extraForms)
-            {
-                var formData = await DataHandler.FindOne(ctx, "forms", new Dictionary<string, object>
-                {
-                    ["identifier"] = formName.ToLower()
-                });
-
-                var formStats = await DataHandler.FindOne(ctx, "pokemon_stats", new Dictionary<string, object>
-                {
-                    ["pokemon_id"] = formData["pokemon_id"]
-                });
-
-                baseStats[formName] = (List<int>)formStats["stats"];
-            }
-
-            // Builds a list of the possible ability ids for this poke, `ab_index` is the currently selected ability from this list
-            var abIds = new List<int>();
-            var abilityRecords = await DataHandler.Find(ctx, "poke_abilities", new Dictionary<string, object>
-            {
-                ["pokemon_id"] = formInfo["pokemon_id"]
-            });
-
-            foreach (var record in abilityRecords)
-            {
-                abIds.Add((int)record["ability_id"]);
-            }
-
-            int abId;
-            try
-            {
-                abId = abIds[abIndex];
-            }
-            // Should never happen, but better safe than sorry
-            catch (IndexOutOfRangeException)
-            {
-                abId = abIds[0];
-            }
-
-            if (pn.EndsWith("-bug") || pn.EndsWith("-summer") || pn.EndsWith("-marine") || pn.EndsWith("-elegant") ||
-                pn.EndsWith("-poison") || pn.EndsWith("-average") || pn.EndsWith("-altered") || pn.EndsWith("-winter") ||
-                pn.EndsWith("-trash") || pn.EndsWith("-incarnate") || pn.EndsWith("-baile") || pn.EndsWith("-rainy") ||
-                pn.EndsWith("-steel") || pn.EndsWith("-star") || pn.EndsWith("-ash") || pn.EndsWith("-diamond") ||
-                pn.EndsWith("-pop-star") || pn.EndsWith("-fan") || pn.EndsWith("-school") || pn.EndsWith("-therian") ||
-                pn.EndsWith("-pau") || pn.EndsWith("-river") || pn.EndsWith("-poke-ball") || pn.EndsWith("-kabuki") ||
-                pn.EndsWith("-electric") || pn.EndsWith("-heat") || pn.EndsWith("-unbound") || pn.EndsWith("-chill") ||
-                pn.EndsWith("-archipelago") || pn.EndsWith("-zen") || pn.EndsWith("-normal") || pn.EndsWith("-mega-y") ||
-                pn.EndsWith("-resolute") || pn.EndsWith("-blade") || pn.EndsWith("-speed") || pn.EndsWith("-indigo") ||
-                pn.EndsWith("-dusk") || pn.EndsWith("-sky") || pn.EndsWith("-west") || pn.EndsWith("-sun") ||
-                pn.EndsWith("-dandy") || pn.EndsWith("-solo") || pn.EndsWith("-high-plains") || pn.EndsWith("-la-reine") ||
-                pn.EndsWith("-50") || pn.EndsWith("-unova-cap") || pn.EndsWith("-burn") || pn.EndsWith("-mega-x") ||
-                pn.EndsWith("-monsoon") || pn.EndsWith("-primal") || pn.EndsWith("-red-striped") || pn.EndsWith("-blue-striped") ||
-                pn.EndsWith("-white-striped") || pn.EndsWith("-ground") || pn.EndsWith("-super") || pn.EndsWith("-yellow") ||
-                pn.EndsWith("-polar") || pn.EndsWith("-cosplay") || pn.EndsWith("-ultra") || pn.EndsWith("-heart") ||
-                pn.EndsWith("-snowy") || pn.EndsWith("-sensu") || pn.EndsWith("-eternal") || pn.EndsWith("-douse") ||
-                pn.EndsWith("-defense") || pn.EndsWith("-sunshine") || pn.EndsWith("-psychic") || pn.EndsWith("-modern") ||
-                pn.EndsWith("-natural") || pn.EndsWith("-tundra") || pn.EndsWith("-flying") || pn.EndsWith("-pharaoh") ||
-                pn.EndsWith("-libre") || pn.EndsWith("-sunny") || pn.EndsWith("-autumn") || pn.EndsWith("-10") ||
-                pn.EndsWith("-orange") || pn.EndsWith("-standard") || pn.EndsWith("-land") || pn.EndsWith("-partner") ||
-                pn.EndsWith("-dragon") || pn.EndsWith("-plant") || pn.EndsWith("-pirouette") || pn.EndsWith("-male") ||
-                pn.EndsWith("-hoenn-cap") || pn.EndsWith("-violet") || pn.EndsWith("-spring") || pn.EndsWith("-fighting") ||
-                pn.EndsWith("-sandstorm") || pn.EndsWith("-original-cap") || pn.EndsWith("-neutral") || pn.EndsWith("-fire") ||
-                pn.EndsWith("-fairy") || pn.EndsWith("-attack") || pn.EndsWith("-black") || pn.EndsWith("-shock") ||
-                pn.EndsWith("-shield") || pn.EndsWith("-shadow") || pn.EndsWith("-grass") || pn.EndsWith("-continental") ||
-                pn.EndsWith("-overcast") || pn.EndsWith("-disguised") || pn.EndsWith("-exclamation") || pn.EndsWith("-origin") ||
-                pn.EndsWith("-garden") || pn.EndsWith("-blue") || pn.EndsWith("-matron") || pn.EndsWith("-red-meteor") ||
-                pn.EndsWith("-small") || pn.EndsWith("-rock-star") || pn.EndsWith("-belle") || pn.EndsWith("-alola-cap") ||
-                pn.EndsWith("-green") || pn.EndsWith("-active") || pn.EndsWith("-red") || pn.EndsWith("-mow") ||
-                pn.EndsWith("-icy-snow") || pn.EndsWith("-debutante") || pn.EndsWith("-east") || pn.EndsWith("-midday") ||
-                pn.EndsWith("-jungle") || pn.EndsWith("-frost") || pn.EndsWith("-midnight") || pn.EndsWith("-rock") ||
-                pn.EndsWith("-fancy") || pn.EndsWith("-busted") || pn.EndsWith("-ordinary") || pn.EndsWith("-water") ||
-                pn.EndsWith("-phd") || pn.EndsWith("-ice") || pn.EndsWith("-spiky-eared") || pn.EndsWith("-savanna") ||
-                pn.EndsWith("-original") || pn.EndsWith("-ghost") || pn.EndsWith("-meadow") || pn.EndsWith("-dawn") ||
-                pn.EndsWith("-question") || pn.EndsWith("-pom-pom") || pn.EndsWith("-female") || pn.EndsWith("-kalos-cap") ||
-                pn.EndsWith("-confined") || pn.EndsWith("-sinnoh-cap") || pn.EndsWith("-aria") || pn.EndsWith("-dark") ||
-                pn.EndsWith("-ocean") || pn.EndsWith("-wash") || pn.EndsWith("-white") || pn.EndsWith("-mega") ||
-                pn.EndsWith("-sandy") || pn.EndsWith("-complete") || pn.EndsWith("-large") || pn.EndsWith("-crowned") ||
-                pn.EndsWith("-ice-rider") || pn.EndsWith("-shadow-rider") || pn.EndsWith("-zen-galar") ||
-                pn.EndsWith("-rapid-strike") || pn.EndsWith("-noice") || pn.EndsWith("-hangry"))
-            {
-                var name = pn.ToLower().Split('-')[0];
-                var originalFormData = await DataHandler.FindOne(ctx, "forms", new Dictionary<string, object>
-                {
-                    ["identifier"] = name
-                });
-                var pid = (int)originalFormData["pokemon_id"];
-            }
-            else
-            {
-                var pid = (int)formInfo["pokemon_id"];
-            }
-
-            // True if any possible future evo exists
-            var evoCheck = await DataHandler.FindOne(ctx, "pfile", new Dictionary<string, object>
-            {
-                ["evolves_from_species_id"] = pid
-            });
-            bool canStillEvolve = evoCheck != null;
-
-            // Unreleased pokemon that is treated like a form in the bot, monkeypatch fix.
-            if (pn == "Floette-eternal")
-            {
-                canStillEvolve = false;
-            }
-
-            // This stat can (/has to) be calculated ahead of time, as it does not change between forms.
-            // If transform copied HP, I would probably take up drinking...
-            pokemonHp = (int)Math.Round((2 * pokemonHp + hpiv + hpev / 4.0) * plevel / 100 + plevel + 10);
-
-            var hitemData = await DataHandler.FindOne(ctx, "items", new Dictionary<string, object>
-            {
-                ["identifier"] = hitem
-            });
-
-            if (pn == "Shedinja")
-            {
-                pokemonHp = 1;
-            }
-
-            var formWeight = await DataHandler.FindOne(ctx, "forms", new Dictionary<string, object>
-            {
-                ["identifier"] = pn.ToLower()
-            });
-
-            var weight = formWeight["weight"] != null ? (int)formWeight["weight"] : 20;
-
-            var objectMoves = new List<Move>();
-            foreach (var moveStr in moves)
-            {
-                ElementType? typeOverride = null;
-                var moveId = moveStr;
-
-                if (moveStr.StartsWith("hidden-power-"))
-                {
-                    var element = moveStr.Split('-')[2];
-                    moveId = "hidden-power";
-                    typeOverride = (ElementType)Enum.Parse(typeof(ElementType), element.ToUpper());
-                }
-
-                var moveData = await DataHandler.FindOne(ctx, "moves", new Dictionary<string, object>
-                {
-                    ["identifier"] = moveId
-                });
-
-                if (moveData == null)
-                {
-                    moveData = await DataHandler.FindOne(ctx, "moves", new Dictionary<string, object>
-                    {
-                        ["identifier"] = "tackle"
-                    });
-                }
-                else
-                {
-                    if (typeOverride != null)
-                    {
-                        moveData["type_id"] = typeOverride.Value;
-                    }
-                }
-
-                objectMoves.Add(new Move(moveData));
-            }
-
-            return new DuelPokemon(
-                pokemonId: id,
-                name: pn,
-                nickname: nick,
-                baseStats: baseStats,
-                hp: pokemonHp,
-                hpIV: hpiv,
-                atkIV: atkiv,
-                defIV: defiv,
-                spatkIV: spatkiv,
-                spdefIV: spdefiv,
-                speedIV: speediv,
-                hpEV: hpev,
-                atkEV: atkev,
-                defEV: defev,
-                spatkEV: spaev,
-                spdefEV: spdev,
-                speedEV: speedev,
-                level: plevel,
-                natureStatDeltas: natureStatDeltas,
-                shiny: shiny,
-                radiant: radiant,
-                skin: skin,
-                typeIds: typeIds,
-                megaTypeIds: megaTypeIds,
-                id: id,
-                heldItemData: hitemData,
-                happiness: happiness,
-                moves: objectMoves,
-                abilityId: abId,
-                megaAbilityId: megaAbilityId,
-                weight: weight,
-                gender: gender,
-                canStillEvolve: canStillEvolve,
-                dislikedFlavor: dislikedFlavor);
+            case "mega-stone":
+                megaForm = pn + "-mega";
+                break;
+            case "mega-stone-x":
+                megaForm = pn + "-mega-x";
+                break;
+            case "mega-stone-y":
+                megaForm = pn + "-mega-y";
+                break;
         }
+    }
+    else
+    {
+        if (moves.Contains("dragon-ascent"))
+        {
+            megaForm = pn + "-mega";
+        }
+    }
+
+    if (megaForm != null)
+    {
+        var megaFormInfo = await mongoService.Forms.Find(f => f.Identifier == megaForm.ToLower()).FirstOrDefaultAsync();
+
+        if (megaFormInfo != null)
+        {
+            var megaAbility = await mongoService.PokeAbilities.Find(pa => pa.PokemonId == megaFormInfo.PokemonId).FirstOrDefaultAsync();
+
+            if (megaAbility == null)
+            {
+                throw new InvalidOperationException("mega form missing ability in `poke_abilities`");
+            }
+
+            megaAbilityId = megaAbility.AbilityId;
+
+            var megaTypes = await mongoService.PokemonTypes.Find(pt => pt.Id == megaFormInfo.Identifier).FirstOrDefaultAsync();
+
+            if (megaTypes == null)
+            {
+                throw new InvalidOperationException("mega form missing types in `ptypes`");
+            }
+
+            megaTypeIds = megaTypes.Types.Select(x => (ElementType)x).ToList();
+            extraForms.Add(megaForm);
+        }
+    }
+
+    foreach (var formName in extraForms)
+    {
+        var formData = await mongoService.Forms.Find(f => f.Identifier == formName.ToLower()).FirstOrDefaultAsync();
+        var formStats = await mongoService.PokemonStats.Find(ps => ps.PokemonId == formData.PokemonId).FirstOrDefaultAsync();
+        baseStats[formName] = formStats.Stats.ToList();
+    }
+
+    // Builds a list of the possible ability ids for this poke, `ab_index` is the currently selected ability from this list
+    var abilityRecords = await mongoService.PokeAbilities.Find(pa => pa.PokemonId == formInfo.PokemonId).ToListAsync();
+
+    var abIds = abilityRecords.Select(record => record.AbilityId).ToList();
+
+    int abId;
+    try
+    {
+        abId = abIds.Intersect(abilityRecords.Select(x => x.AbilityId)).ToList().FirstOrDefault();
+    }
+    // Should never happen, but better safe than sorry
+    catch (IndexOutOfRangeException)
+    {
+        abId = abIds[0];
+    }
+
+    int pid;
+    // Check if Pokémon is a form variant
+    if (pn.EndsWith("-bug") || pn.EndsWith("-summer") || pn.EndsWith("-marine") || pn.EndsWith("-elegant") ||
+        pn.EndsWith("-poison") || pn.EndsWith("-average") || pn.EndsWith("-altered") || pn.EndsWith("-winter") ||
+        pn.EndsWith("-trash") || pn.EndsWith("-incarnate") || pn.EndsWith("-baile") || pn.EndsWith("-rainy") ||
+        pn.EndsWith("-steel") || pn.EndsWith("-star") || pn.EndsWith("-ash") || pn.EndsWith("-diamond") ||
+        pn.EndsWith("-pop-star") || pn.EndsWith("-fan") || pn.EndsWith("-school") || pn.EndsWith("-therian") ||
+        pn.EndsWith("-pau") || pn.EndsWith("-river") || pn.EndsWith("-poke-ball") || pn.EndsWith("-kabuki") ||
+        pn.EndsWith("-electric") || pn.EndsWith("-heat") || pn.EndsWith("-unbound") || pn.EndsWith("-chill") ||
+        pn.EndsWith("-archipelago") || pn.EndsWith("-zen") || pn.EndsWith("-normal") || pn.EndsWith("-mega-y") ||
+        pn.EndsWith("-resolute") || pn.EndsWith("-blade") || pn.EndsWith("-speed") || pn.EndsWith("-indigo") ||
+        pn.EndsWith("-dusk") || pn.EndsWith("-sky") || pn.EndsWith("-west") || pn.EndsWith("-sun") ||
+        pn.EndsWith("-dandy") || pn.EndsWith("-solo") || pn.EndsWith("-high-plains") || pn.EndsWith("-la-reine") ||
+        pn.EndsWith("-50") || pn.EndsWith("-unova-cap") || pn.EndsWith("-burn") || pn.EndsWith("-mega-x") ||
+        pn.EndsWith("-monsoon") || pn.EndsWith("-primal") || pn.EndsWith("-red-striped") || pn.EndsWith("-blue-striped") ||
+        pn.EndsWith("-white-striped") || pn.EndsWith("-ground") || pn.EndsWith("-super") || pn.EndsWith("-yellow") ||
+        pn.EndsWith("-polar") || pn.EndsWith("-cosplay") || pn.EndsWith("-ultra") || pn.EndsWith("-heart") ||
+        pn.EndsWith("-snowy") || pn.EndsWith("-sensu") || pn.EndsWith("-eternal") || pn.EndsWith("-douse") ||
+        pn.EndsWith("-defense") || pn.EndsWith("-sunshine") || pn.EndsWith("-psychic") || pn.EndsWith("-modern") ||
+        pn.EndsWith("-natural") || pn.EndsWith("-tundra") || pn.EndsWith("-flying") || pn.EndsWith("-pharaoh") ||
+        pn.EndsWith("-libre") || pn.EndsWith("-sunny") || pn.EndsWith("-autumn") || pn.EndsWith("-10") ||
+        pn.EndsWith("-orange") || pn.EndsWith("-standard") || pn.EndsWith("-land") || pn.EndsWith("-partner") ||
+        pn.EndsWith("-dragon") || pn.EndsWith("-plant") || pn.EndsWith("-pirouette") || pn.EndsWith("-male") ||
+        pn.EndsWith("-hoenn-cap") || pn.EndsWith("-violet") || pn.EndsWith("-spring") || pn.EndsWith("-fighting") ||
+        pn.EndsWith("-sandstorm") || pn.EndsWith("-original-cap") || pn.EndsWith("-neutral") || pn.EndsWith("-fire") ||
+        pn.EndsWith("-fairy") || pn.EndsWith("-attack") || pn.EndsWith("-black") || pn.EndsWith("-shock") ||
+        pn.EndsWith("-shield") || pn.EndsWith("-shadow") || pn.EndsWith("-grass") || pn.EndsWith("-continental") ||
+        pn.EndsWith("-overcast") || pn.EndsWith("-disguised") || pn.EndsWith("-exclamation") || pn.EndsWith("-origin") ||
+        pn.EndsWith("-garden") || pn.EndsWith("-blue") || pn.EndsWith("-matron") || pn.EndsWith("-red-meteor") ||
+        pn.EndsWith("-small") || pn.EndsWith("-rock-star") || pn.EndsWith("-belle") || pn.EndsWith("-alola-cap") ||
+        pn.EndsWith("-green") || pn.EndsWith("-active") || pn.EndsWith("-red") || pn.EndsWith("-mow") ||
+        pn.EndsWith("-icy-snow") || pn.EndsWith("-debutante") || pn.EndsWith("-east") || pn.EndsWith("-midday") ||
+        pn.EndsWith("-jungle") || pn.EndsWith("-frost") || pn.EndsWith("-midnight") || pn.EndsWith("-rock") ||
+        pn.EndsWith("-fancy") || pn.EndsWith("-busted") || pn.EndsWith("-ordinary") || pn.EndsWith("-water") ||
+        pn.EndsWith("-phd") || pn.EndsWith("-ice") || pn.EndsWith("-spiky-eared") || pn.EndsWith("-savanna") ||
+        pn.EndsWith("-original") || pn.EndsWith("-ghost") || pn.EndsWith("-meadow") || pn.EndsWith("-dawn") ||
+        pn.EndsWith("-question") || pn.EndsWith("-pom-pom") || pn.EndsWith("-female") || pn.EndsWith("-kalos-cap") ||
+        pn.EndsWith("-confined") || pn.EndsWith("-sinnoh-cap") || pn.EndsWith("-aria") || pn.EndsWith("-dark") ||
+        pn.EndsWith("-ocean") || pn.EndsWith("-wash") || pn.EndsWith("-white") || pn.EndsWith("-mega") ||
+        pn.EndsWith("-sandy") || pn.EndsWith("-complete") || pn.EndsWith("-large") || pn.EndsWith("-crowned") ||
+        pn.EndsWith("-ice-rider") || pn.EndsWith("-shadow-rider") || pn.EndsWith("-zen-galar") ||
+        pn.EndsWith("-rapid-strike") || pn.EndsWith("-noice") || pn.EndsWith("-hangry"))
+    {
+        var name = pn.ToLower().Split('-')[0];
+        var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
+        pid = originalFormInfo.PokemonId;
+    }
+    else
+    {
+        pid = formInfo.PokemonId;
+    }
+
+    // True if any possible future evo exists
+    var evoCheck = await mongoService.PFile.Find(pf => pf.EvolvesFromSpeciesId == pid).FirstOrDefaultAsync();
+    var canStillEvolve = evoCheck != null;
+
+    // Unreleased pokemon that is treated like a form in the bot, monkeypatch fix.
+    if (pn == "Floette-eternal")
+    {
+        canStillEvolve = false;
+    }
+
+    // This stat can (/has to) be calculated ahead of time, as it does not change between forms.
+    // If transform copied HP, I would probably take up drinking...
+    pokemonHp = (int)Math.Round((2 * pokemonHp + hpiv + hpev / 4.0) * plevel / 100 + plevel + 10);
+
+    var hitemData = await mongoService.Items.Find(i => i.Identifier == hitem).FirstOrDefaultAsync();
+
+    if (pn == "Shedinja")
+    {
+        pokemonHp = 1;
+    }
+
+    var weight = formInfo.Weight ?? 20;
+
+    var objectMoves = new List<Move>();
+    foreach (var moveName in moves)
+    {
+        ElementType? typeOverride = null;
+        string moveIdentifier = moveName;
+
+        if (moveName.StartsWith("hidden-power-"))
+        {
+            var element = moveName.Split('-')[2];
+            moveIdentifier = "hidden-power";
+            typeOverride = (ElementType)Enum.Parse(typeof(ElementType), element.ToUpper());
+        }
+
+        // Get database move
+        var dbMove = await mongoService.Moves.Find(m => m.Identifier == moveIdentifier).FirstOrDefaultAsync();
+
+        if (dbMove == null)
+        {
+            // Fallback to tackle
+            dbMove = await mongoService.Moves.Find(m => m.Identifier == "tackle").FirstOrDefaultAsync();
+        }
+
+        // Create game move from database move
+        var gameMove = new Move(dbMove);
+
+        // Apply type override if needed
+        if (typeOverride.HasValue)
+        {
+            gameMove.Type = typeOverride.Value;
+        }
+
+        // Add to list
+        objectMoves.Add(gameMove);
+    }
+    return new DuelPokemon(
+        pokemonId: pid,
+        name: pn,
+        nickname: nick,
+        baseStats: baseStats,
+        hp: pokemonHp,
+        hpIV: hpiv,
+        atkIV: atkiv,
+        defIV: defiv,
+        spatkIV: spatkiv,
+        spdefIV: spdefiv,
+        speedIV: speediv,
+        hpEV: hpev,
+        atkEV: atkev,
+        defEV: defev,
+        spatkEV: spaev,
+        spdefEV: spdev,
+        speedEV: speedev,
+        level: plevel,
+        natureStatDeltas: natureStatDeltas,
+        shiny: shiny.GetValueOrDefault(),
+        radiant: radiant.GetValueOrDefault(),
+        skin: skin,
+        typeIds: typeIds,
+        megaTypeIds: megaTypeIds,
+        id: id,
+        heldItemData: hitemData,
+        happiness: happiness,
+        moves: objectMoves,
+        abilityId: abId,
+        megaAbilityId: megaAbilityId,
+        weight: weight,
+        gender: gender,
+        canStillEvolve: canStillEvolve,
+        dislikedFlavor: dislikedFlavor);
+}
     }
 }

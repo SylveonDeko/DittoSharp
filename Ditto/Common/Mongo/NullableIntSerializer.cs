@@ -1,6 +1,8 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 
+namespace Ditto.Common.Mongo;
+
 public class NullableIntSerializer : IBsonSerializer<int?>
 {
     public Type ValueType => typeof(int?);
@@ -16,7 +18,7 @@ public class NullableIntSerializer : IBsonSerializer<int?>
                 var str = context.Reader.ReadString();
                 if (string.IsNullOrEmpty(str))
                     return null;
-                if (int.TryParse(str, out int result))
+                if (int.TryParse(str, out var result))
                     return result;
                 return null;
             case BsonType.Null:

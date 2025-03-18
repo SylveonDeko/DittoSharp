@@ -1,6 +1,6 @@
-using Duels.Helpers;
+using Ditto.Modules.Duels.Impl.Helpers;
 
-namespace Duels
+namespace Ditto.Modules.Duels.Impl
 {
     /// <summary>
     /// Represents a genereric pokemon trainer.
@@ -117,26 +117,16 @@ namespace Duels
             public abstract bool IsSwitch { get; }
         }
 
-        public class MoveAction : TrainerAction
+        public class MoveAction(Move move) : TrainerAction
         {
-            public Move Move { get; set; }
-
-            public MoveAction(Move move)
-            {
-                Move = move;
-            }
+            public Move Move { get; set; } = move;
 
             public override bool IsSwitch => false;
         }
 
-        public class SwitchAction : TrainerAction
+        public class SwitchAction(int switchIndex) : TrainerAction
         {
-            public int SwitchIndex { get; set; }
-
-            public SwitchAction(int switchIndex)
-            {
-                SwitchIndex = switchIndex;
-            }
+            public int SwitchIndex { get; set; } = switchIndex;
 
             public override bool IsSwitch => true;
         }
@@ -427,12 +417,8 @@ namespace Duels
     /// <summary>
     /// Represents a pokemon trainer that is a NPC.
     /// </summary>
-    public class NPCTrainer : Trainer
+    public class NPCTrainer(List<DuelPokemon> party) : Trainer("Trainer John", party)
     {
-        public NPCTrainer(List<DuelPokemon> party) : base("Trainer John", party)
-        {
-        }
-
         //// <summary>
         /// Request a normal move from this trainer AI.
         /// </summary>
@@ -447,7 +433,7 @@ namespace Duels
                     break;
 
                 case ValidMovesResult.ResultType.Struggle:
-                    SelectedAction = new MoveAction(Duels.Move.Struggle());
+                    SelectedAction = new MoveAction(Impl.Move.Struggle());
                     break;
 
                 case ValidMovesResult.ResultType.ValidIndexes:

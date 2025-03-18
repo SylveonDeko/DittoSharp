@@ -56,13 +56,13 @@ public class User
     
     #region Pokemon Management
     [Column("pokes", TypeName = "bigint[]")]
-    public long[]? Pokemon { get; set; }
+    public ulong[]? Pokemon { get; set; }
     
     [Column("selected")]
-    public int? Selected { get; set; }
+    public ulong? Selected { get; set; }
     
     [Column("party", TypeName = "bigint[]")]
-    public long[]? Party { get; set; } = [0, 0, 0, 0, 0, 0];
+    public ulong[]? Party { get; set; } = [0, 0, 0, 0, 0, 0];
     
     [Column("daycare")]
     public int? Daycare { get; set; }

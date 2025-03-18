@@ -1,3 +1,4 @@
+using Ditto.Common.Mongo;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -22,19 +23,22 @@ public class Move
     public int TypeId { get; set; }
 
     [BsonElement("power")]
-    public int Power { get; set; }
+    [BsonSerializer(typeof(NullableIntSerializer))]
+    public int? Power { get; set; }
 
     [BsonElement("pp")]
     public int PP { get; set; }
 
     [BsonElement("accuracy")]
-    public int Accuracy { get; set; }
+    [BsonSerializer(typeof(NullableIntSerializer))]
+    public int? Accuracy { get; set; }
 
     [BsonElement("priority")]
     public int Priority { get; set; }
 
     [BsonElement("target_id")]
-    public int TargetId { get; set; }
+    [BsonSerializer(typeof(NullableIntSerializer))]
+    public int? TargetId { get; set; }
 
     [BsonElement("damage_class_id")]
     public int DamageClassId { get; set; }
@@ -43,14 +47,17 @@ public class Move
     public int EffectId { get; set; }
 
     [BsonElement("effect_chance")]
+    [BsonSerializer(typeof(NullableIntSerializer))]
     public int? EffectChance { get; set; }
 
     [BsonElement("crit_rate")]
     public int CritRate { get; set; }
 
     [BsonElement("max_hits")]
+    [BsonSerializer(typeof(NullableIntSerializer))]
     public int? MaxHits { get; set; }
 
     [BsonElement("min_hits")]
+    [BsonSerializer(typeof(NullableIntSerializer))]
     public int? MinHits { get; set; }
 }

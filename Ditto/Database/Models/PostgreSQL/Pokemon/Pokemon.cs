@@ -8,10 +8,10 @@ public class Pokemon
 {
     [Key]
     [Column("id")]
-    public int Id { get; set; }
+    public ulong Id { get; set; }
 
     [Column("ditto_id")]
-    public int DittoId { get; set; }
+    public ulong DittoId { get; set; }
     
     #region Basic Info
     [Column("pokname")]
@@ -177,7 +177,7 @@ public class Pokemon
     public bool Temporary { get; set; }
     
     [Column("owner")]
-    public ulong Owner { get; set; }
+    public ulong? Owner { get; set; }
     
     [Column("owned")]
     public bool? Owned { get; set; }

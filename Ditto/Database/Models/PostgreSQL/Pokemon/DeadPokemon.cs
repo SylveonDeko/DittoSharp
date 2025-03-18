@@ -8,7 +8,7 @@ public class DeadPokemon
 {
     [Key]
     [Column("id")]
-    public int Id { get; set; }
+    public ulong Id { get; set; }
 
 
     #region Basic Info
