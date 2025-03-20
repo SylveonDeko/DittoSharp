@@ -9,8 +9,6 @@ public sealed class EvoReqs
         _raw = raw;
     }
 
-    public static EvoReqs FromRaw(Dictionary<string, object> raw) => new(raw);
-
     public double Score
     {
         get
@@ -28,8 +26,23 @@ public sealed class EvoReqs
         }
     }
 
-    public bool UsedActiveItem() => _raw.GetValueOrDefault("trigger_item_id") != null;
+    public static EvoReqs FromRaw(Dictionary<string, object> raw)
+    {
+        return new EvoReqs(raw);
+    }
 
-    public static bool operator >(EvoReqs left, double right) => left.Score > right;
-    public static bool operator <(EvoReqs left, double right) => left.Score < right;
+    public bool UsedActiveItem()
+    {
+        return _raw.GetValueOrDefault("trigger_item_id") != null;
+    }
+
+    public static bool operator >(EvoReqs left, double right)
+    {
+        return left.Score > right;
+    }
+
+    public static bool operator <(EvoReqs left, double right)
+    {
+        return left.Score < right;
+    }
 }

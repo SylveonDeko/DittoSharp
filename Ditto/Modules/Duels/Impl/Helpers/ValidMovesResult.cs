@@ -9,13 +9,15 @@ public class ValidMovesResult
         Struggle
     }
 
+    private ValidMovesResult()
+    {
+    }
+
     public ResultType Type { get; private set; }
-    public Move ForcedMove { get; private set; }
+    public Move.Move ForcedMove { get; private set; }
     public List<int> ValidMoveIndexes { get; private set; }
 
-    private ValidMovesResult() { }
-
-    public static ValidMovesResult Forced(Move move)
+    public static ValidMovesResult Forced(Move.Move move)
     {
         return new ValidMovesResult
         {

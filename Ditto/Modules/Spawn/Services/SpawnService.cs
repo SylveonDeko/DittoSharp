@@ -5,31 +5,31 @@ using Ditto.Database.DbContextStuff;
 using Ditto.Database.Models.Mongo.Discord;
 using Ditto.Database.Models.PostgreSQL.Pokemon;
 using Ditto.Modules.Pokemon.Services;
+using Ditto.Modules.Spawn.Constants;
 using Ditto.Services.Impl;
 using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Serilog;
-using Ditto.Modules.Spawn.Constants;
+using User = Ditto.Database.Models.PostgreSQL.Bot.User;
 
 namespace Ditto.Modules.Spawn.Services;
 
 public class SpawnService : INService
 {
-    private readonly DiscordShardedClient _client;
-    private readonly IMongoService _mongoDb;
-    private readonly IDataCache _cache;
-    private readonly DbContextProvider _dbContextProvider;
-    private readonly Random _random;
-    private readonly ConcurrentDictionary<ulong, DateTime> _spawnCache = new(Environment.ProcessorCount, 1000);
-    private readonly HashSet<ulong> _activeVaults = [];
-    private bool _alwaysSpawn;
-    private readonly PokemonService _pokemonService;
-
     // Constants from Python code
     private const double BASE_SPAWN_CHANCE = 0.03;
     private const int BASE_COOLDOWN = 20;
     private static readonly ulong[] EXCLUDED_GUILDS = [264445053596991498, 446425626988249089];
+    private readonly HashSet<ulong> _activeVaults = [];
+    private readonly IDataCache _cache;
+    private readonly DiscordShardedClient _client;
+    private readonly DbContextProvider _dbContextProvider;
+    private readonly IMongoService _mongoDb;
+    private readonly PokemonService _pokemonService;
+    private readonly Random _random;
+    private readonly ConcurrentDictionary<ulong, DateTime> _spawnCache = new(Environment.ProcessorCount, 1000);
+    private bool _alwaysSpawn;
 
     public SpawnService(
         DiscordShardedClient client,
@@ -132,9 +132,7 @@ public class SpawnService : INService
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}");
         var threshold = 4000;
         if (inventory != null)
-        {
             threshold = (int)(threshold - threshold * (inventory.GetValueOrDefault("shiny-multiplier", 0) / 100.0));
-        }
 
         var isShiny = _random.Next(threshold) == 0;
         var honey = await db.Honey.FirstOrDefaultAsyncEF(h => h.ChannelId == channelId);
@@ -158,10 +156,10 @@ public class SpawnService : INService
     {
         var honeyValue = honey?.Type is "ghost" or "cheer" ? 0.0 : honey?.Type == null ? 0.0 : 50.0;
 
-        var legendBase = 4000 - (7600 * honeyValue / 100.0);
-        var ubBase = 3000 - (5700 * honeyValue / 100.0);
-        var pseudoBase = 1000 - (1900 * honeyValue / 100.0);
-        var starterBase = 750 - (950 * honeyValue / 100.0);
+        var legendBase = 4000 - 7600 * honeyValue / 100.0;
+        var ubBase = 3000 - 5700 * honeyValue / 100.0;
+        var pseudoBase = 1000 - 1900 * honeyValue / 100.0;
+        var starterBase = 750 - 950 * honeyValue / 100.0;
 
         return (
             (int)(_random.NextDouble() * Math.Round(legendBase)),
@@ -172,8 +170,8 @@ public class SpawnService : INService
     }
 
 
-
-    private async Task<string> SelectPokemon((int Legend, int Ub, int Pseudo, int Starter) chances, bool ghost, bool ice, ulong guildId)
+    private async Task<string> SelectPokemon((int Legend, int Ub, int Pseudo, int Starter) chances, bool ghost,
+        bool ice, ulong guildId)
     {
         if (ghost)
             return await GetRandomPokemonOfType(8);
@@ -183,11 +181,11 @@ public class SpawnService : INService
             return "ditto";
 
         // Low numbers = rare spawns in Python
-        var pokemon = chances.Legend < 2 ? GetRandomFromList(PokemonList.LegendList) :  // This matches Python
-            chances.Ub < 2 ? GetRandomFromList(PokemonList.ubList) :  // This matches Python
-            chances.Pseudo < 2 ? GetRandomFromList(PokemonList.pseudoList) :  // This matches Python
-            chances.Starter < 2 ? GetRandomFromList(PokemonList.starterList) :  // This matches Python
-            GetRandomFromList(PokemonList.pList);  // Fallback to normal list like Python
+        var pokemon = chances.Legend < 2 ? GetRandomFromList(PokemonList.LegendList) : // This matches Python
+            chances.Ub < 2 ? GetRandomFromList(PokemonList.ubList) : // This matches Python
+            chances.Pseudo < 2 ? GetRandomFromList(PokemonList.pseudoList) : // This matches Python
+            chances.Starter < 2 ? GetRandomFromList(PokemonList.starterList) : // This matches Python
+            GetRandomFromList(PokemonList.pList); // Fallback to normal list like Python
 
         return pokemon.ToLower();
     }
@@ -204,7 +202,8 @@ public class SpawnService : INService
 
         var embed = new EmbedBuilder()
             .WithTitle("🔒 A locked ditto vault has been spotted!")
-            .WithDescription($"`Decoding key:` ||{shiftInverted}||!\n# {giftWord}\n**Reply to the bots message with the pokemon name.**\nShift each letter up or down by the decoding key!\nBe the first decode and say the name to unlock the vault and see what its hiding!\n\n||`A B C D E F G H I J K L M N O P Q R S T U V W X Y Z`||")
+            .WithDescription(
+                $"`Decoding key:` ||{shiftInverted}||!\n# {giftWord}\n**Reply to the bots message with the pokemon name.**\nShift each letter up or down by the decoding key!\nBe the first decode and say the name to unlock the vault and see what its hiding!\n\n||`A B C D E F G H I J K L M N O P Q R S T U V W X Y Z`||")
             .WithColor(Color.Red)
             .WithImageUrl("https://images.mewdeko.tech/ditto_vault.png");
 
@@ -275,24 +274,36 @@ public class SpawnService : INService
             var shifted = (char)(c + shift);
             if (char.IsLower(c))
             {
-                if (shifted > 'z')
-                    shifted -= (char)26;
-                else if (shifted < 'a')
-                    shifted += (char)26;
+                switch (shifted)
+                {
+                    case > 'z':
+                        shifted -= (char)26;
+                        break;
+                    case < 'a':
+                        shifted += (char)26;
+                        break;
+                }
             }
             else
             {
-                if (shifted > 'Z')
-                    shifted -= (char)26;
-                else if (shifted < 'A')
-                    shifted += (char)26;
+                switch (shifted)
+                {
+                    case > 'Z':
+                        shifted -= (char)26;
+                        break;
+                    case < 'A':
+                        shifted += (char)26;
+                        break;
+                }
             }
+
             encoded.Append(shifted);
         }
+
         return encoded.ToString();
     }
 
-    private async Task<string> HandleShadowReward(Database.Models.PostgreSQL.Bot.User user, DittoContext db)
+    private async Task<string> HandleShadowReward(User user, DittoContext db)
     {
         if (string.IsNullOrEmpty(user.Hunt))
             return "You don't have a shadow hunt set! Here's some credits instead.";
@@ -302,7 +313,8 @@ public class SpawnService : INService
 
         if (isShadow)
         {
-            await CreatePokemon(user.UserId.GetValueOrDefault(), user.Hunt, shiny: false, skin: "shadow", boosted: true, level: 100);
+            await CreatePokemon(user.UserId.GetValueOrDefault(), user.Hunt, false, skin: "shadow", boosted: true,
+                level: 100);
             return $"Shadows pour from the vault and circle around you! You got a shadow {user.Hunt}!";
         }
 
@@ -311,9 +323,10 @@ public class SpawnService : INService
         return $"Shadows pour from the vault and circle around you! Your chain has increased by {shadowChainUp}!";
     }
 
-    private async Task<string> HandleChestReward(Database.Models.PostgreSQL.Bot.User user, DittoContext db)
+    private async Task<string> HandleChestReward(User user, DittoContext db)
     {
-        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ?? new();
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ??
+                        new Dictionary<string, int>();
         var chance = _random.Next(60);
 
         string chestType;
@@ -338,13 +351,14 @@ public class SpawnService : INService
         return $"> The vault contained a **{chestType}**!";
     }
 
-    private async Task<string> HandleGiftReward(Database.Models.PostgreSQL.Bot.User user, DittoContext db)
+    private async Task<string> HandleGiftReward(User user, DittoContext db)
     {
         // Implement gift creation logic
-        return "Its a winter wrapped gift! Oh, it even has a Ditto on it... Imagine that!\n\nGifts can be kept and opened or gifted to others as a `Mystery Gift`\nSee `/explain event`";
+        return
+            "Its a winter wrapped gift! Oh, it even has a Ditto on it... Imagine that!\n\nGifts can be kept and opened or gifted to others as a `Mystery Gift`\nSee `/explain event`";
     }
 
-    private async Task<string> HandleRedeemReward(Database.Models.PostgreSQL.Bot.User user, DittoContext db)
+    private async Task<string> HandleRedeemReward(User user, DittoContext db)
     {
         var redeems = _random.Next(1, 3) + 1;
         user.Redeems += redeems;
@@ -364,8 +378,7 @@ public class SpawnService : INService
     {
         if (config.Redirects?.Any() != true) return channel as ITextChannel;
         var redirectId = config.Redirects[_random.Next(config.Redirects.Count)];
-        var redirectChannel = channel.Guild.GetChannel(redirectId) as ITextChannel;
-        if (redirectChannel == null)
+        if (channel.Guild.GetChannel(redirectId) is not ITextChannel redirectChannel)
             return null;
 
         var user = channel.Guild.GetUser(_client.CurrentUser.Id);
@@ -384,9 +397,15 @@ public class SpawnService : INService
         return !config.DisabledSpawnChannels.Contains(channel.Id);
     }
 
-    private int Round(double value) => (int)Math.Round(value);
+    private int Round(double value)
+    {
+        return (int)Math.Round(value);
+    }
 
-    private string GetRandomFromList(IReadOnlyList<string> list) => list[_random.Next(list.Count)];
+    private string GetRandomFromList(IReadOnlyList<string> list)
+    {
+        return list[_random.Next(list.Count)];
+    }
 
     private async Task<bool> ShadowHuntCheck(ulong userId, string pokemon)
     {
@@ -407,68 +426,69 @@ public class SpawnService : INService
         return makeShadow;
     }
 
-   private async Task CreateAndSendSpawnMessage(ITextChannel channel, string pokemonName, bool isShiny, Guild config)
-{
-    // Get form info from MongoDB for validation
-    var formInfo = await _mongoDb.Forms
-        .Find(f => f.Identifier == pokemonName.ToLower())
-        .FirstOrDefaultAsync();
-
-    if (formInfo == null)
+    private async Task CreateAndSendSpawnMessage(ITextChannel channel, string pokemonName, bool isShiny, Guild config)
     {
-        Log.Error("Invalid pokemon name {Pokemon} in spawn", pokemonName);
-        return;
+        // Get form info from MongoDB for validation
+        var formInfo = await _mongoDb.Forms
+            .Find(f => f.Identifier == pokemonName.ToLower())
+            .FirstOrDefaultAsync();
+
+        if (formInfo == null)
+        {
+            Log.Error("Invalid pokemon name {Pokemon} in spawn", pokemonName);
+            return;
+        }
+
+        // Get the image URL
+        var (_, imageUrl) = await _pokemonService.GetPokemonFormInfo(pokemonName, isShiny);
+        if (string.IsNullOrEmpty(imageUrl)) return;
+
+        var shinyEmote = isShiny ? "<a:shiny:1057764628349853786>" : "";
+        var spawnMessage = SpawnMessages.Messages[_random.Next(SpawnMessages.Messages.Count)];
+
+        // Calculate spawn chances ONCE
+        var legChance = _random.Next(4000);
+        var ubChance = _random.Next(3000);
+
+        var embed = new EmbedBuilder()
+            .WithTitle(spawnMessage)
+            .WithDescription($"{shinyEmote}This Pokémon's name starts with {pokemonName[0]}{shinyEmote}")
+            .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
+            .WithFooter("/explain spawns for basic info");
+
+        if (config.SmallImages)
+            embed.WithThumbnailUrl(imageUrl);
+        else
+            embed.WithImageUrl(imageUrl);
+
+        // Create spawn message with or without button
+        IUserMessage spawnMsg;
+        if (config.ModalView)
+        {
+            var button = new ButtonBuilder()
+                .WithLabel("Catch This Pokemon!")
+                .WithCustomId($"catch:{pokemonName},{isShiny},{legChance},{ubChance}")
+                .WithStyle(ButtonStyle.Primary);
+
+            var component = new ComponentBuilder().WithButton(button);
+
+            spawnMsg = await channel.SendMessageAsync(embed: embed.Build(), components: component.Build());
+        }
+        else
+        {
+            spawnMsg = await channel.SendMessageAsync(embed: embed.Build());
+            _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
+                ubChance); // Pass the chances here too
+        }
     }
 
-    // Get the image URL
-    var (_, imageUrl) = await _pokemonService.GetPokemonFormInfo(pokemonName, isShiny);
-    if (string.IsNullOrEmpty(imageUrl)) return;
-
-    var shinyEmote = isShiny ? "<a:shiny:1057764628349853786>" : "";
-    var spawnMessage = SpawnMessages.Messages[_random.Next(SpawnMessages.Messages.Count)];
-
-    // Calculate spawn chances ONCE
-    var legChance = _random.Next(4000);
-    var ubChance = _random.Next(3000);
-
-    var embed = new EmbedBuilder()
-        .WithTitle(spawnMessage)
-        .WithDescription($"{shinyEmote}This Pokémon's name starts with {pokemonName[0]}{shinyEmote}")
-        .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
-        .WithFooter("/explain spawns for basic info");
-
-    if (config.SmallImages)
-        embed.WithThumbnailUrl(imageUrl);
-    else
-        embed.WithImageUrl(imageUrl);
-
-    // Create spawn message with or without button
-    IUserMessage spawnMsg;
-    if (config.ModalView)
-    {
-        var button = new ButtonBuilder()
-            .WithLabel("Catch This Pokemon!")
-            .WithCustomId($"catch:{pokemonName},{isShiny},{legChance},{ubChance}")
-            .WithStyle(ButtonStyle.Primary);
-
-        var component = new ComponentBuilder().WithButton(button);
-
-        spawnMsg = await channel.SendMessageAsync(embed: embed.Build(), components: component.Build());
-    }
-    else
-    {
-        spawnMsg = await channel.SendMessageAsync(embed: embed.Build());
-        _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance, ubChance); // Pass the chances here too
-    }
-}
-
-    private async Task HandleMessageCollector(ITextChannel channel, IUserMessage spawnMsg, string pokemonName, bool isShiny, Guild config, int legChance, int ubChance)
+    private async Task HandleMessageCollector(ITextChannel channel, IUserMessage spawnMsg, string pokemonName,
+        bool isShiny, Guild config, int legChance, int ubChance)
     {
         var catchOptions = GetCatchOptions(pokemonName);
         var hasCaught = false;
 
         for (var i = 0; i < 12; i++) // 12 * 50 = 600 seconds (10 minutes)
-        {
             try
             {
                 var collected = await channel.GetMessagesAsync(50).FlattenAsync();
@@ -497,10 +517,15 @@ public class SpawnService : INService
                     {
                         await message.AddReactionAsync(new Emoji("✅"));
                     }
-                    catch { /* Ignore reaction errors */ }
+                    catch
+                    {
+                        /* Ignore reaction errors */
+                    }
 
                     if (result.ShouldDeleteSpawn)
+                    {
                         await spawnMsg.DeleteAsync();
+                    }
                     else
                     {
                         var originalEmbed = spawnMsg.Embeds.First().ToEmbedBuilder();
@@ -530,11 +555,9 @@ public class SpawnService : INService
             {
                 Log.Error(ex, "Error in message collector for spawn");
             }
-        }
 
         // Timeout if no one caught it
         if (!hasCaught)
-        {
             try
             {
                 var timeoutEmbed = spawnMsg.Embeds.First().ToEmbedBuilder();
@@ -545,8 +568,10 @@ public class SpawnService : INService
                     m.Components = new ComponentBuilder().Build();
                 });
             }
-            catch { /* Ignore timeout message errors */ }
-        }
+            catch
+            {
+                /* Ignore timeout message errors */
+            }
     }
 
     public List<string> GetCatchOptions(string pokemonName)
@@ -598,6 +623,7 @@ public class SpawnService : INService
                         $"paldean-{baseName}"
                     ]);
                 }
+
                 break;
         }
 
@@ -630,13 +656,6 @@ public class SpawnService : INService
         return validForms[_random.Next(validForms.Count)];
     }
 
-    public record CatchResult(
-        bool Success,
-        string Message,
-        Embed ResponseEmbed,
-        bool ShouldDeleteSpawn,
-        bool ShouldPinSpawn);
-
     public async Task<CatchResult> HandleCatch(
         ulong userId,
         ulong guildId,
@@ -650,7 +669,8 @@ public class SpawnService : INService
         var conf = await _mongoDb.Guilds.Find(x => x.GuildId == guildId).FirstOrDefaultAsync();
 
         if (user == null)
-            return new CatchResult(false, "You have not started!\nStart with `/start` first!", null, conf?.DeleteSpawns ?? false,
+            return new CatchResult(false, "You have not started!\nStart with `/start` first!", null,
+                conf?.DeleteSpawns ?? false,
                 conf?.PinSpawns ?? false);
 
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}");
@@ -658,12 +678,14 @@ public class SpawnService : INService
         var boosted = _random.Next(500) < ivMulti;
         var level = _random.Next(1, 61);
 
-        var pokemon = await CreatePokemon(userId, pokemonName, isShiny, boosted: boosted, level: level);
+        var pokemon = await CreatePokemon(userId, pokemonName, isShiny, boosted, level: level);
         if (pokemon == null)
-            return new CatchResult(false, "Failed to create Pokemon", null, conf?.DeleteSpawns ?? false, conf?.PinSpawns ?? false);
+            return new CatchResult(false, "Failed to create Pokemon", null, conf?.DeleteSpawns ?? false,
+                conf?.PinSpawns ?? false);
 
         var ivPercent = Math.Round((pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
-                                  pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100, 2);
+                                    pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100,
+            2);
 
         var rewardMessages = new List<string>();
         var shinyEmote = isShiny ? "<a:shiny:1057764628349853786>" : "";
@@ -718,7 +740,7 @@ public class SpawnService : INService
             (conf?.PinSpawns ?? false) && (legendChance < 2 || ubChance < 2));
     }
 
-    private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(Database.Models.PostgreSQL.Bot.User user)
+    private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(User user)
     {
         var berryChance = _random.Next(1, 101);
         var expensiveChance = _random.Next(1, 26);
@@ -726,7 +748,8 @@ public class SpawnService : INService
         if (berryChance >= 8)
             return (null, null);
 
-        Dictionary<string?, int> items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ?? new Dictionary<string?, int>();
+        Dictionary<string?, int> items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
+                                         new Dictionary<string?, int>();
 
         string? berry;
         if (berryChance == 1)
@@ -847,14 +870,23 @@ public class SpawnService : INService
         {
             if (pokemonName.ToLower().Contains("nidoran-"))
                 gender = pokemonName.ToLower().EndsWith("f") ? "-f" : "-m";
-            else if (pokemonName.ToLower() == "illumise")
-                gender = "-f";
-            else if (pokemonName.ToLower() == "volbeat")
-                gender = "-m";
-            else if (pokemonInfo.GenderRate == -1)
-                gender = "-x";
-            else
-                gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
+            else switch (pokemonName.ToLower())
+            {
+                case "illumise":
+                    gender = "-f";
+                    break;
+                case "volbeat":
+                    gender = "-m";
+                    break;
+                default:
+                {
+                    if (pokemonInfo.GenderRate == -1)
+                        gender = "-x";
+                    else
+                        gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
+                    break;
+                }
+            }
         }
 
         // Check for shadow override if no skin is specified
@@ -961,11 +993,11 @@ public class SpawnService : INService
             return new EmbedBuilder()
                 .WithColor(Color.Red)
                 .WithDescription("Invalid setting. Available settings:\n" +
-                               "- delete (true/false)\n" +
-                               "- pin (true/false)\n" +
-                               "- small (true/false)\n" +
-                               "- modal (true/false)\n" +
-                               "- enableall (true/false)")
+                                 "- delete (true/false)\n" +
+                                 "- pin (true/false)\n" +
+                                 "- small (true/false)\n" +
+                                 "- modal (true/false)\n" +
+                                 "- enableall (true/false)")
                 .Build();
 
         await _mongoDb.Guilds.UpdateOneAsync(
@@ -1087,4 +1119,11 @@ public class SpawnService : INService
 
         return embed.Build();
     }
+
+    public record CatchResult(
+        bool Success,
+        string Message,
+        Embed ResponseEmbed,
+        bool ShouldDeleteSpawn,
+        bool ShouldPinSpawn);
 }

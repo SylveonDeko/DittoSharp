@@ -6,7 +6,7 @@ public interface IDataCache : IDisposable
 {
     ConnectionMultiplexer Redis { get; }
     ISubscriber Subscriber { get; }
-    
+
     Task<T> GetOrAddCachedDataAsync<T>(string key, Func<Task<T>> factory, TimeSpan? expiry = null);
     Task<bool> TryAddToCache(string key, object value, TimeSpan? expiry = null);
     Task AddToCache(string key, object value, TimeSpan? expiry = null);

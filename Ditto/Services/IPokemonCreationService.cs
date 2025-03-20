@@ -13,5 +13,6 @@ public interface IPokemonCreationService
         string skin = null,
         string gender = null,
         int level = 1);
+
     Task<bool> RemovePokemon(ulong userId, int pokemonId, bool delete = false);
 }

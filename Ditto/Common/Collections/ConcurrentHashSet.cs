@@ -34,10 +34,7 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
     /// <param name="comparer">The comparer to use for item equality.</param>
     public ConcurrentHashSet(IEnumerable<T> values, IEqualityComparer<T>? comparer = null)
     {
-        if (values == null)
-        {
-            throw new ArgumentNullException(nameof(values));
-        }
+        if (values == null) throw new ArgumentNullException(nameof(values));
 
         backingStore =
             new ConcurrentDictionary<T, bool>(values.Select(x => new KeyValuePair<T, bool>(x, true)), comparer);
@@ -69,13 +66,7 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
     /// <summary>
     ///     Gets the number of elements contained in the set.
     /// </summary>
-    public int Count
-    {
-        get
-        {
-            return backingStore.Count;
-        }
-    }
+    public int Count => backingStore.Count;
 
     /// <summary>
     ///     Adds an item to the set.
@@ -148,13 +139,7 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
     /// <summary>
     ///     Gets a value indicating whether the set is read-only.
     /// </summary>
-    public bool IsReadOnly
-    {
-        get
-        {
-            return false;
-        }
-    }
+    public bool IsReadOnly => false;
 
     // Members of ISet<T>
     /// <summary>
@@ -267,12 +252,10 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
         if (other == null) throw new ArgumentNullException(nameof(other));
 
         foreach (var item in other)
-        {
             if (Contains(item))
                 TryRemove(item);
             else
                 Add(item);
-        }
     }
 
     /// <summary>
@@ -284,10 +267,7 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
     {
         ArgumentNullException.ThrowIfNull(other);
 
-        foreach (var item in other)
-        {
-            Add(item);
-        }
+        foreach (var item in other) Add(item);
     }
 
     /// <summary>

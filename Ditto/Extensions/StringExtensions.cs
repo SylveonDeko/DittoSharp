@@ -22,6 +22,8 @@ public static partial class StringExtensions
 
     public static readonly Regex UrlRegex = MyRegex1();
 
+    public static readonly Regex UserMentionsRegex = MyRegex();
+
     public static string GenerateSecureString(int length)
     {
         const string chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -46,17 +48,16 @@ public static partial class StringExtensions
         // Split by hyphens and capitalize each part
         var parts = str.Split('-');
         for (var i = 0; i < parts.Length; i++)
-        {
             if (!string.IsNullOrEmpty(parts[i]))
-            {
                 parts[i] = char.ToUpper(parts[i][0]) + parts[i][1..].ToLower();
-            }
-        }
+
         return string.Join("-", parts);
     }
 
-    public static readonly Regex UserMentionsRegex = MyRegex();
-    public static bool IsNullOrWhiteSpace(this string str) => string.IsNullOrWhiteSpace(str);
+    public static bool IsNullOrWhiteSpace(this string str)
+    {
+        return string.IsNullOrWhiteSpace(str);
+    }
 
     public static string PadBoth(this string str, int length)
     {
@@ -65,14 +66,17 @@ public static partial class StringExtensions
         return str.PadLeft(padLeft).PadRight(length);
     }
 
-    public static bool IsImage(this string input) =>
-        input.EndsWith(".png") ||
-        input.EndsWith(".gif") ||
-        input.EndsWith(".jpg") ||
-        input.EndsWith(".jpeg");
+    public static bool IsImage(this string input)
+    {
+        return input.EndsWith(".png") ||
+               input.EndsWith(".gif") ||
+               input.EndsWith(".jpg") ||
+               input.EndsWith(".jpeg");
+    }
 
-    public static bool CheckIfMusicUrl(this string input) =>
-        input.EndsWith(".mp4") switch
+    public static bool CheckIfMusicUrl(this string input)
+    {
+        return input.EndsWith(".mp4") switch
         {
             false when input.EndsWith(".mp3") => true,
             false when input.EndsWith(".flac") => true,
@@ -83,14 +87,23 @@ public static partial class StringExtensions
             false => false,
             _ => true
         };
+    }
 
     public static bool CheckIfNotEmbeddable(this string input)
-        => input.EndsWith("gifv") || input.EndsWith("mp4") || !input.EndsWith(".png") && !input.EndsWith(".jpg") &&
+    {
+        return input.EndsWith("gifv") || input.EndsWith("mp4") || !input.EndsWith(".png") && !input.EndsWith(".jpg") &&
             !input.EndsWith(".jpeg") || !input.EndsWith(".gif");
+    }
 
-    public static T MapJson<T>(this string str) => JsonConvert.DeserializeObject<T>(str);
+    public static T MapJson<T>(this string str)
+    {
+        return JsonConvert.DeserializeObject<T>(str);
+    }
 
-    public static string StripHtml(this string input) => Regex.Replace(input, "<.*?>", string.Empty);
+    public static string StripHtml(this string input)
+    {
+        return Regex.Replace(input, "<.*?>", string.Empty);
+    }
 
     public static string ToTitleCase(this string str)
     {
@@ -173,7 +186,10 @@ public static partial class StringExtensions
         return ms;
     }
 
-    public static bool IsDiscordInvite(this string str) => FilterRegex.IsMatch(str);
+    public static bool IsDiscordInvite(this string str)
+    {
+        return FilterRegex.IsMatch(str);
+    }
 
     public static string SanitizeMentions(this string? str, bool sanitizeRoleMentions = false)
     {
@@ -185,14 +201,26 @@ public static partial class StringExtensions
         return str;
     }
 
-    public static string SanitizeRoleMentions(this string? str) => str.Replace("<@&", "<ම&", StringComparison.InvariantCultureIgnoreCase);
+    public static string SanitizeRoleMentions(this string? str)
+    {
+        return str.Replace("<@&", "<ම&", StringComparison.InvariantCultureIgnoreCase);
+    }
 
-    public static string RemoveUserMentions(this string str) => UserMentionsRegex.Replace(str, "");
+    public static string RemoveUserMentions(this string str)
+    {
+        return UserMentionsRegex.Replace(str, "");
+    }
 
-    public static IEnumerable<ulong> GetUserMentions(this string str) => UserMentionsRegex.Matches(str).Select(x => ulong.TryParse(x.Value, out var u) ? u : 0)
-        .Where(x => x is not 0).Distinct();
+    public static IEnumerable<ulong> GetUserMentions(this string str)
+    {
+        return UserMentionsRegex.Matches(str).Select(x => ulong.TryParse(x.Value, out var u) ? u : 0)
+            .Where(x => x is not 0).Distinct();
+    }
 
-    public static string SanitizeAllMentions(this string? str) => str.SanitizeMentions().SanitizeRoleMentions();
+    public static string SanitizeAllMentions(this string? str)
+    {
+        return str.SanitizeMentions().SanitizeRoleMentions();
+    }
 
     public static string ToBase64(this string plainText)
     {
@@ -200,13 +228,25 @@ public static partial class StringExtensions
         return Convert.ToBase64String(plainTextBytes);
     }
 
-    public static string GetInitials(this string txt, string glue = "") => string.Join(glue, txt.Split(' ').Select(x => x.FirstOrDefault()));
+    public static string GetInitials(this string txt, string glue = "")
+    {
+        return string.Join(glue, txt.Split(' ').Select(x => x.FirstOrDefault()));
+    }
 
-    public static bool IsAlphaNumeric(this string txt) => txt.All(c => LettersAndDigits.Contains(c));
+    public static bool IsAlphaNumeric(this string txt)
+    {
+        return txt.All(c => LettersAndDigits.Contains(c));
+    }
 
-    public static string RemoveUrls(this string txt) => MyRegex1().Replace(txt, "");
+    public static string RemoveUrls(this string txt)
+    {
+        return MyRegex1().Replace(txt, "");
+    }
 
-    public static string EscapeWeirdStuff(this string txt) => txt.Replace(@"\", @"\\").Replace("\"", "\\\"");
+    public static string EscapeWeirdStuff(this string txt)
+    {
+        return txt.Replace(@"\", @"\\").Replace("\"", "\\\"");
+    }
 
     public static bool TryFormat(string data, object[] args, out string output)
     {
@@ -224,10 +264,15 @@ public static partial class StringExtensions
 
     [GeneratedRegex("@<@\\d{17,19}>|\\d{17,19}", RegexOptions.Compiled)]
     private static partial Regex MyRegex();
+
     [GeneratedRegex(@"^(https?|ftp)://(?<path>[^\s/$.?#].[^\s]*)$", RegexOptions.Compiled)]
     private static partial Regex MyRegex1();
-    [GeneratedRegex(@"(\\U(?<code>[a-zA-Z0-9]{8})|\\u(?<code>[a-zA-Z0-9]{4})|\\x(?<code>[a-zA-Z0-9]{2}))", RegexOptions.Compiled)]
+
+    [GeneratedRegex(@"(\\U(?<code>[a-zA-Z0-9]{8})|\\u(?<code>[a-zA-Z0-9]{4})|\\x(?<code>[a-zA-Z0-9]{2}))",
+        RegexOptions.Compiled)]
     private static partial Regex MyRegex2();
-    [GeneratedRegex(@"discord(?:\.gg|\.io|\.me|\.li|(?:app)?\.com\/invite)\/(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled, "en-US")]
+
+    [GeneratedRegex(@"discord(?:\.gg|\.io|\.me|\.li|(?:app)?\.com\/invite)\/(\w+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled, "en-US")]
     private static partial Regex MyRegex3();
 }

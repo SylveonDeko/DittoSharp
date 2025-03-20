@@ -76,7 +76,8 @@ public class ItemSlashCommands : DittoSlashModuleBase<ItemsService>
         [SlashCommand("chest", "Buy a radiant chest")]
         public async Task Chest(string chestType, string creditsOrRedeems)
         {
-            if (!await PromptUserConfirmAsync($"Are you sure you want to buy a {chestType} chest for {creditsOrRedeems}?", ctx.User.Id))
+            if (!await PromptUserConfirmAsync(
+                    $"Are you sure you want to buy a {chestType} chest for {creditsOrRedeems}?", ctx.User.Id))
             {
                 await RespondAsync("Purchase cancelled.", ephemeral: true);
                 return;

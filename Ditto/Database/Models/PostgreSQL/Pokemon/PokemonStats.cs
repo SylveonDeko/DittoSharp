@@ -10,10 +10,8 @@ public class PokemonStats
     [Column("pokemon")]
     [StringLength(255)]
     public string Pokemon { get; set; } = null!;
-    
-    [Column("wins")]
-    public int? Wins { get; set; }
-    
-    [Column("faints")]
-    public int? Faints { get; set; }
+
+    [Column("wins")] public int? Wins { get; set; }
+
+    [Column("faints")] public int? Faints { get; set; }
 }

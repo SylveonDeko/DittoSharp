@@ -8,15 +8,14 @@ namespace Ditto.Services;
 
 public class GuildSettingsService : IAsyncDisposable
 {
-    private readonly IMongoService _mongo;
-    private readonly BotCredentials _creds;
-    private readonly IDataCache _cache;
-    private readonly ConcurrentDictionary<ulong, GuildConfigChanged> _changeTracker;
-    private readonly Channel<(ulong GuildId, Guild Config)> _updateChannel;
-
     private const string PrefixCacheKey = "prefix:{0}";
     private const string ConfigCacheKey = "guild_config:{0}";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
+    private readonly IDataCache _cache;
+    private readonly ConcurrentDictionary<ulong, GuildConfigChanged> _changeTracker;
+    private readonly BotCredentials _creds;
+    private readonly IMongoService _mongo;
+    private readonly Channel<(ulong GuildId, Guild Config)> _updateChannel;
 
     public GuildSettingsService(
         IMongoService mongo,
@@ -33,6 +32,14 @@ public class GuildSettingsService : IAsyncDisposable
         _ = ProcessConfigUpdatesAsync();
     }
 
+    public async ValueTask DisposeAsync()
+    {
+        _updateChannel.Writer.Complete();
+        await SaveConfigBatchAsync(
+            _changeTracker.Select(x => (x.Key, GetGuildConfigAsync(x.Key).GetAwaiter().GetResult())));
+        GC.SuppressFinalize(this);
+    }
+
     public async Task<string> GetPrefix(IGuild? guild)
     {
         if (guild is null)
@@ -40,7 +47,8 @@ public class GuildSettingsService : IAsyncDisposable
 
         var cacheKey = string.Format(PrefixCacheKey, guild.Id);
         return await _cache.GetOrAddCachedDataAsync(cacheKey,
-            async () => {
+            async () =>
+            {
                 var config = await GetGuildConfigAsync(guild.Id);
                 return string.IsNullOrWhiteSpace(config.Prefix)
                     ? _creds.DefaultPrefix
@@ -157,10 +165,7 @@ public class GuildSettingsService : IAsyncDisposable
 
         while (await _updateChannel.Reader.WaitToReadAsync())
         {
-            while (batch.Count < 100 && _updateChannel.Reader.TryRead(out var update))
-            {
-                batch.Add(update);
-            }
+            while (batch.Count < 100 && _updateChannel.Reader.TryRead(out var update)) batch.Add(update);
 
             if (batch.Count > 0)
             {
@@ -202,10 +207,7 @@ public class GuildSettingsService : IAsyncDisposable
                 });
             }
 
-            if (bulkOps.Any())
-            {
-                await _mongo.Guilds.BulkWriteAsync(bulkOps);
-            }
+            if (bulkOps.Any()) await _mongo.Guilds.BulkWriteAsync(bulkOps);
 
             foreach (var (guildId, config) in updates)
             {
@@ -217,14 +219,6 @@ public class GuildSettingsService : IAsyncDisposable
         {
             Log.Error(ex, "Error saving guild configs batch");
         }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _updateChannel.Writer.Complete();
-        await SaveConfigBatchAsync(
-            _changeTracker.Select(x => (x.Key, GetGuildConfigAsync(x.Key).GetAwaiter().GetResult())));
-        GC.SuppressFinalize(this);
     }
 
     private class GuildConfigChanged

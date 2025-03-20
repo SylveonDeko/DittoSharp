@@ -10,17 +10,13 @@ public class Item
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int ItemId { get; set; }
+    [BsonElement("id")] public int ItemId { get; set; }
 
-    [BsonElement("identifier")]
-    public string? Identifier { get; set; }
+    [BsonElement("identifier")] public string? Identifier { get; set; }
 
-    [BsonElement("category_id")]
-    public int CategoryId { get; set; }
+    [BsonElement("category_id")] public int CategoryId { get; set; }
 
-    [BsonElement("cost")]
-    public int Cost { get; set; }
+    [BsonElement("cost")] public int Cost { get; set; }
 
     [BsonElement("fling_power")]
     [BsonSerializer(typeof(NullableIntSerializer))]

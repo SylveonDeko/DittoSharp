@@ -1,6 +1,6 @@
 ﻿using Serilog;
-using Serilog.Events;
 using Serilog.Core;
+using Serilog.Events;
 
 namespace Ditto.Common;
 
@@ -24,7 +24,8 @@ public static class LogSetup
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
                 fileSizeLimitBytes: 52428800,
-                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                outputTemplate:
+                "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
     }
 }

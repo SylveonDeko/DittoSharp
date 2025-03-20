@@ -21,6 +21,59 @@ public sealed class EventHandler : IDisposable
         RegisterEvents();
     }
 
+    /// <summary>
+    ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+    /// </summary>
+    public void Dispose()
+    {
+        try
+        {
+            // Unregister all events
+            _client.MessageReceived -= ClientOnMessageReceived;
+            _client.UserJoined -= ClientOnUserJoined;
+            _client.UserLeft -= ClientOnUserLeft;
+            _client.MessageDeleted -= ClientOnMessageDeleted;
+            _client.GuildMemberUpdated -= ClientOnGuildMemberUpdated;
+            _client.MessageUpdated -= ClientOnMessageUpdated;
+            _client.MessagesBulkDeleted -= ClientOnMessagesBulkDeleted;
+            _client.UserBanned -= ClientOnUserBanned;
+            _client.UserUnbanned -= ClientOnUserUnbanned;
+            _client.UserVoiceStateUpdated -= ClientOnUserVoiceStateUpdated;
+            _client.UserUpdated -= ClientOnUserUpdated;
+            _client.ChannelCreated -= ClientOnChannelCreated;
+            _client.ChannelDestroyed -= ClientOnChannelDestroyed;
+            _client.ChannelUpdated -= ClientOnChannelUpdated;
+            _client.RoleDeleted -= ClientOnRoleDeleted;
+            _client.ReactionAdded -= ClientOnReactionAdded;
+            _client.ReactionRemoved -= ClientOnReactionRemoved;
+            _client.ReactionsCleared -= ClientOnReactionsCleared;
+            _client.InteractionCreated -= ClientOnInteractionCreated;
+            _client.UserIsTyping -= ClientOnUserIsTyping;
+            _client.PresenceUpdated -= ClientOnPresenceUpdated;
+            _client.JoinedGuild -= ClientOnJoinedGuild;
+            _client.GuildScheduledEventCreated -= ClientOnEventCreated;
+            _client.RoleUpdated -= ClientOnRoleUpdated;
+            _client.GuildUpdated -= ClientOnGuildUpdated;
+            _client.RoleCreated -= ClientOnRoleCreated;
+            _client.ThreadCreated -= ClientOnThreadCreated;
+            _client.ThreadUpdated -= ClientOnThreadUpdated;
+            _client.ThreadDeleted -= ClientOnThreadDeleted;
+            _client.ThreadMemberJoined -= ClientOnThreadMemberJoined;
+            _client.ThreadMemberLeft -= ClientOnThreadMemberLeft;
+            _client.AuditLogCreated -= ClientOnAuditLogCreated;
+            _client.GuildAvailable -= ClientOnGuildAvailable;
+            _client.LeftGuild -= ClientOnLeftGuild;
+            _client.InviteCreated -= ClientOnInviteCreated;
+            _client.InviteDeleted -= ClientOnInviteDeleted;
+
+            Log.Information("Successfully unregistered all Discord event handlers");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error occurred while disposing AsyncEventHandler");
+        }
+    }
+
     private void RegisterEvents()
     {
         _client.MessageReceived += ClientOnMessageReceived;
@@ -59,6 +112,37 @@ public sealed class EventHandler : IDisposable
         _client.LeftGuild += ClientOnLeftGuild;
         _client.InviteCreated += ClientOnInviteCreated;
         _client.InviteDeleted += ClientOnInviteDeleted;
+    }
+
+    /// <summary>
+    ///     Safely executes an event handler with error logging
+    /// </summary>
+    private static void SafeExecuteHandler(Func<Task> handlerAction, string eventName)
+    {
+        _ = ExecuteHandlerAsync(handlerAction, eventName);
+    }
+
+    private static async Task ExecuteHandlerAsync(Func<Task> handlerAction, string eventName)
+    {
+        try
+        {
+            await handlerAction().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Use structured logging with Serilog
+            Log.Error(ex,
+                "Error occurred in {EventName} handler: {ErrorMessage}",
+                eventName,
+                ex.Message);
+
+            // If there's an inner exception, log that too
+            if (ex.InnerException != null)
+                Log.Error(ex.InnerException,
+                    "Inner exception in {EventName} handler: {ErrorMessage}",
+                    eventName,
+                    ex.InnerException.Message);
+        }
     }
 
     #region Delegates
@@ -559,90 +643,4 @@ public sealed class EventHandler : IDisposable
     }
 
     #endregion
-
-    /// <summary>
-    ///     Safely executes an event handler with error logging
-    /// </summary>
-    private static void SafeExecuteHandler(Func<Task> handlerAction, string eventName)
-    {
-        _ = ExecuteHandlerAsync(handlerAction, eventName);
-    }
-
-    private static async Task ExecuteHandlerAsync(Func<Task> handlerAction, string eventName)
-    {
-        try
-        {
-            await handlerAction().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            // Use structured logging with Serilog
-            Log.Error(ex,
-                "Error occurred in {EventName} handler: {ErrorMessage}",
-                eventName,
-                ex.Message);
-
-            // If there's an inner exception, log that too
-            if (ex.InnerException != null)
-            {
-                Log.Error(ex.InnerException,
-                    "Inner exception in {EventName} handler: {ErrorMessage}",
-                    eventName,
-                    ex.InnerException.Message);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-    /// </summary>
-    public void Dispose()
-    {
-        try
-        {
-            // Unregister all events
-            _client.MessageReceived -= ClientOnMessageReceived;
-            _client.UserJoined -= ClientOnUserJoined;
-            _client.UserLeft -= ClientOnUserLeft;
-            _client.MessageDeleted -= ClientOnMessageDeleted;
-            _client.GuildMemberUpdated -= ClientOnGuildMemberUpdated;
-            _client.MessageUpdated -= ClientOnMessageUpdated;
-            _client.MessagesBulkDeleted -= ClientOnMessagesBulkDeleted;
-            _client.UserBanned -= ClientOnUserBanned;
-            _client.UserUnbanned -= ClientOnUserUnbanned;
-            _client.UserVoiceStateUpdated -= ClientOnUserVoiceStateUpdated;
-            _client.UserUpdated -= ClientOnUserUpdated;
-            _client.ChannelCreated -= ClientOnChannelCreated;
-            _client.ChannelDestroyed -= ClientOnChannelDestroyed;
-            _client.ChannelUpdated -= ClientOnChannelUpdated;
-            _client.RoleDeleted -= ClientOnRoleDeleted;
-            _client.ReactionAdded -= ClientOnReactionAdded;
-            _client.ReactionRemoved -= ClientOnReactionRemoved;
-            _client.ReactionsCleared -= ClientOnReactionsCleared;
-            _client.InteractionCreated -= ClientOnInteractionCreated;
-            _client.UserIsTyping -= ClientOnUserIsTyping;
-            _client.PresenceUpdated -= ClientOnPresenceUpdated;
-            _client.JoinedGuild -= ClientOnJoinedGuild;
-            _client.GuildScheduledEventCreated -= ClientOnEventCreated;
-            _client.RoleUpdated -= ClientOnRoleUpdated;
-            _client.GuildUpdated -= ClientOnGuildUpdated;
-            _client.RoleCreated -= ClientOnRoleCreated;
-            _client.ThreadCreated -= ClientOnThreadCreated;
-            _client.ThreadUpdated -= ClientOnThreadUpdated;
-            _client.ThreadDeleted -= ClientOnThreadDeleted;
-            _client.ThreadMemberJoined -= ClientOnThreadMemberJoined;
-            _client.ThreadMemberLeft -= ClientOnThreadMemberLeft;
-            _client.AuditLogCreated -= ClientOnAuditLogCreated;
-            _client.GuildAvailable -= ClientOnGuildAvailable;
-            _client.LeftGuild -= ClientOnLeftGuild;
-            _client.InviteCreated -= ClientOnInviteCreated;
-            _client.InviteDeleted -= ClientOnInviteDeleted;
-
-            Log.Information("Successfully unregistered all Discord event handlers");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error occurred while disposing AsyncEventHandler");
-        }
-    }
 }

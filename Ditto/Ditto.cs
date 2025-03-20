@@ -39,7 +39,7 @@ public class Ditto
     {
         var sw = new Stopwatch();
         sw.Start();
-        
+
         Type[] allTypes;
         try
         {
@@ -53,8 +53,8 @@ public class Ditto
 
         var filteredTypes = allTypes
             .Where(x => x.IsSubclassOf(typeof(TypeReader))
-                       && x.BaseType.GetGenericArguments().Length > 0
-                       && !x.IsAbstract);
+                        && x.BaseType.GetGenericArguments().Length > 0
+                        && !x.IsAbstract);
 
         foreach (var ft in filteredTypes)
         {
@@ -142,7 +142,9 @@ public class Ditto
 
             try
             {
-                var chan = await Client.Rest.GetChannelAsync(Credentials.GuildJoinsChannelId).ConfigureAwait(false) as ITextChannel;
+                var chan =
+                    await Client.Rest.GetChannelAsync(Credentials.GuildJoinsChannelId).ConfigureAwait(false) as
+                        ITextChannel;
                 var eb = new EmbedBuilder()
                     .WithTitle($"Joined {Format.Bold(guild.Name)} {guild.Id}")
                     .AddField("Members", guild.MemberCount)
@@ -203,12 +205,12 @@ public class Ditto
         }
 
         // Register commands based on environment
-        #if !DEBUG
+#if !DEBUG
         await interactionService.RegisterCommandsGloballyAsync().ConfigureAwait(false);
-        #else
+#else
         if (Client.Guilds.Select(x => x.Id).Contains(Credentials.DebugGuildId))
             await interactionService.RegisterCommandsToGuildAsync(Credentials.DebugGuildId);
-        #endif
+#endif
 
         await ExecuteReadySubscriptions();
         Ready.TrySetResult(true);

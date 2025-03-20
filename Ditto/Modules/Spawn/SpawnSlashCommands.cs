@@ -10,6 +10,18 @@ namespace Ditto.Modules.Spawn;
 [Group("spawn", "Spawn related commands")]
 public class SpawnSlashCommands : DittoSlashModuleBase<SpawnService>
 {
+    public enum ChannelOption
+    {
+        Enable,
+        Disable
+    }
+
+    public enum RedirectOption
+    {
+        Add,
+        Remove
+    }
+
     [SlashCommand("letsgo", "Toggle spawn storm mode")]
     [RequireContext(ContextType.Guild)]
     [RequireAdmin]
@@ -244,16 +256,4 @@ public class SpawnSlashCommands : DittoSlashModuleBase<SpawnService>
     }
 
     #endregion
-
-    public enum ChannelOption
-    {
-        Enable,
-        Disable
-    }
-
-    public enum RedirectOption
-    {
-        Add,
-        Remove
-    }
 }

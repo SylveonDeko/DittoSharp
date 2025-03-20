@@ -9,15 +9,11 @@ public class Type
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int TypeId { get; set; }
+    [BsonElement("id")] public int TypeId { get; set; }
 
-    [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    [BsonElement("identifier")] public string Identifier { get; set; }
 
-    [BsonElement("generation_id")]
-    public int? GenerationId { get; set; }
+    [BsonElement("generation_id")] public int? GenerationId { get; set; }
 
-    [BsonElement("damage_class_id")]
-    public int? DamageClassId { get; set; }
+    [BsonElement("damage_class_id")] public int? DamageClassId { get; set; }
 }

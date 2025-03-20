@@ -12,7 +12,34 @@ namespace Ditto.Modules.Pokemon;
 [Group("pokemon", "Pokemon related commands")]
 public class PokemonSlashCommands(InteractiveService interactivity) : DittoSlashModuleBase<PokemonService>
 {
-    private readonly Random _random = new();
+    public enum PokemonType
+    {
+        Normal,
+        Fire,
+        Water,
+        Electric,
+        Grass,
+        Ice,
+        Fighting,
+        Poison,
+        Ground,
+        Flying,
+        Psychic,
+        Bug,
+        Rock,
+        Ghost,
+        Dragon,
+        Dark,
+        Steel,
+        Fairy
+    }
+
+    public enum PokemonVariantType
+    {
+        Shiny,
+        Radiant,
+        Shadow
+    }
 
     private readonly string[] _footers =
     [
@@ -23,6 +50,8 @@ public class PokemonSlashCommands(InteractiveService interactivity) : DittoSlash
         "Take a look at one of our partners bots! Mewdeko - discord.gg/mewdeko, we think its the best all-purpose bot around!",
         "We are always looking for new help! Art Team, Staff Team, and Dev team-ask in the official server!"
     ];
+
+    private readonly Random _random = new();
 
     [SlashCommand("select", "Select a pokemon by ID number")]
     [RequireContext(ContextType.Guild)]
@@ -577,219 +606,6 @@ public class PokemonSlashCommands(InteractiveService interactivity) : DittoSlash
         }
     }
 
-    [Group("filter", "Filter your Pokemon in various ways")]
-    public class FilterCommands(InteractiveService interactivity) : DittoSlashSubmodule<PokemonService>
-    {
-        [SlashCommand("legendary", "Show all your legendary Pokemon")]
-        public async Task FilterLegendaryAsync()
-        {
-            await DeferAsync();
-            var result = await Service.GetSpecialPokemon(ctx.User.Id, "legendary");
-            await DisplayFilteredPokemon(result, "Legendary Pokemon");
-        }
-
-        [SlashCommand("shiny", "Show all your shiny Pokemon")]
-        public async Task FilterShinyAsync()
-        {
-            await DeferAsync();
-            var result = await Service.GetSpecialPokemon(ctx.User.Id, "shiny");
-            await DisplayFilteredPokemon(result, "Shiny Pokemon");
-        }
-
-        [SlashCommand("radiant", "Show all your radiant Pokemon")]
-        public async Task FilterRadiantAsync()
-        {
-            await DeferAsync();
-            var result = await Service.GetSpecialPokemon(ctx.User.Id, "radiant");
-            await DisplayFilteredPokemon(result, "Radiant Pokemon");
-        }
-
-        [SlashCommand("starter", "Show all your starter Pokemon")]
-        public async Task FilterStarterAsync()
-        {
-            await DeferAsync();
-            var result = await Service.GetSpecialPokemon(ctx.User.Id, "starter");
-            await DisplayFilteredPokemon(result, "Starter Pokemon");
-        }
-
-        [SlashCommand("skin", "Show all your skinned Pokemon")]
-        public async Task FilterSkinAsync()
-        {
-            await DeferAsync();
-            var result = await Service.GetSpecialPokemon(ctx.User.Id, "skin");
-            await DisplayFilteredPokemon(result, "Skinned Pokemon");
-        }
-
-        [SlashCommand("level", "Filter Pokemon by level range")]
-        public async Task FilterLevelAsync(
-            [Summary("min", "Minimum level (1-100)")]
-            int minLevel,
-            [Summary("max", "Maximum level (1-100)")]
-            int? maxLevel = null)
-        {
-            await DeferAsync();
-
-            if (minLevel < 1 || minLevel > 100 || (maxLevel.HasValue && (maxLevel < 1 || maxLevel > 100)))
-            {
-                await ctx.Interaction.SendErrorAsync("Level must be between 1 and 100!");
-                return;
-            }
-
-            if (maxLevel.HasValue && maxLevel < minLevel)
-            {
-                await ctx.Interaction.SendErrorAsync("Maximum level cannot be less than minimum level!");
-                return;
-            }
-
-            var result = await Service.GetPokemonByLevel(ctx.User.Id, minLevel, maxLevel ?? 100);
-            await DisplayFilteredPokemon(result, $"Pokemon (Level {minLevel}-{maxLevel ?? 100})");
-        }
-
-        [SlashCommand("iv", "Filter Pokemon by IV percentage")]
-        public async Task FilterIvAsync(
-            [Summary("min", "Minimum IV percentage (0-100)")]
-            double minIv,
-            [Summary("max", "Maximum IV percentage (0-100)")]
-            double? maxIv = null)
-        {
-            await DeferAsync();
-
-            if (minIv < 0 || minIv > 100 || (maxIv.HasValue && (maxIv < 0 || maxIv > 100)))
-            {
-                await ctx.Interaction.SendErrorAsync("IV percentage must be between 0 and 100!");
-                return;
-            }
-
-            if (maxIv.HasValue && maxIv < minIv)
-            {
-                await ctx.Interaction.SendErrorAsync("Maximum IV cannot be less than minimum IV!");
-                return;
-            }
-
-            var result =
-                await Service.GetPokemonByIv(ctx.User.Id, minIv / 100, maxIv.HasValue ? maxIv.Value / 100 : 1.0);
-            await DisplayFilteredPokemon(result, $"Pokemon (IV {minIv:F2}%-{maxIv:F2}%)");
-        }
-
-        [SlashCommand("type", "Show Pokemon of a specific type")]
-        public async Task FilterTypeAsync(
-            [Summary("type", "Pokemon type")] PokemonType type)
-        {
-            await DeferAsync();
-            var result = await Service.GetPokemonByType(ctx.User.Id, type.ToString());
-            await DisplayFilteredPokemon(result, $"{type} Type Pokemon");
-        }
-
-        [SlashCommand("name", "Search Pokemon by name")]
-        public async Task FilterNameAsync(
-            [Summary("name", "Pokemon name to search for")]
-            string name)
-        {
-            await DeferAsync();
-            var result = await Service.GetPokemonByName(ctx.User.Id, name);
-            await DisplayFilteredPokemon(result, $"Pokemon Named '{name}'");
-        }
-
-        private async Task DisplayFilteredPokemon(List<Database.Models.PostgreSQL.Pokemon.Pokemon> pokemon,
-            string title)
-        {
-            if (!pokemon.Any())
-            {
-                await ctx.Interaction.SendErrorFollowupAsync("No Pokemon found matching the filter criteria.");
-                return;
-            }
-
-            var pages = new List<PageBuilder>();
-            const int itemsPerPage = 15;
-            var totalPages = (pokemon.Count - 1) / itemsPerPage + 1;
-
-            for (var i = 0; i < totalPages; i++)
-            {
-                var pageItems = pokemon
-                    .Skip(i * itemsPerPage)
-                    .Take(itemsPerPage);
-
-                var description = new StringBuilder();
-                foreach (var poke in pageItems)
-                {
-                    var ivTotal = poke.HpIv + poke.AttackIv + poke.DefenseIv +
-                                  poke.SpecialAttackIv + poke.SpecialDefenseIv + poke.SpeedIv;
-                    var ivPercentage = ivTotal / 186.0;
-
-                    var emoji = GetPokemonEmoji(poke.Shiny ?? false, poke.Radiant ?? false, poke.Skin);
-                    var gender = GetGenderEmoji(poke.Gender);
-
-                    description.AppendLine(
-                        $"{emoji}{gender}**{poke.PokemonName.Titleize()}** | " +
-                        $"**__No.__** - {i * itemsPerPage + pokemon.IndexOf(poke) + 1} | " +
-                        $"**Level** {poke.Level} | " +
-                        $"**IV%** {ivPercentage:P2}");
-                }
-
-                var embed = new EmbedBuilder()
-                    .WithTitle(title)
-                    .WithDescription(description.ToString())
-                    .WithColor(Color.Blue)
-                    .WithFooter($"Page {i + 1}/{totalPages}")
-                    .Build();
-
-                pages.Add(PageBuilder.FromEmbed(embed));
-            }
-
-            var pager = new StaticPaginatorBuilder()
-                .WithPages(pages)
-                .WithDefaultEmotes()
-                .WithFooter(PaginatorFooter.PageNumber)
-                .Build();
-
-            await interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10), InteractionResponseType.DeferredUpdateMessage);
-        }
-
-        private string GetPokemonEmoji(bool shiny, bool radiant, string skin)
-        {
-            if (radiant) return "<:radiant:1057764536456966275>";
-            if (shiny) return "<a:shiny:1057764628349853786>";
-            return skin switch
-            {
-                "glitch" => "<:glitch:1057764553091534859>",
-                "shadow" => "<:shadow:1057764584954568775>",
-                _ => "<:blank:1338358271706136648>"
-            };
-        }
-
-        private string GetGenderEmoji(string gender)
-        {
-            return gender?.ToLower() switch
-            {
-                "-m" or "male" => "♂️ ",
-                "-f" or "female" => "♀️ ",
-                _ => ""
-            };
-        }
-    }
-
-    public enum PokemonType
-    {
-        Normal,
-        Fire,
-        Water,
-        Electric,
-        Grass,
-        Ice,
-        Fighting,
-        Poison,
-        Ground,
-        Flying,
-        Psychic,
-        Bug,
-        Rock,
-        Ghost,
-        Dragon,
-        Dark,
-        Steel,
-        Fairy
-    }
-
     [ComponentInteraction("pokeinfo:*,*", true)]
     public async Task HandleInfoButtons(string action, string param)
     {
@@ -1037,10 +853,195 @@ public class PokemonSlashCommands(InteractiveService interactivity) : DittoSlash
         };
     }
 
-    public enum PokemonVariantType
+    [Group("filter", "Filter your Pokemon in various ways")]
+    public class FilterCommands(InteractiveService interactivity) : DittoSlashSubmodule<PokemonService>
     {
-        Shiny,
-        Radiant,
-        Shadow
+        [SlashCommand("legendary", "Show all your legendary Pokemon")]
+        public async Task FilterLegendaryAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "legendary");
+            await DisplayFilteredPokemon(result, "Legendary Pokemon");
+        }
+
+        [SlashCommand("shiny", "Show all your shiny Pokemon")]
+        public async Task FilterShinyAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "shiny");
+            await DisplayFilteredPokemon(result, "Shiny Pokemon");
+        }
+
+        [SlashCommand("radiant", "Show all your radiant Pokemon")]
+        public async Task FilterRadiantAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "radiant");
+            await DisplayFilteredPokemon(result, "Radiant Pokemon");
+        }
+
+        [SlashCommand("starter", "Show all your starter Pokemon")]
+        public async Task FilterStarterAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "starter");
+            await DisplayFilteredPokemon(result, "Starter Pokemon");
+        }
+
+        [SlashCommand("skin", "Show all your skinned Pokemon")]
+        public async Task FilterSkinAsync()
+        {
+            await DeferAsync();
+            var result = await Service.GetSpecialPokemon(ctx.User.Id, "skin");
+            await DisplayFilteredPokemon(result, "Skinned Pokemon");
+        }
+
+        [SlashCommand("level", "Filter Pokemon by level range")]
+        public async Task FilterLevelAsync(
+            [Summary("min", "Minimum level (1-100)")]
+            int minLevel,
+            [Summary("max", "Maximum level (1-100)")]
+            int? maxLevel = null)
+        {
+            await DeferAsync();
+
+            if (minLevel < 1 || minLevel > 100 || (maxLevel.HasValue && (maxLevel < 1 || maxLevel > 100)))
+            {
+                await ctx.Interaction.SendErrorAsync("Level must be between 1 and 100!");
+                return;
+            }
+
+            if (maxLevel.HasValue && maxLevel < minLevel)
+            {
+                await ctx.Interaction.SendErrorAsync("Maximum level cannot be less than minimum level!");
+                return;
+            }
+
+            var result = await Service.GetPokemonByLevel(ctx.User.Id, minLevel, maxLevel ?? 100);
+            await DisplayFilteredPokemon(result, $"Pokemon (Level {minLevel}-{maxLevel ?? 100})");
+        }
+
+        [SlashCommand("iv", "Filter Pokemon by IV percentage")]
+        public async Task FilterIvAsync(
+            [Summary("min", "Minimum IV percentage (0-100)")]
+            double minIv,
+            [Summary("max", "Maximum IV percentage (0-100)")]
+            double? maxIv = null)
+        {
+            await DeferAsync();
+
+            if (minIv < 0 || minIv > 100 || (maxIv.HasValue && (maxIv < 0 || maxIv > 100)))
+            {
+                await ctx.Interaction.SendErrorAsync("IV percentage must be between 0 and 100!");
+                return;
+            }
+
+            if (maxIv.HasValue && maxIv < minIv)
+            {
+                await ctx.Interaction.SendErrorAsync("Maximum IV cannot be less than minimum IV!");
+                return;
+            }
+
+            var result =
+                await Service.GetPokemonByIv(ctx.User.Id, minIv / 100, maxIv.HasValue ? maxIv.Value / 100 : 1.0);
+            await DisplayFilteredPokemon(result, $"Pokemon (IV {minIv:F2}%-{maxIv:F2}%)");
+        }
+
+        [SlashCommand("type", "Show Pokemon of a specific type")]
+        public async Task FilterTypeAsync(
+            [Summary("type", "Pokemon type")] PokemonType type)
+        {
+            await DeferAsync();
+            var result = await Service.GetPokemonByType(ctx.User.Id, type.ToString());
+            await DisplayFilteredPokemon(result, $"{type} Type Pokemon");
+        }
+
+        [SlashCommand("name", "Search Pokemon by name")]
+        public async Task FilterNameAsync(
+            [Summary("name", "Pokemon name to search for")]
+            string name)
+        {
+            await DeferAsync();
+            var result = await Service.GetPokemonByName(ctx.User.Id, name);
+            await DisplayFilteredPokemon(result, $"Pokemon Named '{name}'");
+        }
+
+        private async Task DisplayFilteredPokemon(List<Database.Models.PostgreSQL.Pokemon.Pokemon> pokemon,
+            string title)
+        {
+            if (!pokemon.Any())
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("No Pokemon found matching the filter criteria.");
+                return;
+            }
+
+            var pages = new List<PageBuilder>();
+            const int itemsPerPage = 15;
+            var totalPages = (pokemon.Count - 1) / itemsPerPage + 1;
+
+            for (var i = 0; i < totalPages; i++)
+            {
+                var pageItems = pokemon
+                    .Skip(i * itemsPerPage)
+                    .Take(itemsPerPage);
+
+                var description = new StringBuilder();
+                foreach (var poke in pageItems)
+                {
+                    var ivTotal = poke.HpIv + poke.AttackIv + poke.DefenseIv +
+                                  poke.SpecialAttackIv + poke.SpecialDefenseIv + poke.SpeedIv;
+                    var ivPercentage = ivTotal / 186.0;
+
+                    var emoji = GetPokemonEmoji(poke.Shiny ?? false, poke.Radiant ?? false, poke.Skin);
+                    var gender = GetGenderEmoji(poke.Gender);
+
+                    description.AppendLine(
+                        $"{emoji}{gender}**{poke.PokemonName.Titleize()}** | " +
+                        $"**__No.__** - {i * itemsPerPage + pokemon.IndexOf(poke) + 1} | " +
+                        $"**Level** {poke.Level} | " +
+                        $"**IV%** {ivPercentage:P2}");
+                }
+
+                var embed = new EmbedBuilder()
+                    .WithTitle(title)
+                    .WithDescription(description.ToString())
+                    .WithColor(Color.Blue)
+                    .WithFooter($"Page {i + 1}/{totalPages}")
+                    .Build();
+
+                pages.Add(PageBuilder.FromEmbed(embed));
+            }
+
+            var pager = new StaticPaginatorBuilder()
+                .WithPages(pages)
+                .WithDefaultEmotes()
+                .WithFooter(PaginatorFooter.PageNumber)
+                .Build();
+
+            await interactivity.SendPaginatorAsync(pager, Context.Interaction, TimeSpan.FromMinutes(10),
+                InteractionResponseType.DeferredUpdateMessage);
+        }
+
+        private string GetPokemonEmoji(bool shiny, bool radiant, string skin)
+        {
+            if (radiant) return "<:radiant:1057764536456966275>";
+            if (shiny) return "<a:shiny:1057764628349853786>";
+            return skin switch
+            {
+                "glitch" => "<:glitch:1057764553091534859>",
+                "shadow" => "<:shadow:1057764584954568775>",
+                _ => "<:blank:1338358271706136648>"
+            };
+        }
+
+        private string GetGenderEmoji(string gender)
+        {
+            return gender?.ToLower() switch
+            {
+                "-m" or "male" => "♂️ ",
+                "-f" or "female" => "♀️ ",
+                _ => ""
+            };
+        }
     }
 }

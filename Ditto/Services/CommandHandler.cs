@@ -1,37 +1,34 @@
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using Discord.Commands;
-using Discord.Net;
 using Discord.Interactions;
+using Discord.Net;
 using Ditto.Common.Collections;
 using Ditto.Database.DbContextStuff;
 using Serilog;
 using ExecuteResult = Discord.Commands.ExecuteResult;
+using IResult = Discord.Interactions.IResult;
 
 namespace Ditto.Services;
 
 public class CommandHandler : INService
 {
     private const int GlobalCommandsCooldown = 750;
+    private readonly IDataCache _cache;
+    private readonly Timer _clearUsersOnShortCooldown;
     private readonly DiscordShardedClient _client;
+    private readonly NonBlocking.ConcurrentDictionary<ulong, bool> _commandParseLock = new();
+
+    private readonly NonBlocking.ConcurrentDictionary<ulong, ConcurrentQueue<IUserMessage>> _commandParseQueue = new();
     private readonly CommandService _commands;
     private readonly DbContextProvider _db;
     private readonly GuildSettingsService _guildSettings;
     private readonly InteractionService _interactions;
-    public readonly IServiceProvider Services;
-    private readonly IDataCache _cache;
-    private readonly Timer _clearUsersOnShortCooldown;
-
-    private readonly NonBlocking.ConcurrentDictionary<ulong, ConcurrentQueue<IUserMessage>> _commandParseQueue = new();
-    private readonly NonBlocking.ConcurrentDictionary<ulong, bool> _commandParseLock = new();
     private readonly ConcurrentHashSet<ulong> _usersOnShortCooldown = [];
-
-    public event Func<IUserMessage, CommandInfo, Task> CommandExecuted = delegate { return Task.CompletedTask; };
-    public event Func<CommandInfo, ITextChannel, string, IUser?, Task> CommandErrored = delegate { return Task.CompletedTask; };
-    public event Func<IUserMessage, Task> OnMessageNoTrigger = delegate { return Task.CompletedTask; };
+    public readonly IServiceProvider Services;
 
     public CommandHandler(
-        DiscordShardedClient client, 
+        DiscordShardedClient client,
         CommandService commands,
         DbContextProvider db,
         GuildSettingsService guildSettings,
@@ -48,7 +45,7 @@ public class CommandHandler : INService
         Services = services;
         _cache = cache;
 
-        _clearUsersOnShortCooldown = new Timer(_ => _usersOnShortCooldown.Clear(), 
+        _clearUsersOnShortCooldown = new Timer(_ => _usersOnShortCooldown.Clear(),
             null, GlobalCommandsCooldown, GlobalCommandsCooldown);
 
         eventHandler.MessageReceived += HandleMessageAsync;
@@ -56,6 +53,15 @@ public class CommandHandler : INService
 
         _interactions.SlashCommandExecuted += HandleSlashCommand;
     }
+
+    public event Func<IUserMessage, CommandInfo, Task> CommandExecuted = delegate { return Task.CompletedTask; };
+
+    public event Func<CommandInfo, ITextChannel, string, IUser?, Task> CommandErrored = delegate
+    {
+        return Task.CompletedTask;
+    };
+
+    public event Func<IUserMessage, Task> OnMessageNoTrigger = delegate { return Task.CompletedTask; };
 
     private async Task HandleMessageAsync(IMessage msg)
     {
@@ -96,7 +102,6 @@ public class CommandHandler : INService
         try
         {
             while (_commandParseQueue[channelId].TryDequeue(out var msg))
-            {
                 try
                 {
                     var guild = (msg.Channel as IGuildChannel)?.Guild;
@@ -106,7 +111,6 @@ public class CommandHandler : INService
                 {
                     Log.Error("Error occurred in command handler: {Error}", e);
                 }
-            }
 
             _commandParseQueue[channelId] = new ConcurrentQueue<IUserMessage>();
             return true;
@@ -116,7 +120,7 @@ public class CommandHandler : INService
             _commandParseLock[channelId] = false;
         }
     }
-    
+
     private async Task TryRunCommandAsync(IGuild? guild, IChannel channel, IUserMessage usrMsg)
     {
         var execTime = Environment.TickCount;
@@ -136,8 +140,8 @@ public class CommandHandler : INService
 
         var (success, error, command) = await ExecuteCommandAsync(
             new CommandContext(_client, usrMsg),
-            messageContent, 
-            prefixLength, 
+            messageContent,
+            prefixLength,
             MultiMatchHandling.Best);
 
         execTime = Environment.TickCount - execTime;
@@ -173,10 +177,7 @@ public class CommandHandler : INService
         if (!string.IsNullOrEmpty(error))
         {
             await LogCommandExecution(usrMsg, channel as ITextChannel, command, false, execTime, error);
-            if (guild != null)
-            {
-                await CommandErrored(command, channel as ITextChannel, error, usrMsg.Author);
-            }
+            if (guild != null) await CommandErrored(command, channel as ITextChannel, error, usrMsg.Author);
         }
     }
 
@@ -225,7 +226,7 @@ public class CommandHandler : INService
         }
 
         var cmd = successfulParses[0].match.Command;
-        
+
         if (!_usersOnShortCooldown.Add(context.User.Id))
             return (false, "You are on cooldown.", cmd);
 
@@ -236,9 +237,7 @@ public class CommandHandler : INService
         {
             if (execResult.Exception != null &&
                 execResult.Exception is not HttpException { DiscordCode: DiscordErrorCode.InsufficientPermissions })
-            {
                 Log.Warning(execResult.Exception, "Command execution error");
-            }
             return (execResult.IsSuccess, execResult.ErrorReason, cmd);
         }
 
@@ -314,22 +313,20 @@ public class CommandHandler : INService
         catch (Exception ex)
         {
             Log.Error(ex, "Error executing interaction");
-            
+
             if (interaction.Type == InteractionType.ApplicationCommand)
-            {
                 await interaction.RespondAsync(
-                    "Sorry, something went wrong with this command.", 
+                    "Sorry, something went wrong with this command.",
                     ephemeral: true);
-            }
         }
     }
 
-    private async Task HandleSlashCommand(SlashCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
+    private async Task HandleSlashCommand(SlashCommandInfo commandInfo, IInteractionContext context, IResult result)
     {
         if (!result.IsSuccess)
         {
             await context.Interaction.RespondAsync(
-                $"Command failed: {result.ErrorReason}", 
+                $"Command failed: {result.ErrorReason}",
                 ephemeral: true);
 
             Log.Warning(

@@ -1,13 +1,13 @@
 ﻿using Discord.Commands;
 using Discord.Interactions;
-using Serilog;
-using Serilog.Events;
 using Ditto.Common.ModuleBehaviors;
 using Ditto.Database.DbContextStuff;
 using Ditto.Services.Impl;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
+using Serilog;
+using Serilog.Events;
 using RunMode = Discord.Commands.RunMode;
 
 namespace Ditto;
@@ -26,7 +26,8 @@ public class Program
                 config
                     .MinimumLevel.Information()
                     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] | {Message:lj}{NewLine}{Exception}");
+                    .WriteTo.Console(
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] | {Message:lj}{NewLine}{Exception}");
             })
             .ConfigureServices((context, services) =>
             {
@@ -44,7 +45,7 @@ public class Program
                 services.AddSingleton(client)
                     .AddSingleton(credentials)
                     .AddDbContextFactory<DittoContext>(options =>
-                    options.UseNpgsql(credentials.PostgresConfig.ConnectionString))
+                        options.UseNpgsql(credentials.PostgresConfig.ConnectionString))
                     .AddSingleton<IMongoClient>(new MongoClient(credentials.MongoConfig.ConnectionString))
                     .AddTransient<IMongoService, MongoService>()
                     .AddSingleton<RedisCache>()

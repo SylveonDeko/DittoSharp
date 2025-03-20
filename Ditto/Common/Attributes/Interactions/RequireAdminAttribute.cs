@@ -8,7 +8,6 @@ namespace Ditto.Common.Attributes.Interactions;
 [AttributeUsage(AttributeTargets.Method)]
 public class RequireAdminAttribute : PreconditionAttribute
 {
-
     /// <summary>
     ///     Checks the requirements before executing a command or method.
     /// </summary>

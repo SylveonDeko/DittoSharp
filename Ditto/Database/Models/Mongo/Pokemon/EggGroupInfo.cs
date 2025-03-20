@@ -9,9 +9,7 @@ public class EggGroupInfo
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int GroupId { get; set; }
+    [BsonElement("id")] public int GroupId { get; set; }
 
-    [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    [BsonElement("identifier")] public string Identifier { get; set; }
 }

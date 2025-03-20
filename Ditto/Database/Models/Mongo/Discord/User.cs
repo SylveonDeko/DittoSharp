@@ -9,9 +9,7 @@ public class User
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("user")]
-    public ulong UserId { get; set; }
+    [BsonElement("user")] public ulong UserId { get; set; }
 
-    [BsonElement("progress")]
-    public Dictionary<string, int> Progress { get; set; }
+    [BsonElement("progress")] public Dictionary<string, int> Progress { get; set; }
 }

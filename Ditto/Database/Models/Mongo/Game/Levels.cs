@@ -9,9 +9,7 @@ public class Levels
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("titles")]
-    public Dictionary<string, string> Titles { get; set; }
+    [BsonElement("titles")] public Dictionary<string, string> Titles { get; set; }
 
-    [BsonExtraElements]
-    public IDictionary<string, int> LevelRequirements { get; set; }
+    [BsonExtraElements] public IDictionary<string, int> LevelRequirements { get; set; }
 }

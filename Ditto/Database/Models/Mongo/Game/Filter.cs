@@ -9,9 +9,7 @@ public class Filter
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("arg")]
-    public string Argument { get; set; }
+    [BsonElement("arg")] public string Argument { get; set; }
 
-    [BsonElement("value")]
-    public string Value { get; set; }
+    [BsonElement("value")] public string Value { get; set; }
 }

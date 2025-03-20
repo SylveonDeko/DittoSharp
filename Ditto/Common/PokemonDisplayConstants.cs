@@ -1,6 +1,6 @@
 namespace Ditto.Common;
 
-public static class PokemonDisplayConstants 
+public static class PokemonDisplayConstants
 {
     public const string HP_DISPLAY = "`HP:`";
     public const string ATK_DISPLAY = "`ATK:`";
@@ -8,12 +8,12 @@ public static class PokemonDisplayConstants
     public const string SPATK_DISPLAY = "`SPATK:`";
     public const string SPDEF_DISPLAY = "`SPDEF:`";
     public const string SPE_DISPLAY = "`SPEED:`";
-    
+
     public static readonly string[] CUSTOM_POKES =
     [
         "Onehitmonchan",
         "Xerneas-brad",
-        "Lucariosouta", 
+        "Lucariosouta",
         "Cubone-freki",
         "Glaceon-glaceon",
         "Scorbunny-sav",

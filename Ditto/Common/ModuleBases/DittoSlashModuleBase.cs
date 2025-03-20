@@ -9,7 +9,6 @@ namespace Ditto.Common.ModuleBases;
 /// </summary>
 public abstract class DittoSlashCommandModule : InteractionModuleBase
 {
-
     /// <summary>
     ///     The command handler service.
     /// </summary>
@@ -19,13 +18,7 @@ public abstract class DittoSlashCommandModule : InteractionModuleBase
     /// <summary>
     ///     Gets the interaction context.
     /// </summary>
-    protected IInteractionContext ctx
-    {
-        get
-        {
-            return Context;
-        }
-    }
+    protected IInteractionContext ctx => Context;
 
 
     /// <summary>
@@ -162,9 +155,7 @@ public abstract class DittoSlashCommandModule : InteractionModuleBase
             handler.InteractionCreated += Interaction;
             if (await Task.WhenAny(userInputTask.Task, Task.Delay(30000)).ConfigureAwait(false) !=
                 userInputTask.Task)
-            {
                 return null;
-            }
 
             return await userInputTask.Task.ConfigureAwait(false);
         }
@@ -210,9 +201,7 @@ public abstract class DittoSlashCommandModule : InteractionModuleBase
             handler.MessageReceived += Interaction;
             if (await Task.WhenAny(userInputTask.Task, Task.Delay(60000)).ConfigureAwait(false) !=
                 userInputTask.Task)
-            {
                 return null;
-            }
 
             return await userInputTask.Task.ConfigureAwait(false);
         }
@@ -223,17 +212,16 @@ public abstract class DittoSlashCommandModule : InteractionModuleBase
 
         async Task Interaction(SocketMessage arg)
         {
-                if (arg.Author.Id != userId || arg.Channel.Id != channelId) return;
-                userInputTask.TrySetResult(arg.Content);
-                try
-                {
-                    await arg.DeleteAsync();
-                }
-                catch
-                {
-                    //Exclude
-                }
-
+            if (arg.Author.Id != userId || arg.Channel.Id != channelId) return;
+            userInputTask.TrySetResult(arg.Content);
+            try
+            {
+                await arg.DeleteAsync();
+            }
+            catch
+            {
+                //Exclude
+            }
         }
     }
 }

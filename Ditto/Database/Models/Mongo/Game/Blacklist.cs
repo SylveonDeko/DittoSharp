@@ -9,9 +9,7 @@ public class Blacklist
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("guilds")]
-    public List<ulong> Guilds { get; set; }
+    [BsonElement("guilds")] public List<ulong> Guilds { get; set; }
 
-    [BsonElement("users")]
-    public List<ulong> Users { get; set; }
+    [BsonElement("users")] public List<ulong> Users { get; set; }
 }

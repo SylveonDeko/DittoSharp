@@ -127,7 +127,7 @@ public static class PokemonList
         "Fezandipiti",
         "Terapagos",
         "Pecharunt",
-        "Ogerpon",
+        "Ogerpon"
     ];
 
     public static List<string> starterList =
@@ -216,8 +216,7 @@ public static class PokemonList
         "Skeledirge",
         "Quaxly",
         "Quaxwell",
-        "Quaquaval",
-
+        "Quaquaval"
     ];
 
     public static List<string> pseudoList =
@@ -258,8 +257,7 @@ public static class PokemonList
         "Dragonite",
         "Frigibax",
         "Arctibax",
-        "Baxcalibur",
-
+        "Baxcalibur"
     ];
 
     public static List<string> pList =
@@ -1167,7 +1165,7 @@ public static class PokemonList
         "Sinistcha",
         "Archaludon",
         "Hydrapple",
-        "Dipplin",
+        "Dipplin"
     ];
 
     public static List<string> ubList =
@@ -1182,7 +1180,6 @@ public static class PokemonList
         "Poipole",
         "Naganadel",
         "Stakataka",
-        "Blacephalon",
+        "Blacephalon"
     ];
-
 }

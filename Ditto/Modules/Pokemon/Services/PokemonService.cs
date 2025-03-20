@@ -21,14 +21,13 @@ public class PokemonService(
     RedisCache redis)
     : INService
 {
-    private readonly DiscordShardedClient _client = client;
-
     private const string HP_DISPLAY = "`HP:`";
     private const string ATK_DISPLAY = "`ATK:`";
     private const string DEF_DISPLAY = "`DEF:`";
     private const string SPATK_DISPLAY = "`SPATK:`";
     private const string SPDEF_DISPLAY = "`SPDEF:`";
     private const string SPE_DISPLAY = "`SPEED:`";
+    private readonly DiscordShardedClient _client = client;
 
     private readonly string[] CUSTOM_POKES =
     [
@@ -155,9 +154,15 @@ public class PokemonService(
             var formSuffix = formParts.Length > 1 ? formParts[^1] : "";
             var baseName = "";
 
-            if (formSuffix is "blaze" or "aqua")
-                baseName = "tauros-paldea";
-            else if (formSuffix is "alola" or "galar" or "hisui" or "paldea") formSuffix = "";
+            switch (formSuffix)
+            {
+                case "blaze" or "aqua":
+                    baseName = "tauros-paldea";
+                    break;
+                case "alola" or "galar" or "hisui" or "paldea":
+                    formSuffix = "";
+                    break;
+            }
 
             if (formSuffix == "zen-galar") baseName = "darmanitan-galar";
 
@@ -520,30 +525,32 @@ public class PokemonService(
 
             // Handle special cases first
             var lowerVal = val.ToLower();
-            if (lowerVal is "spewpa" or "scatterbug" or "mew")
+            switch (lowerVal)
             {
-                forms = ["None"];
-            }
-            else if (lowerVal is "tauros-paldea")
-            {
-                forms = ["aqua-paldea", "blaze-paldea"];
-            }
-            else
-            {
-                // Get forms from MongoDB
-                var cursor = mongo.Forms.Find(
-                    Builders<Form>.Filter.Regex(f => f.Identifier, new BsonRegularExpression($".*{val}.*", "i"))
-                );
+                case "spewpa" or "scatterbug" or "mew":
+                    forms = ["None"];
+                    break;
+                case "tauros-paldea":
+                    forms = ["aqua-paldea", "blaze-paldea"];
+                    break;
+                default:
+                {
+                    // Get forms from MongoDB
+                    var cursor = mongo.Forms.Find(
+                        Builders<Form>.Filter.Regex(f => f.Identifier, new BsonRegularExpression($".*{val}.*", "i"))
+                    );
 
-                forms = await cursor.Project(f => f.FormIdentifier)
-                    .ToListAsync();
+                    forms = await cursor.Project(f => f.FormIdentifier)
+                        .ToListAsync();
 
-                // Filter out empty strings and specific region forms
-                forms = forms.Where(f => !string.IsNullOrEmpty(f))
-                    .Where(f => f is not "Galar" and not "Alola" and not "Hisui" and not "Paldea")
-                    .ToList();
+                    // Filter out empty strings and specific region forms
+                    forms = forms.Where(f => !string.IsNullOrEmpty(f))
+                        .Where(f => f is not "Galar" and not "Alola" and not "Hisui" and not "Paldea")
+                        .ToList();
 
-                if (!forms.Any()) forms = ["None"];
+                    if (!forms.Any()) forms = ["None"];
+                    break;
+                }
             }
 
             return string.Join("\n", forms.Select(f => f.Capitalize()));
@@ -577,22 +584,6 @@ public class PokemonService(
             .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
         return user?.AncientUnlocked ?? false;
-    }
-
-// Add these enum extensions for variant handling
-    public static class PokemonVariantExtensions
-    {
-        public static string GetVariantIcon(string variant)
-        {
-            return variant switch
-            {
-                "shiny" => "<:starrr:1175872035927375953>",
-                "radiant" => "<a:newradhmm:1061418796021194883>",
-                "shadow" => "<:shadowicon4:1077328251556470925>",
-                "skin" => "<:skin23:1012754684576014416>",
-                _ => "✨"
-            };
-        }
     }
 
     public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string pokemonName, bool shiny = false,
@@ -819,10 +810,7 @@ public class PokemonService(
             // Convert and add all Pokemon in batches
             var livePokemon = deadPokemon.Select(MapDeadToLivePokemon).ToList();
 
-            foreach (var batch in livePokemon.Chunk(1000))
-            {
-                await dbContext.UserPokemon.AddRangeAsync(batch);
-            }
+            foreach (var batch in livePokemon.Chunk(1000)) await dbContext.UserPokemon.AddRangeAsync(batch);
 
             await dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -835,232 +823,235 @@ public class PokemonService(
         }
     }
 
-private static Database.Models.PostgreSQL.Pokemon.Pokemon MapDeadToLivePokemon(DeadPokemon dead)
-{
-    return new Database.Models.PostgreSQL.Pokemon.Pokemon
+    private static Database.Models.PostgreSQL.Pokemon.Pokemon MapDeadToLivePokemon(DeadPokemon dead)
     {
-        PokemonName = dead.PokemonName,
-        HpIv = dead.HpIv,
-        AttackIv = dead.AttackIv,
-        DefenseIv = dead.DefenseIv,
-        SpecialAttackIv = dead.SpecialAttackIv,
-        SpecialDefenseIv = dead.SpecialDefenseIv,
-        SpeedIv = dead.SpeedIv,
-        HpEv = dead.HpEv,
-        AttackEv = dead.AttackEv,
-        DefenseEv = dead.DefenseEv,
-        SpecialAttackEv = dead.SpecialAttackEv,
-        SpecialDefenseEv = dead.SpecialDefenseEv,
-        SpeedEv = dead.SpeedEv,
-        Level = dead.Level,
-        Moves = dead.Moves,
-        HeldItem = dead.HeldItem,
-        Experience = dead.Experience,
-        Nature = dead.Nature,
-        ExperienceCap = dead.ExperienceCap,
-        Nickname = dead.Nickname,
-        Price = dead.Price,
-        MarketEnlist = dead.MarketEnlist,
-        Happiness = dead.Happiness,
-        Favorite = dead.Favorite,
-        AbilityIndex = dead.AbilityIndex,
-        Gender = dead.Gender,
-        Shiny = dead.Shiny,
-        Counter = dead.Counter,
-        Name = dead.Name,
-        Timestamp = dead.Timestamp,
-        CaughtBy = dead.CaughtBy,
-        Radiant = dead.Radiant,
-        Tags = dead.Tags,
-        Skin = dead.Skin,
-        Tradable = dead.Tradable,
-        Breedable = dead.Breedable,
-        Champion = dead.Champion,
-        Temporary = dead.Temporary,
-        Voucher = dead.Voucher,
-        Owner = dead.Owner,
-        Owned = dead.Owned
-    };
-}
-
-public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByLevel(ulong userId, int minLevel, int maxLevel)
-{
-    await using var dbContext = await dbProvider.GetContextAsync();
-    return await dbContext.UserPokemon
-        .AsNoTracking()  // Add this since we're only reading
-        .Where(p => p.Owner == userId && p.Level >= minLevel && p.Level <= maxLevel)
-        .OrderByDescending(p => p.Level)
-        .ToListAsyncEF();
-}
-
-public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByIv(ulong userId, double minIvPercent, double maxIvPercent)
-{
-    var minIvSum = (int)(minIvPercent * 186);
-    var maxIvSum = (int)(maxIvPercent * 186);
-
-    await using var dbContext = await dbProvider.GetContextAsync();
-    return await dbContext.UserPokemon
-        .AsNoTracking()
-        .Where(p => p.Owner == userId)
-        .Select(p => new
+        return new Database.Models.PostgreSQL.Pokemon.Pokemon
         {
-            Pokemon = p,
-            IvSum = p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
-        })
-        .Where(x => x.IvSum >= minIvSum && x.IvSum <= maxIvSum)
-        .OrderByDescending(x => x.IvSum)
-        .Select(x => x.Pokemon)
-        .ToListAsyncEF();
-}
+            PokemonName = dead.PokemonName,
+            HpIv = dead.HpIv,
+            AttackIv = dead.AttackIv,
+            DefenseIv = dead.DefenseIv,
+            SpecialAttackIv = dead.SpecialAttackIv,
+            SpecialDefenseIv = dead.SpecialDefenseIv,
+            SpeedIv = dead.SpeedIv,
+            HpEv = dead.HpEv,
+            AttackEv = dead.AttackEv,
+            DefenseEv = dead.DefenseEv,
+            SpecialAttackEv = dead.SpecialAttackEv,
+            SpecialDefenseEv = dead.SpecialDefenseEv,
+            SpeedEv = dead.SpeedEv,
+            Level = dead.Level,
+            Moves = dead.Moves,
+            HeldItem = dead.HeldItem,
+            Experience = dead.Experience,
+            Nature = dead.Nature,
+            ExperienceCap = dead.ExperienceCap,
+            Nickname = dead.Nickname,
+            Price = dead.Price,
+            MarketEnlist = dead.MarketEnlist,
+            Happiness = dead.Happiness,
+            Favorite = dead.Favorite,
+            AbilityIndex = dead.AbilityIndex,
+            Gender = dead.Gender,
+            Shiny = dead.Shiny,
+            Counter = dead.Counter,
+            Name = dead.Name,
+            Timestamp = dead.Timestamp,
+            CaughtBy = dead.CaughtBy,
+            Radiant = dead.Radiant,
+            Tags = dead.Tags,
+            Skin = dead.Skin,
+            Tradable = dead.Tradable,
+            Breedable = dead.Breedable,
+            Champion = dead.Champion,
+            Temporary = dead.Temporary,
+            Voucher = dead.Voucher,
+            Owner = dead.Owner,
+            Owned = dead.Owned
+        };
+    }
 
-public async Task<int> GetPokemonIndex(ulong userId, ulong pokemonId)
-{
-    await using var dbContext = await dbProvider.GetContextAsync();
-    var user = await dbContext.Users
-        .FirstOrDefaultAsyncEF(u => u.UserId == userId);
-
-    if (user?.Pokemon == null)
-        return -1;
-
-    // Find the index of this Pokemon in the user's array
-    return Array.IndexOf(user.Pokemon, pokemonId) + 1; // +1 for 1-based indexing
-}
-
-public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByType(ulong userId, string type)
-{
-    // Get type info from MongoDB - do this first to fail fast if type is invalid
-    var typeInfo = await mongo.Types
-        .Find(t => t.Identifier.Equals(type.ToLower()))
-        .FirstOrDefaultAsync();
-
-    if (typeInfo == null)
-        return [];
-
-    // Get Pokemon IDs and forms in parallel
-    var typeTask = mongo.PokemonTypes
-        .Find(pt => pt.Types.Contains(typeInfo.TypeId))
-        .Project(p => p.PokemonId)
-        .ToListAsync();
-
-    var formsTask = mongo.Forms
-        .Find(Builders<Form>.Filter.Empty)
-        .Project(f => new { f.PokemonId, f.Identifier })
-        .ToListAsync();
-
-    await Task.WhenAll(typeTask, formsTask);
-
-    var pokemonIds = await typeTask;
-    var forms = await formsTask;
-
-    var pokemonNames = forms
-        .Where(f => pokemonIds.Contains(f.PokemonId))
-        .Select(f => f.Identifier.Capitalize())
-        .ToHashSet(); // HashSet for more efficient lookup
-
-    // Query PostgreSQL
-    await using var dbContext = await dbProvider.GetContextAsync();
-    return await dbContext.UserPokemon
-        .AsNoTracking()
-        .Where(p => p.Owner == userId && pokemonNames.Contains(p.PokemonName))
-        .ToListAsyncEF();
-}
-
-public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByName(ulong userId, string name)
-{
-    await using var dbContext = await dbProvider.GetContextAsync();
-    return await dbContext.UserPokemon
-        .AsNoTracking()
-        .Where(p => p.Owner == userId &&
-                   EF.Functions.ILike(p.PokemonName, $"%{name}%"))
-        .ToListAsyncEF();
-}
-
-public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredPokemon(ulong userId, string filter)
-{
-    await using var dbContext = await dbProvider.GetContextAsync();
-    var query = dbContext.UserPokemon
-        .AsNoTracking()
-        .Where(p => p.Owner == userId);
-
-    query = filter.ToLower() switch
+    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByLevel(ulong userId, int minLevel,
+        int maxLevel)
     {
-        "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.PokemonName)),
-        "starter" => query.Where(p => PokemonList.starterList.Contains(p.PokemonName)),
-        "shiny" => query.Where(p => p.Shiny == true),
-        "radiant" => query.Where(p => p.Radiant == true),
-        "skin" => query.Where(p => !string.IsNullOrEmpty(p.Skin)),
-        _ => query
-    };
+        await using var dbContext = await dbProvider.GetContextAsync();
+        return await dbContext.UserPokemon
+            .AsNoTracking() // Add this since we're only reading
+            .Where(p => p.Owner == userId && p.Level >= minLevel && p.Level <= maxLevel)
+            .OrderByDescending(p => p.Level)
+            .ToListAsyncEF();
+    }
 
-    return await query.ToListAsyncEF();
-}
-
-   public async Task<List<PokemonListEntry>> GetPokemonList(ulong userId, SortOrder order = SortOrder.Default)
-{
-    try
+    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByIv(ulong userId,
+        double minIvPercent, double maxIvPercent)
     {
-        await using var db = await dbProvider.GetContextAsync();
+        var minIvSum = (int)(minIvPercent * 186);
+        var maxIvSum = (int)(maxIvPercent * 186);
 
-        // Get user and their Pokemon array
-        var user = await db.Users
+        await using var dbContext = await dbProvider.GetContextAsync();
+        return await dbContext.UserPokemon
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .Select(x => x.Pokemon)
-            .FirstOrDefaultAsync();
-
-        if (user == null || user.Length == 0)
-            return [];
-
-        // Get Pokemon data
-        var pokemonData = await db.UserPokemon
-            .AsNoTracking()
-            .Where(x => user.Contains(x.Id))
+            .Where(p => p.Owner == userId)
             .Select(p => new
             {
-                p.Id,
-                p.DittoId,
-                p.PokemonName,
-                p.Level,
-                IvTotal = p.AttackIv + p.DefenseIv + p.SpecialAttackIv +
-                         p.SpecialDefenseIv + p.SpeedIv + p.HpIv,
-                p.Shiny,
-                p.Radiant,
-                p.Skin,
-                p.Gender,
-                p.Nickname
+                Pokemon = p,
+                IvSum = p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
             })
+            .Where(x => x.IvSum >= minIvSum && x.IvSum <= maxIvSum)
+            .OrderByDescending(x => x.IvSum)
+            .Select(x => x.Pokemon)
+            .ToListAsyncEF();
+    }
+
+    public async Task<int> GetPokemonIndex(ulong userId, ulong pokemonId)
+    {
+        await using var dbContext = await dbProvider.GetContextAsync();
+        var user = await dbContext.Users
+            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+
+        if (user?.Pokemon == null)
+            return -1;
+
+        // Find the index of this Pokemon in the user's array
+        return Array.IndexOf(user.Pokemon, pokemonId) + 1; // +1 for 1-based indexing
+    }
+
+    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByType(ulong userId, string type)
+    {
+        // Get type info from MongoDB - do this first to fail fast if type is invalid
+        var typeInfo = await mongo.Types
+            .Find(t => t.Identifier.Equals(type.ToLower()))
+            .FirstOrDefaultAsync();
+
+        if (typeInfo == null)
+            return [];
+
+        // Get Pokemon IDs and forms in parallel
+        var typeTask = mongo.PokemonTypes
+            .Find(pt => pt.Types.Contains(typeInfo.TypeId))
+            .Project(p => p.PokemonId)
             .ToListAsync();
 
-        // Sort if needed (in memory since we have all data)
-        var sorted = order switch
+        var formsTask = mongo.Forms
+            .Find(Builders<Form>.Filter.Empty)
+            .Project(f => new { f.PokemonId, f.Identifier })
+            .ToListAsync();
+
+        await Task.WhenAll(typeTask, formsTask);
+
+        var pokemonIds = await typeTask;
+        var forms = await formsTask;
+
+        var pokemonNames = forms
+            .Where(f => pokemonIds.Contains(f.PokemonId))
+            .Select(f => f.Identifier.Capitalize())
+            .ToHashSet(); // HashSet for more efficient lookup
+
+        // Query PostgreSQL
+        await using var dbContext = await dbProvider.GetContextAsync();
+        return await dbContext.UserPokemon
+            .AsNoTracking()
+            .Where(p => p.Owner == userId && pokemonNames.Contains(p.PokemonName))
+            .ToListAsyncEF();
+    }
+
+    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetPokemonByName(ulong userId, string name)
+    {
+        await using var dbContext = await dbProvider.GetContextAsync();
+        return await dbContext.UserPokemon
+            .AsNoTracking()
+            .Where(p => p.Owner == userId &&
+                        EF.Functions.ILike(p.PokemonName, $"%{name}%"))
+            .ToListAsyncEF();
+    }
+
+    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredPokemon(ulong userId, string filter)
+    {
+        await using var dbContext = await dbProvider.GetContextAsync();
+        var query = dbContext.UserPokemon
+            .AsNoTracking()
+            .Where(p => p.Owner == userId);
+
+        query = filter.ToLower() switch
         {
-            SortOrder.Iv => pokemonData.OrderByDescending(p => p.IvTotal),
-            SortOrder.Level => pokemonData.OrderByDescending(p => p.Level),
-            SortOrder.Name => pokemonData.OrderByDescending(p => p.PokemonName),
-            _ => pokemonData.AsEnumerable()
+            "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.PokemonName)),
+            "starter" => query.Where(p => PokemonList.starterList.Contains(p.PokemonName)),
+            "shiny" => query.Where(p => p.Shiny == true),
+            "radiant" => query.Where(p => p.Radiant == true),
+            "skin" => query.Where(p => !string.IsNullOrEmpty(p.Skin)),
+            _ => query
         };
 
-        // Return with correct numbering based on array position
-        return sorted
-            .Select(p => new PokemonListEntry(
-                p.DittoId,
-                p.PokemonName,
-                Array.IndexOf(user, p.Id) + 1,
-                p.Level,
-                p.IvTotal / 186.0,
-                p.Shiny ?? false,
-                p.Radiant ?? false,
-                p.Skin,
-                p.Gender,
-                p.Nickname))
-            .ToList();
+        return await query.ToListAsyncEF();
     }
-    catch (Exception e)
+
+    public async Task<List<PokemonListEntry>> GetPokemonList(ulong userId, SortOrder order = SortOrder.Default)
     {
-        Console.WriteLine(e);
-        throw;
+        try
+        {
+            await using var db = await dbProvider.GetContextAsync();
+
+            // Get user and their Pokemon array
+            var user = await db.Users
+                .AsNoTracking()
+                .Where(x => x.UserId == userId)
+                .Select(x => x.Pokemon)
+                .FirstOrDefaultAsync();
+
+            if (user == null || user.Length == 0)
+                return [];
+
+            // Get Pokemon data
+            var pokemonData = await db.UserPokemon
+                .AsNoTracking()
+                .Where(x => user.Contains(x.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    p.DittoId,
+                    p.PokemonName,
+                    p.Level,
+                    IvTotal = p.AttackIv + p.DefenseIv + p.SpecialAttackIv +
+                              p.SpecialDefenseIv + p.SpeedIv + p.HpIv,
+                    p.Shiny,
+                    p.Radiant,
+                    p.Skin,
+                    p.Gender,
+                    p.Nickname
+                })
+                .ToListAsync();
+
+            // Sort if needed (in memory since we have all data)
+            var sorted = order switch
+            {
+                SortOrder.Iv => pokemonData.OrderByDescending(p => p.IvTotal),
+                SortOrder.Level => pokemonData.OrderByDescending(p => p.Level),
+                SortOrder.Name => pokemonData.OrderByDescending(p => p.PokemonName),
+                _ => pokemonData.AsEnumerable()
+            };
+
+            // Return with correct numbering based on array position
+            return sorted
+                .Select(p => new PokemonListEntry(
+                    p.DittoId,
+                    p.PokemonName,
+                    Array.IndexOf(user, p.Id) + 1,
+                    p.Level,
+                    p.IvTotal / 186.0,
+                    p.Shiny ?? false,
+                    p.Radiant ?? false,
+                    p.Skin,
+                    p.Gender,
+                    p.Nickname))
+                .ToList();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
-}
+
     private static int CalculateHpStat(int baseStat, int level, int iv, int ev)
     {
         return (2 * baseStat + iv + ev / 4) * level / 100 + level + 10;
@@ -1150,10 +1141,12 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         // Check gender
         if (evoReq.GetValueOrDefault("gender_id") is int genderId)
         {
-            if (genderId == 1 && pokemon.Gender == "-m")
-                return false;
-            if (genderId == 2 && pokemon.Gender == "-f")
-                return false;
+            switch (genderId)
+            {
+                case 1 when pokemon.Gender == "-m":
+                case 2 when pokemon.Gender == "-f":
+                    return false;
+            }
         }
 
         // Check minimum level
@@ -1182,12 +1175,13 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
             var attack = pokemon.AttackIv + pokemon.AttackEv;
             var defense = pokemon.DefenseIv + pokemon.DefenseEv;
 
-            if (relativeStats == 1 && !(attack > defense))
-                return false;
-            if (relativeStats == -1 && !(attack < defense))
-                return false;
-            if (relativeStats == 0 && attack != defense)
-                return false;
+            switch (relativeStats)
+            {
+                case 1 when !(attack > defense):
+                case -1 when !(attack < defense):
+                case 0 when attack != defense:
+                    return false;
+            }
         }
 
         // Check region
@@ -1393,6 +1387,22 @@ public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetFilteredP
         foreach (var property in properties) dictionary[property.Name] = property.GetValue(obj);
 
         return dictionary;
+    }
+
+// Add these enum extensions for variant handling
+    public static class PokemonVariantExtensions
+    {
+        public static string GetVariantIcon(string variant)
+        {
+            return variant switch
+            {
+                "shiny" => "<:starrr:1175872035927375953>",
+                "radiant" => "<a:newradhmm:1061418796021194883>",
+                "shadow" => "<:shadowicon4:1077328251556470925>",
+                "skin" => "<:skin23:1012754684576014416>",
+                _ => "✨"
+            };
+        }
     }
 }
 

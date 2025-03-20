@@ -11,7 +11,7 @@ public class BotBan
     [Column("users", TypeName = "bigint[]")]
     [Required]
     public long[] Users { get; set; } = [];
-    
+
     [Column("duelbans", TypeName = "bigint[]")]
     [Required]
     public long[] DuelBans { get; set; } = [];

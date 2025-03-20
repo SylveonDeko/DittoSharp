@@ -1,4 +1,3 @@
-#nullable enable
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
@@ -13,40 +12,89 @@ public static class Extensions
 {
     public static readonly Regex UrlRegex = new(@"^(https?|ftp)://(?<path>[^\s/$.?#].[^\s]*)$", RegexOptions.Compiled);
 
-    public static TOut[] Map<TIn, TOut>(this TIn[] arr, Func<TIn, TOut> f) => Array.ConvertAll(arr, x => f(x));
+    public static TOut[] Map<TIn, TOut>(this TIn[] arr, Func<TIn, TOut> f)
+    {
+        return Array.ConvertAll(arr, x => f(x));
+    }
 
     public static async Task SendConfirmAsync(this IDiscordInteraction interaction, string? message)
-        => await interaction.RespondAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build()).ConfigureAwait(false);
+    {
+        await interaction.RespondAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build())
+            .ConfigureAwait(false);
+    }
 
     public static async Task SendEphemeralConfirmAsync(this IDiscordInteraction interaction, string message)
-        => await interaction.RespondAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(), ephemeral: true).ConfigureAwait(false);
+    {
+        await interaction
+            .RespondAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(), ephemeral: true)
+            .ConfigureAwait(false);
+    }
 
     public static async Task SendErrorAsync(this IDiscordInteraction interaction, string? message)
-        => await interaction.RespondAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), components: new ComponentBuilder()
-            .WithButton(label: "Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto").Build()).ConfigureAwait(false);
+    {
+        await interaction.RespondAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(),
+                components: new ComponentBuilder()
+                    .WithButton("Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto")
+                    .Build())
+            .ConfigureAwait(false);
+    }
 
     public static async Task SendEphemeralErrorAsync(this IDiscordInteraction interaction, string? message)
-        => await interaction.RespondAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), ephemeral: true, components: new ComponentBuilder()
-            .WithButton(label: "Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto").Build()).ConfigureAwait(false);
+    {
+        await interaction.RespondAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(),
+                ephemeral: true, components: new ComponentBuilder()
+                    .WithButton("Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto")
+                    .Build())
+            .ConfigureAwait(false);
+    }
 
-    public static async Task<IUserMessage> SendConfirmFollowupAsync(this IDiscordInteraction interaction, string message)
-        => await interaction.FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build()).ConfigureAwait(false);
+    public static async Task<IUserMessage> SendConfirmFollowupAsync(this IDiscordInteraction interaction,
+        string message)
+    {
+        return await interaction.FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build())
+            .ConfigureAwait(false);
+    }
 
-    public static async Task<IUserMessage> SendConfirmFollowupAsync(this IDiscordInteraction interaction, string message, ComponentBuilder builder)
-        => await interaction.FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(), components: builder.Build()).ConfigureAwait(false);
+    public static async Task<IUserMessage> SendConfirmFollowupAsync(this IDiscordInteraction interaction,
+        string message, ComponentBuilder builder)
+    {
+        return await interaction.FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(),
+            components: builder.Build()).ConfigureAwait(false);
+    }
 
-    public static async Task<IUserMessage> SendEphemeralFollowupConfirmAsync(this IDiscordInteraction interaction, string message)
-        => await interaction.FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(), ephemeral: true).ConfigureAwait(false);
+    public static async Task<IUserMessage> SendEphemeralFollowupConfirmAsync(this IDiscordInteraction interaction,
+        string message)
+    {
+        return await interaction
+            .FollowupAsync(embed: new EmbedBuilder().WithOkColor().WithDescription(message).Build(), ephemeral: true)
+            .ConfigureAwait(false);
+    }
 
     public static async Task<IUserMessage> SendErrorFollowupAsync(this IDiscordInteraction interaction, string message)
-        => await interaction.FollowupAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), components: new ComponentBuilder()
-            .WithButton(label: "Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto").Build()).ConfigureAwait(false);
+    {
+        return await interaction.FollowupAsync(
+                embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(),
+                components: new ComponentBuilder()
+                    .WithButton("Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto")
+                    .Build())
+            .ConfigureAwait(false);
+    }
 
-    public static async Task<IUserMessage> SendEphemeralFollowupErrorAsync(this IDiscordInteraction interaction, string message)
-        => await interaction.FollowupAsync(embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), ephemeral: true, components: new ComponentBuilder()
-            .WithButton(label: "Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto").Build()).ConfigureAwait(false);
+    public static async Task<IUserMessage> SendEphemeralFollowupErrorAsync(this IDiscordInteraction interaction,
+        string message)
+    {
+        return await interaction.FollowupAsync(
+                embed: new EmbedBuilder().WithErrorColor().WithDescription(message).Build(), ephemeral: true,
+                components: new ComponentBuilder()
+                    .WithButton("Support Server", style: ButtonStyle.Link, url: "https://discord.gg/Ditto")
+                    .Build())
+            .ConfigureAwait(false);
+    }
 
-    public static List<ulong> GetGuildIds(this DiscordShardedClient client) => client.Guilds.Select(x => x.Id).ToList();
+    public static List<ulong> GetGuildIds(this DiscordShardedClient client)
+    {
+        return client.Guilds.Select(x => x.Id).ToList();
+    }
 
     // ReSharper disable once InvalidXmlDocComment
     /// Generates a string in the format 00:mm:ss if timespan is less than 2m.
@@ -83,10 +131,12 @@ public static class Extensions
         return false;
     }
 
-    public static IEmote? ToIEmote(this string emojiStr) =>
-        Emote.TryParse(emojiStr, out var maybeEmote)
+    public static IEmote? ToIEmote(this string emojiStr)
+    {
+        return Emote.TryParse(emojiStr, out var maybeEmote)
             ? maybeEmote
             : new Emoji(emojiStr);
+    }
 
     public static bool TryToIEmote(this string emojiStr, out IEmote value)
     {
@@ -101,7 +151,10 @@ public static class Extensions
     /// <summary>
     ///     First 10 characters of teh bot token.
     /// </summary>
-    public static string RedisKey(this IBotCredentials bc) => bc.Token[..10];
+    public static string RedisKey(this IBotCredentials bc)
+    {
+        return bc.Token[..10];
+    }
 
     public static async Task<string?> ReplaceAsync(this Regex regex, string? input,
         Func<Match, Task<string>> replacementFn)
@@ -127,10 +180,15 @@ public static class Extensions
             throw new ArgumentNullException(nameof(o));
     }
 
-    public static bool IsAuthor(this IMessage msg, IDiscordClient client) => msg.Author?.Id == client.CurrentUser.Id;
+    public static bool IsAuthor(this IMessage msg, IDiscordClient client)
+    {
+        return msg.Author?.Id == client.CurrentUser.Id;
+    }
 
-    public static string GetFullUsage(string commandName, string args, string? prefix) =>
-        $"{prefix}{commandName} {(StringExtensions.TryFormat(args, [prefix], out var output) ? output : args)}";
+    public static string GetFullUsage(string commandName, string args, string? prefix)
+    {
+        return $"{prefix}{commandName} {(StringExtensions.TryFormat(args, [prefix], out var output) ? output : args)}";
+    }
 
     public static EmbedBuilder AddPaginatedFooter(this EmbedBuilder embed, int curPage, int? lastPage)
     {
@@ -139,13 +197,25 @@ public static class Extensions
         return embed.WithFooter(efb => efb.WithText(curPage.ToString()));
     }
 
-    public static EmbedBuilder WithOkColor(this EmbedBuilder eb) => eb.WithColor(Ditto.OkColor);
+    public static EmbedBuilder WithOkColor(this EmbedBuilder eb)
+    {
+        return eb.WithColor(Ditto.OkColor);
+    }
 
-    public static EmbedBuilder WithErrorColor(this EmbedBuilder eb) => eb.WithColor(Ditto.ErrorColor);
+    public static EmbedBuilder WithErrorColor(this EmbedBuilder eb)
+    {
+        return eb.WithColor(Ditto.ErrorColor);
+    }
 
-    public static PageBuilder WithOkColor(this PageBuilder eb) => eb.WithColor(Ditto.OkColor);
+    public static PageBuilder WithOkColor(this PageBuilder eb)
+    {
+        return eb.WithColor(Ditto.OkColor);
+    }
 
-    public static PageBuilder WithErrorColor(this PageBuilder eb) => eb.WithColor(Ditto.ErrorColor);
+    public static PageBuilder WithErrorColor(this PageBuilder eb)
+    {
+        return eb.WithColor(Ditto.ErrorColor);
+    }
 
     public static HttpClient AddFakeHeaders(this HttpClient http)
     {
@@ -203,9 +273,11 @@ public static class Extensions
         return module;
     }
 
-    public static async Task<IEnumerable<IGuildUser>> GetMembersAsync(this IRole role) =>
-        (await role.Guild.GetUsersAsync(CacheMode.CacheOnly).ConfigureAwait(false)).Where(u =>
+    public static async Task<IEnumerable<IGuildUser>> GetMembersAsync(this IRole role)
+    {
+        return (await role.Guild.GetUsersAsync(CacheMode.CacheOnly).ConfigureAwait(false)).Where(u =>
             u.RoleIds.Contains(role.Id));
+    }
 
     public static Stream ToStream(this IEnumerable<byte> bytes, bool canWrite = false)
     {
@@ -214,9 +286,15 @@ public static class Extensions
         return ms;
     }
 
-    public static IEnumerable<IRole> GetRoles(this IGuildUser user) => user.RoleIds.Select(r => user.Guild.GetRole(r)).Where(r => r != null);
+    public static IEnumerable<IRole> GetRoles(this IGuildUser user)
+    {
+        return user.RoleIds.Select(r => user.Guild.GetRole(r)).Where(r => r != null);
+    }
 
-    public static bool IsImage(this HttpResponseMessage msg) => IsImage(msg, out _);
+    public static bool IsImage(this HttpResponseMessage msg)
+    {
+        return IsImage(msg, out _);
+    }
 
     public static bool IsImage(this HttpResponseMessage msg, out string? mimeType)
     {
@@ -271,9 +349,7 @@ public static class Extensions
 
             if (collection.FirstOrDefault(x => x.ServiceType == serviceType) !=
                 null) // if that type is already added, skip
-            {
                 continue;
-            }
 
             //also add the same type
             var interfaceType = interfaces.FirstOrDefault(x => serviceType.GetInterfaces().Contains(x));
@@ -333,7 +409,8 @@ public static class Extensions
                 return mCmd.Data.Name;
             default:
             {
-                if (interaction is not SocketSlashCommand sCmd) throw new ArgumentException("interaction is not a valid type");
+                if (interaction is not SocketSlashCommand sCmd)
+                    throw new ArgumentException("interaction is not a valid type");
                 return (sCmd.Data.Name
                         + " "
                         + ((sCmd.Data.Options?.FirstOrDefault()?.Type is ApplicationCommandOptionType.SubCommand

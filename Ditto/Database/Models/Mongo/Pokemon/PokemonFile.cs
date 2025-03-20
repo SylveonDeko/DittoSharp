@@ -10,11 +10,9 @@ public class PokemonFile
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int? PokemonId { get; set; }
+    [BsonElement("id")] public int? PokemonId { get; set; }
 
-    [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    [BsonElement("identifier")] public string Identifier { get; set; }
 
     [BsonElement("generation_id")]
     [BsonSerializer(typeof(NullableIntSerializer))]
@@ -80,9 +78,7 @@ public class PokemonFile
     [BsonSerializer(typeof(NullableIntSerializer))]
     public int? ConquestOrder { get; set; }
 
-    [BsonElement("variant")]
-    public string? Variant { get; set; }
+    [BsonElement("variant")] public string? Variant { get; set; }
 
-    [BsonElement("types")]
-    public List<string> Types { get; set; }
+    [BsonElement("types")] public List<string> Types { get; set; }
 }

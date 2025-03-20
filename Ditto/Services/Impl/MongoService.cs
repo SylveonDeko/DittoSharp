@@ -1,7 +1,7 @@
-﻿using MongoDB.Driver;
-using Ditto.Database.Models.Mongo.Pokemon;
+﻿using Ditto.Database.Models.Mongo.Discord;
 using Ditto.Database.Models.Mongo.Game;
-using Ditto.Database.Models.Mongo.Discord;
+using Ditto.Database.Models.Mongo.Pokemon;
+using MongoDB.Driver;
 using Type = Ditto.Database.Models.Mongo.Pokemon.Type;
 
 namespace Ditto.Services.Impl;
@@ -22,11 +22,16 @@ public class MongoService(IMongoClient client) : IMongoService
     public IMongoCollection<PokemonTypes> PokemonTypes => _database.GetCollection<PokemonTypes>("ptypes");
     public IMongoCollection<StatType> StatTypes => _database.GetCollection<StatType>("stat_types");
     public IMongoCollection<Type> Types => _database.GetCollection<Type>("types");
-    public IMongoCollection<TypeEffectiveness> TypeEffectiveness => _database.GetCollection<TypeEffectiveness>("type_effectiveness");
+
+    public IMongoCollection<TypeEffectiveness> TypeEffectiveness =>
+        _database.GetCollection<TypeEffectiveness>("type_effectiveness");
 
     // Game Data
     public IMongoCollection<Booster> Boosters => _database.GetCollection<Booster>("boosters");
-    public IMongoCollection<CurrentRadiant> CurrentRadiants => _database.GetCollection<CurrentRadiant>("current_radiants");
+
+    public IMongoCollection<CurrentRadiant> CurrentRadiants =>
+        _database.GetCollection<CurrentRadiant>("current_radiants");
+
     public IMongoCollection<EggGroup> EggGroups => _database.GetCollection<EggGroup>("egg_groups");
     public IMongoCollection<EggGroupInfo> EggGroupsInfo => _database.GetCollection<EggGroupInfo>("egg_groups_info");
     public IMongoCollection<Evolution> Evolution => _database.GetCollection<Evolution>("evofile");
@@ -38,7 +43,10 @@ public class MongoService(IMongoClient client) : IMongoService
     public IMongoCollection<Milestone> Milestones => _database.GetCollection<Milestone>("milestones");
     public IMongoCollection<Mission> Missions => _database.GetCollection<Mission>("missions2");
     public IMongoCollection<Month> Months => _database.GetCollection<Month>("month");
-    public IMongoCollection<RadiantPlaceholder> RadiantPlaceholders => _database.GetCollection<RadiantPlaceholder>("radiant_placeholder_pokes");
+
+    public IMongoCollection<RadiantPlaceholder> RadiantPlaceholders =>
+        _database.GetCollection<RadiantPlaceholder>("radiant_placeholder_pokes");
+
     public IMongoCollection<ShopItem> Shop => _database.GetCollection<ShopItem>("shop");
     public IMongoCollection<UserProgress> UserProgress => _database.GetCollection<UserProgress>("user_progress");
 

@@ -9,9 +9,7 @@ public class Month
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int MonthId { get; set; }
+    [BsonElement("id")] public int MonthId { get; set; }
 
-    [BsonElement("m-y")]
-    public string MonthYear { get; set; }
+    [BsonElement("m-y")] public string MonthYear { get; set; }
 }

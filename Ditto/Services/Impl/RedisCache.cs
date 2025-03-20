@@ -5,17 +5,16 @@ namespace Ditto.Services.Impl;
 
 public class RedisCache : IDataCache
 {
-    private readonly ConnectionMultiplexer _redis;
     private readonly IDatabase _db;
-
-    public ISubscriber Subscriber => _redis.GetSubscriber();
-    public ConnectionMultiplexer Redis => _redis;
 
     public RedisCache(BotCredentials creds)
     {
-        _redis = ConnectionMultiplexer.Connect(creds.RedisConfig.ConnectionString);
-        _db = _redis.GetDatabase();
+        Redis = ConnectionMultiplexer.Connect(creds.RedisConfig.ConnectionString);
+        _db = Redis.GetDatabase();
     }
+
+    public ISubscriber Subscriber => Redis.GetSubscriber();
+    public ConnectionMultiplexer Redis { get; }
 
     public async Task<T> GetOrAddCachedDataAsync<T>(string key, Func<Task<T>> factory, TimeSpan? expiry = null)
     {
@@ -51,8 +50,10 @@ public class RedisCache : IDataCache
         await _db.KeyDeleteAsync(keys.Select(x => new RedisKey(x)).ToArray());
     }
 
-    public async Task<bool> ExistsInCache(string key) => 
-        await _db.KeyExistsAsync(key);
+    public async Task<bool> ExistsInCache(string key)
+    {
+        return await _db.KeyExistsAsync(key);
+    }
 
     public async Task<T> GetFromCache<T>(string key)
     {
@@ -76,6 +77,6 @@ public class RedisCache : IDataCache
 
     public void Dispose()
     {
-        _redis?.Dispose();
+        Redis?.Dispose();
     }
 }

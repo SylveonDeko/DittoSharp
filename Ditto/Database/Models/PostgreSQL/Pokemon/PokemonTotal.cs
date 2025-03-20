@@ -6,10 +6,7 @@ namespace Ditto.Database.Models.PostgreSQL.Pokemon;
 [Table("poke_totals")]
 public class PokemonTotal
 {
-    [Key]
-    [Column("pokname")]
-    public string? PokemonName { get; set; }
-    
-    [Column("count")]
-    public ulong? Count { get; set; }
+    [Key] [Column("pokname")] public string? PokemonName { get; set; }
+
+    [Column("count")] public ulong? Count { get; set; }
 }

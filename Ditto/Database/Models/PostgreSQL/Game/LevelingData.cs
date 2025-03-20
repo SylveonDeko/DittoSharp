@@ -7,12 +7,9 @@ namespace Ditto.Database.Models.PostgreSQL.Game;
 [Keyless]
 public class LevelingData
 {
-    [Column("xp")]
-    public int? Xp { get; set; }
-    
-    [Column("level")]
-    public int? Level { get; set; }
-    
-    [Column("title")]
-    public string? Title { get; set; }
+    [Column("xp")] public int? Xp { get; set; }
+
+    [Column("level")] public int? Level { get; set; }
+
+    [Column("title")] public string? Title { get; set; }
 }

@@ -9,12 +9,9 @@ public class Gift
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public ulong UserId { get; set; }
+    [BsonElement("id")] public ulong UserId { get; set; }
 
-    [BsonElement("gifts")]
-    public int Gifts { get; set; }
+    [BsonElement("gifts")] public int Gifts { get; set; }
 
-    [BsonElement("shinies")]
-    public int Shinies { get; set; }
+    [BsonElement("shinies")] public int Shinies { get; set; }
 }

@@ -17,10 +17,8 @@ public class ItemsService(
     IDataCache cache)
     : INService
 {
-    private readonly Random _random = new();
-    private readonly IDataCache _cache = cache;
-
     private const int MaxMarketSlots = 10;
+
     private readonly HashSet<string> _activeItemList =
     [
         "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone",
@@ -52,15 +50,20 @@ public class ItemsService(
         "kee-berry", "maranga-berry"
     ];
 
+    private readonly IDataCache _cache = cache;
+    private readonly Random _random = new();
+
     private bool IsFormed(string pokemonName)
     {
         return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
                pokemonName.EndsWith("-origin") || pokemonName.EndsWith("-10") || pokemonName.EndsWith("-complete") ||
-               pokemonName.EndsWith("-ultra") || pokemonName.EndsWith("-crowned") || pokemonName.EndsWith("-eternamax") ||
+               pokemonName.EndsWith("-ultra") || pokemonName.EndsWith("-crowned") ||
+               pokemonName.EndsWith("-eternamax") ||
                pokemonName.EndsWith("-blade");
     }
 
-    public async Task<(bool Success, string Message, string HeldItem, string PokemonName, Dictionary<string, int> Items)>
+    public async Task<(bool Success, string Message, string HeldItem, string PokemonName, Dictionary<string, int> Items
+            )>
         PrepItemRemove(ulong userId)
     {
         await using var db = await dbContextProvider.GetContextAsync();
@@ -73,28 +76,21 @@ public class ItemsService(
         ).FirstOrDefaultAsyncEF();
 
         if (data == null)
-        {
             return (false, "You do not have a pokemon selected!\nSelect one with `/select` first.", null, null, null);
-        }
 
-        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ?? new Dictionary<string, int>();
+        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ??
+                    new Dictionary<string, int>();
 
         if (data.HeldItem.ToLower() is "none" or null)
-        {
             return (false, "Your selected Pokemon is not holding any item!", null, null, null);
-        }
 
-        if ((data.HeldItem is "megastone" or "mega-stone" or "mega-stone-x" or "mega-stone-y") &&
+        if (data.HeldItem is "megastone" or "mega-stone" or "mega-stone-x" or "mega-stone-y" &&
             (data.PokemonName.EndsWith("-mega") || data.PokemonName.EndsWith("-x") || data.PokemonName.EndsWith("-y")))
-        {
             return (false, "Deform this Pokemon before Unequipping the item!", null, null, null);
-        }
 
         if (IsFormed(data.PokemonName) && data.HeldItem is "primal-orb" or "blue-orb" or "red-orb" or
-            "griseous-orb" or "ultranecronium-z" or "rusty-sword" or "rusty-shield")
-        {
+                "griseous-orb" or "ultranecronium-z" or "rusty-sword" or "rusty-shield")
             return (false, "Deform this Pokemon before Unequipping the item!", null, null, null);
-        }
 
         return (true, null, data.HeldItem, data.PokemonName, items);
     }
@@ -102,10 +98,7 @@ public class ItemsService(
     public async Task<CommandResult> Unequip(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success)
-        {
-            return new CommandResult { Message = prepResult.Message };
-        }
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
 
         await using var db = await dbContextProvider.GetContextAsync();
         prepResult.Items[prepResult.HeldItem] = prepResult.Items.GetValueOrDefault(prepResult.HeldItem, 0) + 1;
@@ -116,11 +109,9 @@ public class ItemsService(
             .ExecuteUpdateAsync(u => u
                 .SetProperty(x => x.Items, serializedItems));
 
-        await db.UserPokemon.Where(p => p.Id == (
-                db.Users.Where(u => u.UserId == userId)
-                    .Select(u => u.Selected)
-                    .FirstOrDefault()
-            ))
+        await db.UserPokemon.Where(p => p.Id == db.Users.Where(u => u.UserId == userId)
+                .Select(u => u.Selected)
+                .FirstOrDefault())
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.HeldItem, "None"));
 
@@ -130,17 +121,12 @@ public class ItemsService(
     public async Task<CommandResult> Drop(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success)
-        {
-            return new CommandResult { Message = prepResult.Message };
-        }
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
 
         await using var db = await dbContextProvider.GetContextAsync();
-        await db.UserPokemon.Where(p => p.Id == (
-                db.Users.Where(u => u.UserId == userId)
-                    .Select(u => u.Selected)
-                    .FirstOrDefault()
-            ))
+        await db.UserPokemon.Where(p => p.Id == db.Users.Where(u => u.UserId == userId)
+                .Select(u => u.Selected)
+                .FirstOrDefault())
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.HeldItem, "None"));
 
@@ -150,28 +136,18 @@ public class ItemsService(
     public async Task<CommandResult> Transfer(ulong userId, int pokemonNumber)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success)
-        {
-            return new CommandResult { Message = prepResult.Message };
-        }
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
 
         await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
         if (user == null || pokemonNumber <= 0 || pokemonNumber > user.Pokemon.Length)
-        {
             return new CommandResult { Message = "You do not have that Pokemon!" };
-        }
 
         var targetPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == user.Pokemon[pokemonNumber - 1]);
-        if (targetPokemon == null)
-        {
-            return new CommandResult { Message = "That Pokemon does not exist!" };
-        }
+        if (targetPokemon == null) return new CommandResult { Message = "That Pokemon does not exist!" };
 
         if (targetPokemon.HeldItem.ToLower() != "none")
-        {
             return new CommandResult { Message = "That Pokemon is already holding an item" };
-        }
 
         await db.UserPokemon.Where(p => p.Id == user.Selected)
             .ExecuteUpdateAsync(p => p
@@ -183,7 +159,8 @@ public class ItemsService(
 
         return new CommandResult
         {
-            Message = $"You have successfully transfered the {prepResult.HeldItem} from your {prepResult.PokemonName} to your {targetPokemon.PokemonName}!"
+            Message =
+                $"You have successfully transfered the {prepResult.HeldItem} from your {prepResult.PokemonName} to your {targetPokemon.PokemonName}!"
         };
     }
 
@@ -194,129 +171,121 @@ public class ItemsService(
         var itemInfo = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
 
         if (itemName == "nature-capsule")
-        {
-            return new CommandResult { Message = "Use `/change nature` to use a nature capsule to change your pokemon's nature." };
-        }
+            return new CommandResult
+                { Message = "Use `/change nature` to use a nature capsule to change your pokemon's nature." };
 
         if (!_berryList.Contains(itemName) && itemInfo == null && itemName != "glitchy-orb")
-        {
             return new CommandResult { Message = "That Item does not exist!" };
-        }
 
         if (_activeItemList.Contains(itemName))
-        {
-            return new CommandResult { Message = $"That item cannot be equipped! Use it on your poke with `/apply {itemName}`." };
-        }
+            return new CommandResult
+                { Message = $"That item cannot be equipped! Use it on your poke with `/apply {itemName}`." };
 
         await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-        if (user == null)
-        {
-            return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
-        }
+        if (user == null) return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
 
-        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ?? new();
+        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
+                    new Dictionary<string, int>();
         if (items.GetValueOrDefault(itemName, 0) == 0)
-        {
             return new CommandResult { Message = $"You do not have any {itemName}!" };
-        }
 
         var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == user.Selected);
         if (selectedPokemon == null)
-        {
-            return new CommandResult { Message = "You do not have a pokemon selected!\nSelect one with `/select` first." };
-        }
+            return new CommandResult
+                { Message = "You do not have a pokemon selected!\nSelect one with `/select` first." };
 
         if (selectedPokemon.HeldItem.ToLower() != "none")
-        {
-            return new CommandResult { Message = $"Your pokemon is already holding the {selectedPokemon.HeldItem}! Unequip it with `/unequip` first!" };
-        }
+            return new CommandResult
+            {
+                Message =
+                    $"Your pokemon is already holding the {selectedPokemon.HeldItem}! Unequip it with `/unequip` first!"
+            };
 
         items[itemName]--;
 
         string? serializedItems;
-        if (itemName == "glitchy-orb")
+        switch (itemName)
         {
-            if (selectedPokemon.Shiny.GetValueOrDefault() || selectedPokemon.Radiant.GetValueOrDefault() || selectedPokemon.Skin != null)
+            case "glitchy-orb":
             {
-                return new CommandResult { Message = "Please select a pokemon which is not **Shiny or Radiant**, and does not have a **Skin** attached." };
+                if (selectedPokemon.Shiny.GetValueOrDefault() || selectedPokemon.Radiant.GetValueOrDefault() ||
+                    selectedPokemon.Skin != null)
+                    return new CommandResult
+                    {
+                        Message =
+                            "Please select a pokemon which is not **Shiny or Radiant**, and does not have a **Skin** attached."
+                    };
+
+                await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
+                    .ExecuteUpdateAsync(p => p
+                        .SetProperty(x => x.Skin, "glitch"));
+
+                serializedItems = JsonSerializer.Serialize(items);
+
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.Items, serializedItems));
+
+                return new CommandResult { Message = "The orb disappears - something seems off about your pokemon..." };
             }
-
-            await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.Skin, "glitch"));
-
-            serializedItems = JsonSerializer.Serialize(items);
-
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.Items, serializedItems));
-
-            return new CommandResult { Message = "The orb disappears - something seems off about your pokemon..." };
-        }
-
-        if (itemName == "ability-capsule")
-        {
-            var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
-                .FirstOrDefaultAsync();
-
-            var abilityIds = await mongoDb.PokeAbilities
-                .Find(a => a.PokemonId == formInfo.PokemonId)
-                .ToListAsync();
-
-            if (abilityIds.Count <= 1)
+            case "ability-capsule":
             {
-                return new CommandResult { Message = "That Pokemon cannot have its ability changed!" };
+                var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
+                    .FirstOrDefaultAsync();
+
+                var abilityIds = await mongoDb.PokeAbilities
+                    .Find(a => a.PokemonId == formInfo.PokemonId)
+                    .ToListAsync();
+
+                if (abilityIds.Count <= 1)
+                    return new CommandResult { Message = "That Pokemon cannot have its ability changed!" };
+
+                var newIndex = (selectedPokemon.AbilityIndex + 1) % abilityIds.Count;
+                var newAbilityId = abilityIds[newIndex].AbilityId;
+
+                await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
+                    .ExecuteUpdateAsync(p => p
+                        .SetProperty(x => x.AbilityIndex, newIndex));
+
+                var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
+
+                serializedItems = JsonSerializer.Serialize(items);
+
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.Items, serializedItems));
+
+                return new CommandResult
+                    { Message = $"You have Successfully changed your Pokémon's ability to {newAbility.Identifier}" };
             }
+            case "daycare-space":
+                serializedItems = JsonSerializer.Serialize(items);
 
-            var newIndex = (selectedPokemon.AbilityIndex + 1) % abilityIds.Count;
-            var newAbilityId = abilityIds[newIndex].AbilityId;
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.Items, serializedItems)
+                        .SetProperty(x => x.DaycareLimit, u => u.DaycareLimit + 1));
 
-            await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.AbilityIndex, newIndex));
+                return new CommandResult { Message = "You have successfully equipped an Extra Daycare Space!" };
+            case "ev-reset":
+                serializedItems = JsonSerializer.Serialize(items);
 
-            var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.Items, serializedItems));
 
-            serializedItems = JsonSerializer.Serialize(items);
+                await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
+                    .ExecuteUpdateAsync(p => p
+                        .SetProperty(x => x.HpEv, 0)
+                        .SetProperty(x => x.AttackEv, 0)
+                        .SetProperty(x => x.DefenseEv, 0)
+                        .SetProperty(x => x.SpecialAttackEv, 0)
+                        .SetProperty(x => x.SpecialDefenseEv, 0)
+                        .SetProperty(x => x.SpeedEv, 0));
 
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.Items, serializedItems));
-
-            return new CommandResult { Message = $"You have Successfully changed your Pokémon's ability to {newAbility.Identifier}" };
-        }
-
-        if (itemName == "daycare-space")
-        {
-            serializedItems = JsonSerializer.Serialize(items);
-
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.Items, serializedItems)
-                    .SetProperty(x => x.DaycareLimit, u => u.DaycareLimit + 1));
-
-            return new CommandResult { Message = "You have successfully equipped an Extra Daycare Space!" };
-        }
-
-        if (itemName == "ev-reset")
-        {
-            serializedItems = JsonSerializer.Serialize(items);
-
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.Items, serializedItems));
-
-            await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.HpEv, 0)
-                    .SetProperty(x => x.AttackEv, 0)
-                    .SetProperty(x => x.DefenseEv, 0)
-                    .SetProperty(x => x.SpecialAttackEv, 0)
-                    .SetProperty(x => x.SpecialDefenseEv, 0)
-                    .SetProperty(x => x.SpeedEv, 0));
-
-            return new CommandResult { Message = "You have successfully reset the Effort Values (EVs) of your selected Pokemon!" };
+                return new CommandResult
+                    { Message = "You have successfully reset the Effort Values (EVs) of your selected Pokemon!" };
         }
 
         if (itemName.EndsWith("-rod"))
@@ -326,17 +295,14 @@ public class ItemsService(
                 .Select(u => u.FishingLevel)
                 .FirstOrDefaultAsyncEF();
 
-            if (itemName == "supreme-rod" && fishingLevel < 105)
+            switch (itemName)
             {
-                return new CommandResult { Message = "You need to be fishing level 105 to use this item!" };
-            }
-            if (itemName == "epic-rod" && fishingLevel < 150)
-            {
-                return new CommandResult { Message = "You need to be fishing level 150 to use this item!" };
-            }
-            if (itemName == "master-rod" && fishingLevel < 200)
-            {
-                return new CommandResult { Message = "You need to be fishing level 200 to use this item!" };
+                case "supreme-rod" when fishingLevel < 105:
+                    return new CommandResult { Message = "You need to be fishing level 105 to use this item!" };
+                case "epic-rod" when fishingLevel < 150:
+                    return new CommandResult { Message = "You need to be fishing level 150 to use this item!" };
+                case "master-rod" when fishingLevel < 200:
+                    return new CommandResult { Message = "You need to be fishing level 200 to use this item!" };
             }
 
             serializedItems = JsonSerializer.Serialize(items);
@@ -350,7 +316,6 @@ public class ItemsService(
         }
 
         if (itemName is "zinc" or "hp-up" or "protein" or "calcium" or "iron" or "carbos")
-        {
             try
             {
                 var updated = itemName switch
@@ -371,10 +336,7 @@ public class ItemsService(
                     _ => throw new ArgumentException("Invalid vitamin type")
                 };
 
-                if (updated == 0)
-                {
-                    return new CommandResult { Message = "Your Pokemon has maxed all 510 EVs" };
-                }
+                if (updated == 0) return new CommandResult { Message = "Your Pokemon has maxed all 510 EVs" };
 
                 serializedItems = JsonSerializer.Serialize(items);
 
@@ -388,7 +350,6 @@ public class ItemsService(
             {
                 return new CommandResult { Message = "Your Pokemon has maxed all 510 EVs" };
             }
-        }
 
         await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
             .ExecuteUpdateAsync(p => p
@@ -409,33 +370,26 @@ public class ItemsService(
         itemName = string.Join("-", itemName.Split()).ToLower();
 
         if (itemName == "nature-capsule")
-        {
-            return new CommandResult { Message = "Use `/change nature` to use a nature capsule to change your pokemon's nature." };
-        }
+            return new CommandResult
+                { Message = "Use `/change nature` to use a nature capsule to change your pokemon's nature." };
 
         if (!_activeItemList.Contains(itemName))
-        {
-            return new CommandResult { Message = $"That item cannot be used on a poke! Try equipping it with `/equip {itemName}`." };
-        }
+            return new CommandResult
+                { Message = $"That item cannot be used on a poke! Try equipping it with `/equip {itemName}`." };
 
         await using var db = await dbContextProvider.GetContextAsync();
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-        if (user == null)
-        {
-            return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
-        }
+        if (user == null) return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
 
-        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ?? new();
+        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
+                    new Dictionary<string, int>();
         if (items.GetValueOrDefault(itemName, 0) == 0)
-        {
             return new CommandResult { Message = $"You do not have any {itemName}!" };
-        }
 
         var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == user.Selected);
         if (selectedPokemon == null)
-        {
-            return new CommandResult { Message = "You do not have a pokemon selected!\nSelect one with `/select` first." };
-        }
+            return new CommandResult
+                { Message = "You do not have a pokemon selected!\nSelect one with `/select` first." };
 
         items[itemName]--;
 
@@ -456,10 +410,7 @@ public class ItemsService(
         }
 
         var evolveResult = await pokemonService.TryEvolve(selectedPokemon.Id, itemName);
-        if (!evolveResult.Success)
-        {
-            return new CommandResult { Message = $"The {itemName} had no effect!" };
-        }
+        if (!evolveResult.Success) return new CommandResult { Message = $"The {itemName} had no effect!" };
 
         serializedItems = JsonSerializer.Serialize(items);
 
@@ -475,15 +426,10 @@ public class ItemsService(
         itemName = itemName.Replace(" ", "-").ToLower();
 
         if (itemName == "daycare-space")
-        {
             return new CommandResult { Message = "Use `/buy daycare`, not `/buy item daycare-space`." };
-        }
 
         var item = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
-        if (item == null)
-        {
-            return new CommandResult { Message = "That Item is not in the market" };
-        }
+        if (item == null) return new CommandResult { Message = "That Item is not in the market" };
 
         var price = (ulong)item.Price;
         await using var db = await dbContextProvider.GetContextAsync();
@@ -494,22 +440,15 @@ public class ItemsService(
             select new { user.Items, user.MewCoins, user.Selected }
         ).FirstOrDefaultAsyncEF();
 
-        if (data == null)
-        {
-            return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
-        }
+        if (data == null) return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
 
-        if (data.MewCoins < price)
-        {
-            return new CommandResult { Message = $"You don't have {price} credits!" };
-        }
+        if (data.MewCoins < price) return new CommandResult { Message = $"You don't have {price} credits!" };
 
         if (itemName == "market-space")
         {
             if (data.MewCoins < 30000)
-            {
-                return new CommandResult { Message = $"You need 30,000 credits to buy a market space! You only have {data.MewCoins}..." };
-            }
+                return new CommandResult
+                    { Message = $"You need 30,000 credits to buy a market space! You only have {data.MewCoins}..." };
 
             var marketLimit = await db.Users
                 .Where(u => u.UserId == userId)
@@ -517,9 +456,7 @@ public class ItemsService(
                 .FirstOrDefaultAsyncEF();
 
             if (marketLimit >= MaxMarketSlots)
-            {
                 return new CommandResult { Message = "You already have the maximum number of market spaces!" };
-            }
 
             await db.Users.Where(u => u.UserId == userId)
                 .ExecuteUpdateAsync(u => u
@@ -536,20 +473,18 @@ public class ItemsService(
                 .Select(u => u.FishingLevel)
                 .FirstOrDefaultAsyncEF();
 
-            if (itemName == "supreme-rod" && fishingLevel < 105)
+            switch (itemName)
             {
-                return new CommandResult { Message = "You need to be fishing level 105 to use this item!" };
-            }
-            if (itemName == "epic-rod" && fishingLevel < 150)
-            {
-                return new CommandResult { Message = "You need to be fishing level 150 to use this item!" };
-            }
-            if (itemName == "master-rod" && fishingLevel < 200)
-            {
-                return new CommandResult { Message = "You need to be fishing level 200 to use this item!" };
+                case "supreme-rod" when fishingLevel < 105:
+                    return new CommandResult { Message = "You need to be fishing level 105 to use this item!" };
+                case "epic-rod" when fishingLevel < 150:
+                    return new CommandResult { Message = "You need to be fishing level 150 to use this item!" };
+                case "master-rod" when fishingLevel < 200:
+                    return new CommandResult { Message = "You need to be fishing level 200 to use this item!" };
             }
 
-            var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ?? new();
+            var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ??
+                        new Dictionary<string, int>();
             items[itemName] = items.GetValueOrDefault(itemName, 0) + 1;
 
             var serializedItems = JsonSerializer.Serialize(items);
@@ -564,7 +499,8 @@ public class ItemsService(
 
         if (_activeItemList.Contains(itemName))
         {
-            var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ?? new();
+            var items = JsonSerializer.Deserialize<Dictionary<string, int>>(data.Items ?? "{}") ??
+                        new Dictionary<string, int>();
             items[itemName] = items.GetValueOrDefault(itemName, 0) + 1;
 
             var serializedItems = JsonSerializer.Serialize(items);
@@ -574,80 +510,74 @@ public class ItemsService(
                     .SetProperty(x => x.MewCoins, x => x.MewCoins - price)
                     .SetProperty(x => x.Items, serializedItems));
 
-            return new CommandResult { Message = $"You have successfully bought a {itemName}! Use it with `/apply {itemName}`." };
+            return new CommandResult
+                { Message = $"You have successfully bought a {itemName}! Use it with `/apply {itemName}`." };
         }
 
         if (data.Selected == null)
-        {
             return new CommandResult
             {
-                Message = "You do not have a selected pokemon and the item you are trying to buy requires one!\nUse `/select` to select a pokemon."
+                Message =
+                    "You do not have a selected pokemon and the item you are trying to buy requires one!\nUse `/select` to select a pokemon."
             };
-        }
 
         var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == data.Selected);
-        if (selectedPokemon == null)
+        if (selectedPokemon == null) return new CommandResult { Message = "Selected pokemon not found!" };
+
+        switch (itemName)
         {
-            return new CommandResult { Message = "Selected pokemon not found!" };
-        }
-
-        if (itemName == "ability-capsule")
-        {
-            var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
-                .FirstOrDefaultAsync();
-
-            var abilityIds = await mongoDb.PokeAbilities
-                .Find(a => a.PokemonId == formInfo.PokemonId)
-                .ToListAsync();
-
-            if (abilityIds.Count <= 1)
+            case "ability-capsule":
             {
-                return new CommandResult { Message = "That Pokemon cannot have its ability changed!" };
+                var formInfo = await mongoDb.Forms.Find(f => f.Identifier == selectedPokemon.PokemonName.ToLower())
+                    .FirstOrDefaultAsync();
+
+                var abilityIds = await mongoDb.PokeAbilities
+                    .Find(a => a.PokemonId == formInfo.PokemonId)
+                    .ToListAsync();
+
+                if (abilityIds.Count <= 1)
+                    return new CommandResult { Message = "That Pokemon cannot have its ability changed!" };
+
+                var newIndex = (selectedPokemon.AbilityIndex + 1) % abilityIds.Count;
+                var newAbilityId = abilityIds[newIndex].AbilityId;
+
+                await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
+                    .ExecuteUpdateAsync(p => p
+                        .SetProperty(x => x.AbilityIndex, newIndex));
+
+                var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
+
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
+
+                return new CommandResult
+                    { Message = $"You have Successfully changed your Pokémon's ability to {newAbility.Identifier}" };
             }
+            case "ev-reset":
+                await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
+                    .ExecuteUpdateAsync(p => p
+                        .SetProperty(x => x.HpEv, 0)
+                        .SetProperty(x => x.AttackEv, 0)
+                        .SetProperty(x => x.DefenseEv, 0)
+                        .SetProperty(x => x.SpecialAttackEv, 0)
+                        .SetProperty(x => x.SpecialDefenseEv, 0)
+                        .SetProperty(x => x.SpeedEv, 0));
 
-            var newIndex = (selectedPokemon.AbilityIndex + 1) % abilityIds.Count;
-            var newAbilityId = abilityIds[newIndex].AbilityId;
+                await db.Users.Where(u => u.UserId == userId)
+                    .ExecuteUpdateAsync(u => u
+                        .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
 
-            await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.AbilityIndex, newIndex));
-
-            var newAbility = await mongoDb.Abilities.Find(a => a.AbilityId == newAbilityId).FirstOrDefaultAsync();
-
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
-
-            return new CommandResult { Message = $"You have Successfully changed your Pokémon's ability to {newAbility.Identifier}" };
-        }
-
-        if (itemName == "ev-reset")
-        {
-            await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.HpEv, 0)
-                    .SetProperty(x => x.AttackEv, 0)
-                    .SetProperty(x => x.DefenseEv, 0)
-                    .SetProperty(x => x.SpecialAttackEv, 0)
-                    .SetProperty(x => x.SpecialDefenseEv, 0)
-                    .SetProperty(x => x.SpeedEv, 0));
-
-            await db.Users.Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
-
-            return new CommandResult { Message = "You have successfully reset the Effort Values (EVs) of your selected Pokemon!" };
+                return new CommandResult
+                    { Message = "You have successfully reset the Effort Values (EVs) of your selected Pokemon!" };
         }
 
         if (IsFormed(selectedPokemon.PokemonName))
-        {
-            return new CommandResult { Message = "You can not buy an item for a Form. Use `/deform` to de-form your Pokemon!" };
-        }
+            return new CommandResult
+                { Message = "You can not buy an item for a Form. Use `/deform` to de-form your Pokemon!" };
 
         if (selectedPokemon.HeldItem.ToLower() != "none")
-        {
             return new CommandResult { Message = "You already have an item equipped!" };
-        }
 
         await db.Users.Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(u => u
@@ -659,15 +589,13 @@ public class ItemsService(
 
         var evolveResult = await pokemonService.TryEvolve(selectedPokemon.Id);
 
-        return new CommandResult { Message = $"You have successfully bought the {itemName} for your {selectedPokemon.PokemonName}" };
+        return new CommandResult
+            { Message = $"You have successfully bought the {itemName} for your {selectedPokemon.PokemonName}" };
     }
 
     public async Task<CommandResult> BuyDaycare(ulong userId, int amount)
     {
-        if (amount < 0)
-        {
-            return new CommandResult { Message = "Yeah... negative numbers won't work here. Try again" };
-        }
+        if (amount < 0) return new CommandResult { Message = "Yeah... negative numbers won't work here. Try again" };
 
         var price = (ulong)(10000 * amount);
         await using var db = await dbContextProvider.GetContextAsync();
@@ -676,18 +604,14 @@ public class ItemsService(
             .Select(u => u.MewCoins)
             .FirstOrDefaultAsyncEF();
 
-        if (balance == null)
-        {
-            return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
-        }
+        if (balance == null) return new CommandResult { Message = "You have not started!\nStart with `/start` first." };
 
         if (price > balance)
-        {
             return new CommandResult
             {
-                Message = $"You cannot afford that many daycare spaces! You need {price} credits, but you only have {balance}."
+                Message =
+                    $"You cannot afford that many daycare spaces! You need {price} credits, but you only have {balance}."
             };
-        }
 
         await db.Users.Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(u => u
@@ -703,10 +627,7 @@ public class ItemsService(
         amount = Math.Max(0, amount);
         itemName = itemName.Trim();
         var itemInfo = await mongoDb.Shop.Find(x => x.Item == itemName).FirstOrDefaultAsync();
-        if (itemInfo == null)
-        {
-            return new CommandResult { Message = "That Item is not in the market" };
-        }
+        if (itemInfo == null) return new CommandResult { Message = "That Item is not in the market" };
 
         await using var db = await dbContextProvider.GetContextAsync();
         var totalPrice = (ulong)(amount * 100);
@@ -719,25 +640,20 @@ public class ItemsService(
             .FirstOrDefaultAsyncEF(p => p.Id == selectedId);
 
         if (selectedPokemon == null)
-        {
-            return new CommandResult { Message = "You don't have a pokemon selected!\nSelect one with `/select` first." };
-        }
+            return new CommandResult
+                { Message = "You don't have a pokemon selected!\nSelect one with `/select` first." };
 
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
         if (user == null || user.MewCoins < totalPrice)
-        {
             return new CommandResult { Message = $"You do not have {totalPrice} credits!" };
-        }
 
         try
         {
             var evTotal = selectedPokemon.HpEv + selectedPokemon.AttackEv + selectedPokemon.DefenseEv +
-                         selectedPokemon.SpecialAttackEv + selectedPokemon.SpecialDefenseEv + selectedPokemon.SpeedEv;
+                          selectedPokemon.SpecialAttackEv + selectedPokemon.SpecialDefenseEv + selectedPokemon.SpeedEv;
 
             if (evTotal + amount > 510)
-            {
                 return new CommandResult { Message = "Your Pokemon has maxed all 510 EVs or 252 EVs for that stat." };
-            }
 
             await db.Users.Where(u => u.UserId == userId)
                 .ExecuteUpdateAsync(u => u
@@ -762,7 +678,12 @@ public class ItemsService(
             };
 
 
-            return updated == 0 ? new CommandResult { Message = "Your Pokemon has maxed all 510 EVs or 252 EVs for that stat." } : new CommandResult { Message = $"You have successfully bought {amount} {itemName} for your {selectedPokemon.PokemonName}" };
+            return updated == 0
+                ? new CommandResult { Message = "Your Pokemon has maxed all 510 EVs or 252 EVs for that stat." }
+                : new CommandResult
+                {
+                    Message = $"You have successfully bought {amount} {itemName} for your {selectedPokemon.PokemonName}"
+                };
         }
         catch
         {
@@ -778,16 +699,10 @@ public class ItemsService(
             .Select(u => u.Selected)
             .FirstOrDefaultAsyncEF();
 
-        if (selectedId == null)
-        {
-            return new CommandResult { Message = "You need to select a pokemon first!" };
-        }
+        if (selectedId == null) return new CommandResult { Message = "You need to select a pokemon first!" };
 
         var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.DittoId == selectedId);
-        if (selectedPokemon == null)
-        {
-            return new CommandResult { Message = "Selected pokemon not found!" };
-        }
+        if (selectedPokemon == null) return new CommandResult { Message = "Selected pokemon not found!" };
 
         var credits = await db.Users
             .Where(u => u.UserId == userId)
@@ -800,13 +715,11 @@ public class ItemsService(
         var candyStr = buyAmount == 1 ? "candy" : "candies";
 
         if (price > credits)
-        {
             return new CommandResult
             {
                 Message = $"You do not have {price} credits for {buyAmount} Rare {candyStr}",
                 Ephemeral = true
             };
-        }
 
         try
         {
@@ -829,7 +742,8 @@ public class ItemsService(
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error in Buy Candy - Poke: {Id} | Expected level - {Level}", selectedId, selectedPokemon.Level + useAmount);
+            Log.Error(ex, "Error in Buy Candy - Poke: {Id} | Expected level - {Level}", selectedId,
+                selectedPokemon.Level + useAmount);
             return new CommandResult
             {
                 Message = "Sorry, I can't do that right now. Try again in a moment.",
@@ -839,264 +753,241 @@ public class ItemsService(
     }
 
     public async Task<CommandResult> BuyChest(ulong userId, string chestType, string creditsOrRedeems)
-{
-    var ct = chestType.ToLower().Trim();
-    var cor = creditsOrRedeems.ToLower();
-
-    if (!new[] { "rare", "mythic", "legend" }.Contains(ct))
     {
-        return new CommandResult
-        {
-            Message = $"`{ct}` is not a valid chest type! Choose one of Rare, Mythic, or Legend.",
-            Ephemeral = true
-        };
-    }
+        var ct = chestType.ToLower().Trim();
+        var cor = creditsOrRedeems.ToLower();
 
-    if (!new[] { "credits", "redeems" }.Contains(cor))
-    {
-        return new CommandResult
-        {
-            Message = "Specify either \"credits\" or \"redeems\"!",
-            Ephemeral = true
-        };
-    }
-
-    var prices = new Dictionary<string, Dictionary<string, int>>
-    {
-        ["credits"] = new()
-        {
-            ["rare"] = 300000,
-            ["mythic"] = 600000,
-            ["legend"] = 2000000
-        },
-        ["redeems"] = new()
-        {
-            ["rare"] = 7,
-            ["mythic"] = 10,
-            ["legend"] = 33
-        }
-    };
-
-    var price = (ulong)prices[cor][ct];
-    await using var db = await dbContextProvider.GetContextAsync();
-    var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-    if (user == null)
-    {
-        return new CommandResult
-        {
-            Message = "You have not started!\nStart with `/start` first.",
-            Ephemeral = true
-        };
-    }
-
-    if (cor == "credits")
-    {
-        if (user.MewCoins < price)
-        {
+        if (!new[] { "rare", "mythic", "legend" }.Contains(ct))
             return new CommandResult
             {
-                Message = $"You do not have the {price} credits you need to buy a {ct} chest!",
+                Message = $"`{ct}` is not a valid chest type! Choose one of Rare, Mythic, or Legend.",
                 Ephemeral = true
             };
-        }
 
-        var chestStore = await db.ChestStore.FirstOrDefaultAsyncEF(c => c.UserId == userId);
-        if (chestStore == null)
-        {
-            chestStore = new ChestStore
-            {
-                UserId = userId,
-                Restock = ((DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800) + 1).ToString()
-            };
-            await db.ChestStore.AddAsync(chestStore);
-        }
-
-        var currentWeek = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800).ToString();
-        if (long.Parse(chestStore.Restock) <= long.Parse(currentWeek))
-        {
-            chestStore.Rare = 0;
-            chestStore.Mythic = 0;
-            chestStore.Legend = 0;
-            chestStore.Restock = (long.Parse(currentWeek) + 1).ToString();
-        }
-
-        const int maxChests = 5;
-        var currentAmount = ct switch
-        {
-            "rare" => chestStore.Rare,
-            "mythic" => chestStore.Mythic,
-            "legend" => chestStore.Legend,
-            _ => throw new ArgumentException("Invalid chest type")
-        };
-
-        if (currentAmount + 1 > maxChests)
-        {
+        if (!new[] { "credits", "redeems" }.Contains(cor))
             return new CommandResult
             {
-                Message = $"You can't buy more than {maxChests} per week using credits! You've already bought {currentAmount}.",
+                Message = "Specify either \"credits\" or \"redeems\"!",
                 Ephemeral = true
             };
-        }
 
-        // Update chest count
-        switch (ct)
+        var prices = new Dictionary<string, Dictionary<string, int>>
         {
-            case "legend":
-                chestStore.Legend++;
-                break;
-            case "mythic":
-                chestStore.Mythic++;
-                break;
-            case "rare":
-                chestStore.Rare++;
-                break;
+            ["credits"] = new()
+            {
+                ["rare"] = 300000,
+                ["mythic"] = 600000,
+                ["legend"] = 2000000
+            },
+            ["redeems"] = new()
+            {
+                ["rare"] = 7,
+                ["mythic"] = 10,
+                ["legend"] = 33
+            }
+        };
+
+        var price = (ulong)prices[cor][ct];
+        await using var db = await dbContextProvider.GetContextAsync();
+        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        if (user == null)
+            return new CommandResult
+            {
+                Message = "You have not started!\nStart with `/start` first.",
+                Ephemeral = true
+            };
+
+        if (cor == "credits")
+        {
+            if (user.MewCoins < price)
+                return new CommandResult
+                {
+                    Message = $"You do not have the {price} credits you need to buy a {ct} chest!",
+                    Ephemeral = true
+                };
+
+            var chestStore = await db.ChestStore.FirstOrDefaultAsyncEF(c => c.UserId == userId);
+            if (chestStore == null)
+            {
+                chestStore = new ChestStore
+                {
+                    UserId = userId,
+                    Restock = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800 + 1).ToString()
+                };
+                await db.ChestStore.AddAsync(chestStore);
+            }
+
+            var currentWeek = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800).ToString();
+            if (long.Parse(chestStore.Restock) <= long.Parse(currentWeek))
+            {
+                chestStore.Rare = 0;
+                chestStore.Mythic = 0;
+                chestStore.Legend = 0;
+                chestStore.Restock = (long.Parse(currentWeek) + 1).ToString();
+            }
+
+            const int maxChests = 5;
+            var currentAmount = ct switch
+            {
+                "rare" => chestStore.Rare,
+                "mythic" => chestStore.Mythic,
+                "legend" => chestStore.Legend,
+                _ => throw new ArgumentException("Invalid chest type")
+            };
+
+            if (currentAmount + 1 > maxChests)
+                return new CommandResult
+                {
+                    Message =
+                        $"You can't buy more than {maxChests} per week using credits! You've already bought {currentAmount}.",
+                    Ephemeral = true
+                };
+
+            // Update chest count
+            switch (ct)
+            {
+                case "legend":
+                    chestStore.Legend++;
+                    break;
+                case "mythic":
+                    chestStore.Mythic++;
+                    break;
+                case "rare":
+                    chestStore.Rare++;
+                    break;
+            }
+
+            await db.SaveChangesAsync();
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
+        }
+        else // redeems
+        {
+            if ((ulong)user.Redeems.GetValueOrDefault() < price)
+                return new CommandResult
+                {
+                    Message = $"You do not have the {price} redeems you need to buy a {ct} chest!",
+                    Ephemeral = true
+                };
+
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => (ulong)x.Redeems.GetValueOrDefault(),
+                        x => (ulong)x.Redeems.GetValueOrDefault() - price));
         }
 
-        await db.SaveChangesAsync();
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ??
+                        new Dictionary<string, int>();
+        var item = $"{ct} chest";
+        inventory[item] = inventory.GetValueOrDefault(item, 0) + 1;
+
+        var serializedItems = JsonSerializer.Serialize(inventory);
+
         await db.Users.Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
-    }
-    else // redeems
-    {
-        if ((ulong)user.Redeems.GetValueOrDefault() < price)
+                .SetProperty(x => x.Inventory, serializedItems));
+
+        return new CommandResult
         {
-            return new CommandResult
-            {
-                Message = $"You do not have the {price} redeems you need to buy a {ct} chest!",
-                Ephemeral = true
-            };
-        }
-
-        await db.Users.Where(u => u.UserId == userId)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => (ulong)x.Redeems.GetValueOrDefault(), x => (ulong)x.Redeems.GetValueOrDefault() - price));
+            Message =
+                $"You have successfully bought a {ct} chest for {price} {cor}!\nYou can open it with `/open {ct}`."
+        };
     }
-
-    var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ?? new();
-    var item = $"{ct} chest";
-    inventory[item] = inventory.GetValueOrDefault(item, 0) + 1;
-
-    var serializedItems = JsonSerializer.Serialize(inventory);
-
-    await db.Users.Where(u => u.UserId == userId)
-        .ExecuteUpdateAsync(u => u
-            .SetProperty(x => x.Inventory, serializedItems));
-
-    return new CommandResult
-    {
-        Message = $"You have successfully bought a {ct} chest for {price} {cor}!\nYou can open it with `/open {ct}`."
-    };
-}
 
     public async Task<CommandResult> BuyRedeems(ulong userId, int? amount = null)
-{
-    if (amount.HasValue && amount.Value < 1)
     {
-        return new CommandResult { Message = "Nice try..." };
-    }
+        if (amount.HasValue && amount.Value < 1) return new CommandResult { Message = "Nice try..." };
 
-    await using var db = await dbContextProvider.GetContextAsync();
-    var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-    if (user == null)
-    {
-        return new CommandResult
-        {
-            Message = "You have not started!\nStart with `/start` first.",
-            Ephemeral = true
-        };
-    }
-
-    var redeemStore = await db.RedeemStore.FirstOrDefaultAsyncEF(r => r.UserId == userId);
-    if (redeemStore == null)
-    {
-        redeemStore = new RedeemStore
-        {
-            UserId = userId,
-            Restock = ((DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800) + 1).ToString()
-        };
-        await db.RedeemStore.AddAsync(redeemStore);
-        await db.SaveChangesAsync();
-    }
-
-    const int maxRedeems = 100;
-    const int restock_time = 604800;
-
-    var currentWeek = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / restock_time).ToString();
-    if (long.Parse(redeemStore.Restock) <= long.Parse(currentWeek))
-    {
-        redeemStore.Bought = 0;
-        redeemStore.Restock = (long.Parse(currentWeek) + 1).ToString();
-        await db.SaveChangesAsync();
-    }
-
-    if (!amount.HasValue)
-    {
-        var embed = new EmbedBuilder();
-        if (redeemStore.Restock != "0")
-        {
-            var desc = $"You have bought {redeemStore.Bought} redeems this week.\n";
-            if (redeemStore.Bought >= maxRedeems)
+        await using var db = await dbContextProvider.GetContextAsync();
+        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        if (user == null)
+            return new CommandResult
             {
-                desc += "You cannot buy any more this week.";
+                Message = "You have not started!\nStart with `/start` first.",
+                Ephemeral = true
+            };
+
+        var redeemStore = await db.RedeemStore.FirstOrDefaultAsyncEF(r => r.UserId == userId);
+        if (redeemStore == null)
+        {
+            redeemStore = new RedeemStore
+            {
+                UserId = userId,
+                Restock = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800 + 1).ToString()
+            };
+            await db.RedeemStore.AddAsync(redeemStore);
+            await db.SaveChangesAsync();
+        }
+
+        const int maxRedeems = 100;
+        const int restock_time = 604800;
+
+        var currentWeek = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / restock_time).ToString();
+        if (long.Parse(redeemStore.Restock) <= long.Parse(currentWeek))
+        {
+            redeemStore.Bought = 0;
+            redeemStore.Restock = (long.Parse(currentWeek) + 1).ToString();
+            await db.SaveChangesAsync();
+        }
+
+        if (!amount.HasValue)
+        {
+            var embed = new EmbedBuilder();
+            if (redeemStore.Restock != "0")
+            {
+                var desc = $"You have bought {redeemStore.Bought} redeems this week.\n";
+                if (redeemStore.Bought >= maxRedeems)
+                    desc += "You cannot buy any more this week.";
+                else
+                    desc += "Buy more using `/buy redeems <amount>`!";
+
+                embed.WithTitle("Buy redeems")
+                    .WithDescription(desc)
+                    .WithColor(new Color(255, 182, 193))
+                    .WithFooter("Redeems restock every Wednesday at 8pm ET.");
             }
             else
             {
-                desc += "Buy more using `/buy redeems <amount>`!";
+                embed.WithTitle("Buy redeems")
+                    .WithDescription("You haven't bought any redeems yet! Use `/buy redeems <amount>`!")
+                    .WithColor(new Color(255, 182, 193));
             }
 
-            embed.WithTitle("Buy redeems")
-                .WithDescription(desc)
-                .WithColor(new Color(255, 182, 193))
-                .WithFooter("Redeems restock every Wednesday at 8pm ET.");
-        }
-        else
-        {
-            embed.WithTitle("Buy redeems")
-                .WithDescription("You haven't bought any redeems yet! Use `/buy redeems <amount>`!")
-                .WithColor(new Color(255, 182, 193));
+            return new CommandResult { Embed = embed.Build(), Ephemeral = true };
         }
 
-        return new CommandResult { Embed = embed.Build(), Ephemeral = true };
-    }
+        if (redeemStore.Bought + amount.Value > maxRedeems)
+            return new CommandResult
+            {
+                Message = $"You can't buy more than {maxRedeems} per week! You've already bought {redeemStore.Bought}.",
+                Ephemeral = true
+            };
 
-    if (redeemStore.Bought + amount.Value > maxRedeems)
-    {
+        const int creditsPerRedeem = 60000;
+        var price = (ulong)(amount.Value * creditsPerRedeem);
+
+        if (user.MewCoins < price)
+            return new CommandResult
+            {
+                Message = $"You do not have the {price} credits to buy those redeems!"
+            };
+
+        await db.Users.Where(u => u.UserId == userId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.Redeems, x => x.Redeems + amount.Value)
+                .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
+
+        redeemStore.Bought += amount.Value;
+        if (redeemStore.Restock == "0")
+            redeemStore.Restock = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800 + 1).ToString();
+        await db.SaveChangesAsync();
+
         return new CommandResult
         {
-            Message = $"You can't buy more than {maxRedeems} per week! You've already bought {redeemStore.Bought}.",
-            Ephemeral = true
+            Message = $"You have successfully bought {amount.Value} redeems for {price} credits!"
         };
     }
-
-    const int creditsPerRedeem = 60000;
-    var price = (ulong)(amount.Value * creditsPerRedeem);
-
-    if (user.MewCoins < price)
-    {
-        return new CommandResult
-        {
-            Message = $"You do not have the {price} credits to buy those redeems!"
-        };
-    }
-
-    await db.Users.Where(u => u.UserId == userId)
-        .ExecuteUpdateAsync(u => u
-            .SetProperty(x => x.Redeems, x => x.Redeems + amount.Value)
-            .SetProperty(x => x.MewCoins, x => x.MewCoins - price));
-
-    redeemStore.Bought += amount.Value;
-    if (redeemStore.Restock == "0")
-    {
-        redeemStore.Restock = ((DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 604800) + 1).ToString();
-    }
-    await db.SaveChangesAsync();
-
-    return new CommandResult
-    {
-        Message = $"You have successfully bought {amount.Value} redeems for {price} credits!"
-    };
-}
 
     public record CommandResult
     {

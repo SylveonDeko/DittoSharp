@@ -5,5 +5,4 @@ namespace Ditto.Modules.Spawn.Components;
 
 public class SpawnSlashComponentsHandler(DiscordShardedClient client) : DittoSlashModuleBase<SpawnService>
 {
-
 }

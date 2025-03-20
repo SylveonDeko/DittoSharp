@@ -9,15 +9,11 @@ public class Ability
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("id")]
-    public int AbilityId { get; set; }
+    [BsonElement("id")] public int AbilityId { get; set; }
 
-    [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    [BsonElement("identifier")] public string Identifier { get; set; }
 
-    [BsonElement("generation_id")]
-    public int? GenerationId { get; set; }
+    [BsonElement("generation_id")] public int? GenerationId { get; set; }
 
-    [BsonElement("is_main_series")]
-    public int? IsMainSeries { get; set; }
+    [BsonElement("is_main_series")] public int? IsMainSeries { get; set; }
 }

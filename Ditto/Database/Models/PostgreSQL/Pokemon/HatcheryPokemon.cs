@@ -7,6 +7,5 @@ namespace Ditto.Database.Models.PostgreSQL.Pokemon;
 [Keyless]
 public class HatcheryPokemon
 {
-    [Column("array", TypeName = "text[]")]
-    public string[]? PokemonArray { get; set; }
+    [Column("array", TypeName = "text[]")] public string[]? PokemonArray { get; set; }
 }

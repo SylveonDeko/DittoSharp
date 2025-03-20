@@ -9,9 +9,7 @@ public class PokemonMoves
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
 
-    [BsonElement("pokemon")]
-    public string Pokemon { get; set; }
+    [BsonElement("pokemon")] public string Pokemon { get; set; }
 
-    [BsonElement("moves")]
-    public List<string> Moves { get; set; }
+    [BsonElement("moves")] public List<string> Moves { get; set; }
 }

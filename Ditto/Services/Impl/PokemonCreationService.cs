@@ -17,7 +17,7 @@ public class PokemonCreationService : IPokemonCreationService
     private static readonly string[] NatureList =
     [
         "Lonely", "Brave", "Adamant", "Naughty", "Bold",
-        "Relaxed", "Impish", "Lax", "Timid", "Hasty", 
+        "Relaxed", "Impish", "Lax", "Timid", "Hasty",
         "Jolly", "Naive", "Modest", "Mild", "Quiet",
         "Rash", "Calm", "Gentle", "Sassy", "Careful",
         "Bashful", "Quirky", "Serious", "Docile", "Hardy"
@@ -94,11 +94,11 @@ public class PokemonCreationService : IPokemonCreationService
     }
 
     public async Task<Pokes> CreatePokemon(
-        ulong userId, 
-        string pokemonName, 
+        ulong userId,
+        string pokemonName,
         bool shiny = false,
         bool boosted = false,
-        bool radiant = false, 
+        bool radiant = false,
         string skin = null,
         string gender = null,
         int level = 1)
@@ -159,7 +159,7 @@ public class PokemonCreationService : IPokemonCreationService
         {
             Pokname = pokemonName,
             Hpiv = _rng.Next(minIv, maxIv + 1),
-            Atkiv = _rng.Next(minIv, maxIv + 1), 
+            Atkiv = _rng.Next(minIv, maxIv + 1),
             Defiv = _rng.Next(minIv, maxIv + 1),
             Spatkiv = _rng.Next(minIv, maxIv + 1),
             Spdefiv = _rng.Next(minIv, maxIv + 1),
@@ -201,7 +201,7 @@ public class PokemonCreationService : IPokemonCreationService
                 .SetProperty(x => x.Pokes, u => u.Pokes.Append(poke.Id).ToArray()));
 
         return new Pokes
-        { 
+        {
             Id = poke.Id,
             Gender = gender,
             IvSum = poke.Hpiv + poke.Atkiv + poke.Defiv + poke.Spatkiv + poke.Spdefiv + poke.Speediv,
@@ -215,3 +215,4 @@ public class PokemonCreationService : IPokemonCreationService
         return "";
     }
 }*/
+
