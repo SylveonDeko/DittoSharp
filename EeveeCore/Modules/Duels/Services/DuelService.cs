@@ -220,7 +220,11 @@ public class DuelService : INService
         try
         {
             var db = _redis.Redis.GetDatabase();
-            return await db.KeyExistsAsync($"user_in_battle:{userId}");
+            var exists =  await db.KeyExistsAsync($"user_in_battle:{userId}");
+            if (!exists) return false;
+            await db.KeyDeleteAsync($"user_in_battle:{userId}");
+            return false;
+
         }
         catch (Exception ex)
         {
