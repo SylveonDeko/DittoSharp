@@ -411,9 +411,6 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <summary>
     ///     Draw the battle background
     /// </summary>
-    /// <summary>
-    ///     Draw the battle background to look more like a Pokémon battle
-    /// </summary>
     private async Task DrawBackground(SKCanvas canvas, int bgNum, int width, int height)
     {
         var bgPath = Path.Combine(ResourcePath, "backgrounds", $"bg{bgNum}.png");
@@ -426,69 +423,17 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
         else
         {
-            // Create a Pokemon-like background gradient
-            using var skyPaint = new SKPaint
+            // Fallback to a gradient background
+            using var paint = new SKPaint
             {
                 Shader = SKShader.CreateLinearGradient(
                     new SKPoint(0, 0),
-                    new SKPoint(0, height * 0.7f),
-                    new[] { new SKColor(120, 180, 250), new SKColor(180, 220, 255) },
-                    null,
-                    SKShaderTileMode.Clamp)
-            };
-            canvas.DrawRect(0, 0, width, height * 0.7f, skyPaint);
-
-            // Draw ground gradient
-            using var groundPaint = new SKPaint
-            {
-                Shader = SKShader.CreateLinearGradient(
-                    new SKPoint(0, height * 0.7f),
                     new SKPoint(0, height),
-                    new[] { new SKColor(120, 200, 100), new SKColor(80, 160, 60) },
+                    new[] { new SKColor(135, 206, 235), new SKColor(34, 139, 34) },
                     null,
                     SKShaderTileMode.Clamp)
             };
-            canvas.DrawRect(0, height * 0.7f, width, height, groundPaint);
-
-            // Draw some clouds
-            using var cloudPaint = new SKPaint
-            {
-                Color = new SKColor(255, 255, 255, 180),
-                IsAntialias = true,
-                MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 10)
-            };
-
-            var random = new Random(42);
-            for (var i = 0; i < 5; i++)
-            {
-                float cloudX = random.Next(width);
-                float cloudY = 50 + random.Next(100);
-                float cloudWidth = 80 + random.Next(120);
-                float cloudHeight = 20 + random.Next(30);
-
-                canvas.DrawOval(new SKRect(cloudX, cloudY, cloudX + cloudWidth, cloudY + cloudHeight), cloudPaint);
-            }
-
-            // Draw distant mountains
-            using var mountainPaint = new SKPaint
-            {
-                Color = new SKColor(100, 140, 160, 150),
-                IsAntialias = true
-            };
-
-            var mountainPath = new SKPath();
-            mountainPath.MoveTo(0, height * 0.6f);
-
-            for (var i = 0; i < width / 50; i++)
-            {
-                float x = i * 50;
-                var y = height * 0.6f - (30 + random.Next(70));
-                mountainPath.LineTo(x, y);
-            }
-
-            mountainPath.LineTo(width, height * 0.6f);
-            mountainPath.Close();
-            canvas.DrawPath(mountainPath, mountainPaint);
+            canvas.DrawRect(0, 0, width, height, paint);
         }
     }
 
