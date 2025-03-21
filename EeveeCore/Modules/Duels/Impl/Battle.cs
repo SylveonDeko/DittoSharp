@@ -733,14 +733,14 @@ public class Battle
             if (at.CurrentPokemon is { ShouldMegaEvolve: true })
             {
                 // Bit of a hack, since it is in its mega form and dashes are removed from `name`, it will show as "<poke> mega evolved!".
-                if ((at.CurrentPokemon.HeldItem == "mega-stone" || at.CurrentPokemon.Name == "Rayquaza") &&
-                    at.CurrentPokemon.Form(at.CurrentPokemon.Name + "-mega"))
+                if ((at.CurrentPokemon.HeldItem.Name == "mega-stone" || at.CurrentPokemon._name == "Rayquaza") &&
+                    at.CurrentPokemon.Form(at.CurrentPokemon._name + "-mega"))
                     Msg += $"{at.CurrentPokemon.DisplayName} evolved!\n";
-                else if (at.CurrentPokemon.HeldItem == "mega-stone-x" &&
-                         at.CurrentPokemon.Form(at.CurrentPokemon.Name + "-mega-x"))
+                else if (at.CurrentPokemon.HeldItem.Name == "mega-stone-x" &&
+                         at.CurrentPokemon.Form(at.CurrentPokemon._name + "-mega-x"))
                     Msg += $"{at.CurrentPokemon.DisplayName} evolved!\n";
-                else if (at.CurrentPokemon.HeldItem == "mega-stone-y" &&
-                         at.CurrentPokemon.Form(at.CurrentPokemon.Name + "-mega-y"))
+                else if (at.CurrentPokemon.HeldItem.Name == "mega-stone-y" &&
+                         at.CurrentPokemon.Form(at.CurrentPokemon._name + "-mega-y"))
                     Msg += $"{at.CurrentPokemon.DisplayName} evolved!\n";
                 else
                     throw new InvalidOperationException("expected to mega evolve but no valid mega condition");

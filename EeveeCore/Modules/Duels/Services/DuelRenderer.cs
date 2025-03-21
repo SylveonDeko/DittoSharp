@@ -1,6 +1,5 @@
 using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Impl;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
 using SkiaSharp;
@@ -313,8 +312,6 @@ public class DuelRenderer(IMongoService mongoService) : INService
 
         // Draw HP bars and info
         DrawPokemonStatus(canvas, battle, width, height);
-
-        // No UI menu elements as requested
 
         return surface.Snapshot();
     }
@@ -669,7 +666,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
             var directory = "images";
 
             // Determine skin or default sprite
-            if (pokemon.Skin != null && !pokemon.Skin.Contains("verification")) directory = "skins";
+            if (pokemon.Skin != null && !pokemon.Skin.Contains("verification")) directory = "images";
 
             var fileName = await GetPokemonFileName(pokemon, mongoService);
 
@@ -679,8 +676,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
                 var substitute = await LoadPokemonBitmap("images/substitute.png");
                 if (substitute != null)
                 {
-                    // Larger substitute sprite
-                    var rect = new SKRect(100, height - 230, 250, height - 80);
+                    var rect = new SKRect(70, height - 270, 300, height - 40);
                     canvas.DrawBitmap(substitute, rect);
                 }
             }
@@ -690,9 +686,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
                 var sprite = await LoadPokemonBitmap($"{directory}/{fileName}");
                 if (sprite != null)
                 {
-
-                    // Larger Pokémon sprite (50% bigger)
-                    var rect = new SKRect(100, height - 230, 250, height - 80);
+                    var rect = new SKRect(70, height - 270, 300, height - 40);
                     canvas.DrawBitmap(sprite, rect);
                 }
             }
@@ -705,7 +699,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
             var directory = "images";
 
             // Determine skin or default sprite
-            if (pokemon.Skin != null && !pokemon.Skin.Contains("verification")) directory = "skins";
+            if (pokemon.Skin != null && !pokemon.Skin.Contains("verification")) directory = "images";
 
             var fileName = await GetPokemonFileName(pokemon, mongoService);
 
@@ -715,8 +709,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
                 var substitute = await LoadPokemonBitmap("images/substitute.png");
                 if (substitute != null)
                 {
-
-                    var rect = new SKRect(width - 270, 80, width - 100, 230);
+                    var rect = new SKRect(width - 300, 40, width - 70, 270);
                     canvas.DrawBitmap(substitute, rect);
                 }
             }
@@ -726,33 +719,31 @@ public class DuelRenderer(IMongoService mongoService) : INService
                 var sprite = await LoadPokemonBitmap($"{directory}/{fileName}");
                 if (sprite != null)
                 {
-
-                    // Larger Pokémon sprite (50% bigger)
-                    var rect = new SKRect(width - 270, 80, width - 100, 230);
+                    var rect = new SKRect(width - 300, 40, width - 70, 270);
                     canvas.DrawBitmap(sprite, rect);
                 }
             }
         }
     }
 
-
-    //// <summary>
-    /// Draw Pokémon status and HP bars
+    /// <summary>
+    ///     Draw Pokémon status and HP bars
     /// </summary>
     private void DrawPokemonStatus(SKCanvas canvas, Battle battle, int width, int height)
     {
-        // Draw player's Pokémon info (bottom right) in Pokémon style - like in Image 1
+        // Draw player's Pokémon info (bottom left) in Pokémon style - like in Image 1
         if (battle.Trainer1.CurrentPokemon != null)
         {
             var pokemon = battle.Trainer1.CurrentPokemon;
             DrawPokemonGameStyleHpBar(canvas, pokemon, 40, 40, 300, true);
         }
 
-        // Draw opponent's Pokémon info (top right) in Pokémon style - like in Image 1
+        // Draw opponent's Pokémon info (bottom right) in Pokémon style - moved from top to bottom
         if (battle.Trainer2.CurrentPokemon != null)
         {
             var pokemon = battle.Trainer2.CurrentPokemon;
-            DrawPokemonGameStyleHpBar(canvas, pokemon, width - 340, 40, 300, false);
+            // Changed y-coordinate from 40 to (height - 110) to place it at the bottom
+            DrawPokemonGameStyleHpBar(canvas, pokemon, width - 340, height - 110, 300, false);
         }
     }
 
@@ -762,7 +753,6 @@ public class DuelRenderer(IMongoService mongoService) : INService
     private void DrawPokemonGameStyleHpBar(SKCanvas canvas, DuelPokemon pokemon, float x, float y, float width,
         bool isPlayer)
     {
-        // Draw Pokémon-style HP info box with angled edge like in Image 1
         using var boxPath = new SKPath();
         boxPath.MoveTo(x, y);
         boxPath.LineTo(x + width, y);
@@ -800,7 +790,6 @@ public class DuelRenderer(IMongoService mongoService) : INService
 
         canvas.DrawText(pokemon.Name, x + 15, y + 25, namePaint);
 
-        // Draw level with gender symbol like in Image 1
         var genderSymbol = pokemon.Gender == "male" ? "♂" : pokemon.Gender == "female" ? "♀" : "";
         using var levelPaint = new SKPaint
         {
@@ -879,27 +868,27 @@ public class DuelRenderer(IMongoService mongoService) : INService
     private async Task<string> GetPokemonFileName(DuelPokemon pokemon, IMongoService mongo)
     {
         var identifier = await mongo.Forms
-            .Find(f => f.Identifier.Equals(pokemon.PokemonName.ToLower(), StringComparison.CurrentCultureIgnoreCase))
+            .Find(f => f.Identifier.Equals(pokemon._name.ToLower(), StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
         if (identifier == null)
-            throw new ArgumentException($"Invalid name ({pokemon.PokemonName}) passed to GetPokemonFormInfo");
+            throw new ArgumentException($"Invalid name ({pokemon._name}) passed to GetPokemonFormInfo");
 
         var suffix = identifier.FormIdentifier;
         int pokemonId;
         var formId = 0;
 
-        if (!string.IsNullOrEmpty(suffix) && pokemon.PokemonName.EndsWith(suffix))
+        if (!string.IsNullOrEmpty(suffix) && pokemon.FullName.EndsWith(suffix))
         {
             formId = (int)(identifier.FormOrder - 1)!;
-            var formName = pokemon.PokemonName[..^(suffix.Length + 1)];
+            var formName = pokemon.FullName[..^(suffix.Length + 1)];
 
             var pokemonIdentifier = await mongo.Forms
                 .Find(f => f.Identifier.Equals(formName, StringComparison.CurrentCultureIgnoreCase))
                 .FirstOrDefaultAsync();
 
             if (pokemonIdentifier == null)
-                throw new ArgumentException($"Invalid name ({pokemon.PokemonName}) passed to GetPokemonFormInfo");
+                throw new ArgumentException($"Invalid name ({pokemon._name}) passed to GetPokemonFormInfo");
 
             pokemonId = pokemonIdentifier.PokemonId;
         }
@@ -917,9 +906,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
             skinPath = $"{pokemon.Skin}/";
         }
 
-        // Assuming you have a radiant_placeholder_pokes collection
         var isPlaceholder = await mongo.RadiantPlaceholders
-            .Find(p => p.Name.Equals(pokemon.PokemonName, StringComparison.CurrentCultureIgnoreCase))
+            .Find(p => p.Name.Equals(pokemon._name, StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
         var radiantPath = pokemon.Radiant ? "radiant/" : "";

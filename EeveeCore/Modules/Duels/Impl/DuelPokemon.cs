@@ -13,9 +13,9 @@ public class DuelPokemon
     private readonly string _startingName;
     private string _illusionDisplayName;
     private string _illusionName;
-    private string _name;
+    public string _name;
 
-    public DuelPokemon(int pokemonId, string pokemonName, string name, string nickname,
+    public DuelPokemon(int pokemonId, string name, string fullname,string nickname,
         Dictionary<string, List<int>> baseStats, int hp,
         int hpIV, int atkIV, int defIV, int spatkIV, int spdefIV, int speedIV,
         int hpEV, int atkEV, int defEV, int spatkEV, int spdefEV, int speedEV,
@@ -26,17 +26,17 @@ public class DuelPokemon
         string gender, bool canStillEvolve, string dislikedFlavor)
     {
         PokemonId = pokemonId;
-        PokemonName = pokemonName;
         _name = name;
         _nickname = nickname;
         if (_nickname != "None")
-            Name = $"{_nickname} ({_name.Replace("-", " ")})";
+            DisplayName = $"{_nickname} ({_name.Replace("-", " ")})";
         else
             Name = _name.Replace("-", " ");
         _illusionName = null;
         _illusionDisplayName = null;
 
         // Stats
+        FullName = fullname;
         BaseStats = baseStats;
         Hp = hp;
         Attack = baseStats[_name][1];
@@ -219,7 +219,9 @@ public class DuelPokemon
 
     // ID from pfile
     public int PokemonId { get; private set; }
-    public string PokemonName { get; private set; }
+
+    public string FullName { get; set; }
+
     public string Name { get; private set; }
 
     // Stats
@@ -600,7 +602,11 @@ public class DuelPokemon
     // Boolean - stores whether supersweet_syrup has been consumed to lower the evasion of its opponent. NOT reset on switch out.
     public bool SupersweetSyrup { get; set; }
 
-    public string DisplayName => Name;
+    public string DisplayName
+    {
+        get => Name;
+        set => Name = value;
+    }
 
     /// <summary>
     ///     Initialize a poke upon first sending it out.
@@ -1235,7 +1241,7 @@ public class DuelPokemon
 
         _illusionName = null;
         _illusionDisplayName = null;
-        if (_startingName is "EeveeCore" or "Smeargle" or "Mew" or "Aegislash")
+        if (_startingName is "Ditto" or "Smeargle" or "Mew" or "Aegislash")
         {
             _name = _startingName;
             if (_nickname != "None")
@@ -3016,9 +3022,9 @@ public class DuelPokemon
         if (!BaseStats.ContainsKey(form)) return false;
         _name = form;
         if (_nickname != "None")
-            Name = $"{_nickname} ({_name.Replace('-', ' ')})";
+            DisplayName = $"{_nickname} ({_name.Replace('-', ' ')})";
         else
-            Name = _name.Replace("-", " ");
+            DisplayName = _name.Replace("-", " ");
         Attack = BaseStats[_name][1];
         Defense = BaseStats[_name][2];
         SpAtk = BaseStats[_name][3];
@@ -3609,8 +3615,8 @@ public class DuelPokemon
 
         return new DuelPokemon(
             pid,
-            pokemon.PokemonName,
             pn,
+            pokemon.PokemonName,
             nick,
             baseStats,
             pokemonHp,
