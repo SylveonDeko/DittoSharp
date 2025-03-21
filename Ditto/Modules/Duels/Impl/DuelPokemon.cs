@@ -3468,7 +3468,7 @@ public class DuelPokemon
 
                 megaAbilityId = megaAbility.AbilityId;
 
-                var megaTypes = await mongoService.PokemonTypes.Find(pt => pt.Id == megaFormInfo.Identifier)
+                var megaTypes = await mongoService.PokemonTypes.Find(pt => pt.PokemonId == megaFormInfo.PokemonId)
                     .FirstOrDefaultAsync();
 
                 if (megaTypes == null) throw new InvalidOperationException("mega form missing types in `ptypes`");
