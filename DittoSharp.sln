@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ditto", "Ditto\Ditto.csproj", "{64015DF3-F526-4EEC-81AE-D9864E7EEEA5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EeveeCore", "EeveeCore\EeveeCore.csproj", "{64015DF3-F526-4EEC-81AE-D9864E7EEEA5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

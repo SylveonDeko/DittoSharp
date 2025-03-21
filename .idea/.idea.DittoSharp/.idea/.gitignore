@@ -12,3 +12,4 @@
 /dataSources/
 /dataSources.local.xml
 config.json
+/ditto/data/pixel_sprites/**

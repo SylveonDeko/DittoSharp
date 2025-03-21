@@ -4,3 +4,7 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 config.json
+Ditto/data/
+*.png
+.claudeignore
+*.json
