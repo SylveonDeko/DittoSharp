@@ -1017,14 +1017,22 @@ public class SpawnService : INService
 
     public async Task<Embed> UpdateChannelSetting(ulong guildId, ulong channelId, bool enable)
     {
+        await _mongoDb.Guilds.UpdateOneAsync(
+            g => g.GuildId == guildId,
+            Builders<Guild>.Update
+                .SetOnInsert(g => g.EnabledChannels, new List<ulong>())
+                .SetOnInsert(g => g.DisabledSpawnChannels, new List<ulong>()),
+            new UpdateOptions { IsUpsert = true }
+        );
+
         var update = enable
             ? Builders<Guild>.Update.AddToSet(g => g.EnabledChannels, channelId)
             : Builders<Guild>.Update.AddToSet(g => g.DisabledSpawnChannels, channelId);
 
         await _mongoDb.Guilds.UpdateOneAsync(
             g => g.GuildId == guildId,
-            update,
-            new UpdateOptions { IsUpsert = true });
+            update
+        );
 
         return new EmbedBuilder()
             .WithColor(Color.Green)
