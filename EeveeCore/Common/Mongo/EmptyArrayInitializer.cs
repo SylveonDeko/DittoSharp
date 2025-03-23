@@ -1,13 +1,17 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
-using System.Collections.Generic;
 using MongoDB.Bson.IO;
 
 namespace EeveeCore.Common.Mongo
 {
-    public class NullableListSerializer<T> : IBsonSerializer<List<T>>
+    public class NullableListSerializer<T> : IBsonSerializer<List<T>>, IBsonArraySerializer
     {
-        private readonly IBsonSerializer<T> _itemSerializer = BsonSerializer.LookupSerializer<T>();
+        private readonly IBsonSerializer<T> _itemSerializer;
+
+        public NullableListSerializer()
+        {
+            _itemSerializer = BsonSerializer.LookupSerializer<T>();
+        }
 
         public Type ValueType => typeof(List<T>);
 
@@ -66,6 +70,28 @@ namespace EeveeCore.Common.Mongo
         public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, object value)
         {
             Serialize(context, args, (List<T>)value);
+        }
+
+        public IBsonSerializer GetItemSerializer()
+        {
+            return _itemSerializer;
+        }
+
+        public BsonSerializationInfo GetItemSerializationInfo()
+        {
+            return new BsonSerializationInfo(
+                null,
+                _itemSerializer,
+                _itemSerializer.ValueType);
+        }
+
+        public bool TryGetItemSerializationInfo(out BsonSerializationInfo serializationInfo)
+        {
+            serializationInfo = new BsonSerializationInfo(
+                null,
+                _itemSerializer,
+                _itemSerializer.ValueType);
+            return true;
         }
     }
 }
