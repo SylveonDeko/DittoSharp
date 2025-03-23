@@ -5,6 +5,15 @@ namespace EeveeCore.Database.Models.Mongo.Discord;
 
 public class Guild
 {
+
+    public Guild()
+    {
+        EnabledChannels = [];
+        DisabledSpawnChannels = [];
+        DisabledChannels = [];
+        Redirects = [];
+    }
+
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; }
