@@ -17,15 +17,15 @@ public class Guild
 
     [BsonElement("disabled_channels")]
     [BsonSerializer(typeof(NullableListSerializer<ulong>))]
-    public List<ulong> DisabledChannels { get; set; }
+    public List<ulong>? DisabledChannels { get; set; }
 
     [BsonElement("redirects")]
     [BsonSerializer(typeof(NullableListSerializer<ulong>))]
-    public List<ulong> Redirects { get; set; }
+    public List<ulong>? Redirects { get; set; }
 
     [BsonElement("disabled_spawn_channels")]
     [BsonSerializer(typeof(NullableListSerializer<ulong>))]
-    public List<ulong> DisabledSpawnChannels { get; set; }
+    public List<ulong>? DisabledSpawnChannels { get; set; }
 
     [BsonElement("pin_spawns")] public bool PinSpawns { get; set; }
 
@@ -39,7 +39,7 @@ public class Guild
 
     [BsonElement("enabled_channels")]
     [BsonSerializer(typeof(NullableListSerializer<ulong>))]
-    public List<ulong> EnabledChannels { get; set; }
+    public List<ulong>? EnabledChannels { get; set; }
 
     [BsonElement("enable_spawns_all")] public bool EnableSpawnsAll { get; set; }
 
