@@ -210,7 +210,7 @@ public class Trainer
     /// <summary>
     ///     https://www.smogon.com/dp/articles/move_restrictions
     ///     Returns
-    ///     - ("forced", Move) - The move-action this trainer is FORCED to use.
+    ///     - ("forced", OldMove) - The move-action this trainer is FORCED to use.
     ///     - ("idxs", List[int]) - The indexes of moves that are valid to CHOOSE to use.
     ///     - ("struggle", List[int]) - If the user attempts to use any move, use struggle instead (no valid moves).
     /// </summary>

@@ -40,7 +40,7 @@ public static partial class StringExtensions
         return sb.ToString();
     }
 
-    public static string Capitalize(this string str)
+    public static string? Capitalize(this string? str)
     {
         if (string.IsNullOrEmpty(str))
             return str;
@@ -105,7 +105,7 @@ public static partial class StringExtensions
         return Regex.Replace(input, "<.*?>", string.Empty);
     }
 
-    public static string ToTitleCase(this string str)
+    public static string? ToTitleCase(this string? str)
     {
         var tokens = str.Split([
             " "

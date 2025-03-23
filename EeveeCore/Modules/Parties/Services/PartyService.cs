@@ -13,7 +13,7 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// <summary>
     ///     Creates a formatted table string from rows and headers
     /// </summary>
-    public string FormatTable(List<List<string>> rows, List<string> headers)
+    public string FormatTable(List<List<string?>> rows, List<string> headers)
     {
         // Calculate column widths
         var columnWidths = new int[headers.Count];
@@ -61,7 +61,7 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         GetPartySetupData(ulong userId, string partyName)
     {
         // Initialize arrays for pokemon data
-        var pokemonNames = new string[6] { "None", "None", "None", "None", "None", "None" };
+        var pokemonNames = new string?[6] { "None", "None", "None", "None", "None", "None" };
         var pokemonIndices = new int[6] { 0, 0, 0, 0, 0, 0 };
         var partyPokeIds = new ulong[6] { 0, 0, 0, 0, 0, 0 };
 
@@ -131,7 +131,7 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
             }
 
         // Build the table for display
-        var table = new List<List<string>>
+        var table = new List<List<string?>>
         {
             new() { "1", pokemonIndices[0] > 0 ? pokemonIndices[0].ToString() : "None", pokemonNames[0] },
             new() { "2", pokemonIndices[1] > 0 ? pokemonIndices[1].ToString() : "None", pokemonNames[1] },

@@ -44,7 +44,7 @@ public class ResurrectService(DbContextProvider dbProvider) : INService
     {
         await using var dbContext = await dbProvider.GetContextAsync();
 
-        // Move pokemon from dead_pokes to pokes table
+        // OldMove pokemon from dead_pokes to pokes table
         await dbContext.Database.ExecuteSqlRawAsync(
             "INSERT INTO pokes SELECT * FROM dead_pokes WHERE id = @p0",
             pokemonId);

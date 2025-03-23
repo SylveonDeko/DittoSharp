@@ -36,6 +36,7 @@
         <Content Update="config.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
+        <Content Remove="Modules\Duels\Impl\OldMove\**" />
     </ItemGroup>
 
     <ItemGroup>
@@ -54,6 +55,15 @@
 
     <ItemGroup>
         <None Include="data\**" CopyToOutputDirectory="PreserveNewest"/>
+        <None Remove="Modules\Duels\Impl\OldMove\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Modules\Duels\Impl\OldMove\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="Modules\Duels\Impl\OldMove\**" />
     </ItemGroup>
 
 </Project>

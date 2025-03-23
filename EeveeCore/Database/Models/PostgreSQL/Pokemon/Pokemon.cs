@@ -12,7 +12,7 @@ public class Pokemon
 
     #region Basic Info
 
-    [Column("pokname")] [Required] public string PokemonName { get; set; } = null!;
+    [Column("pokname")] [Required] public string? PokemonName { get; set; } = null!;
 
     [Column("poknick")] [Required] public string Nickname { get; set; } = null!;
 

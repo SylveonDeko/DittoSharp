@@ -118,6 +118,111 @@ public partial class Move
         });
     }
 
+    /// <summary>
+    ///     Gets a random new type for attacker that is resistant to defender's last move type.
+    /// </summary>
+    /// <returns>A random possible type id, or null if there is no valid type.</returns>
+    public static ElementType? GetConversion2(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    {
+        if (defender.LastMove == null) return null;
+
+        var moveType = defender.LastMove.GetType(attacker, defender, battle);
+        var newTypes = new HashSet<ElementType>();
+
+        foreach (ElementType e in Enum.GetValues(typeof(ElementType)))
+        {
+            if (e == ElementType.TYPELESS) continue;
+
+            if (battle.InverseBattle)
+            {
+                if (battle.TypeEffectiveness[(moveType, e)] > 100) newTypes.Add(e);
+            }
+            else
+            {
+                if (battle.TypeEffectiveness[(moveType, e)] < 100) newTypes.Add(e);
+            }
+        }
+
+        // Remove existing types
+        foreach (var t in attacker.TypeIds) newTypes.Remove(t);
+
+        if (newTypes.Count == 0) return null;
+
+        return newTypes.ElementAt(new Random().Next(newTypes.Count));
+    }
+
+    /// <summary>
+    ///     Generate an instance of the move struggle.
+    /// </summary>
+    public static Move Struggle()
+    {
+        return new Move(new Dictionary<string, object>
+        {
+            ["id"] = 165,
+            ["identifier"] = "struggle",
+            ["power"] = 50,
+            ["pp"] = 999999999999,
+            ["accuracy"] = null,
+            ["priority"] = 0,
+            ["type_id"] = ElementType.TYPELESS,
+            ["damage_class_id"] = 2,
+            ["effect_id"] = 255,
+            ["effect_chance"] = null,
+            ["target_id"] = 10,
+            ["crit_rate"] = 0,
+            ["min_hits"] = null,
+            ["max_hits"] = null
+        });
+    }
+
+    /// <summary>
+    ///     Generate an instance of the move confusion.
+    /// </summary>
+    public static Move Confusion()
+    {
+        return new Move(new Dictionary<string, object>
+        {
+            ["id"] = 0xCFCF,
+            ["identifier"] = "confusion",
+            ["power"] = 40,
+            ["pp"] = 999999999999,
+            ["accuracy"] = null,
+            ["priority"] = 0,
+            ["type_id"] = ElementType.TYPELESS,
+            ["damage_class_id"] = DamageClass.PHYSICAL,
+            ["effect_id"] = 1,
+            ["effect_chance"] = null,
+            ["target_id"] = 7,
+            ["crit_rate"] = 0,
+            ["min_hits"] = null,
+            ["max_hits"] = null
+        });
+    }
+
+    /// <summary>
+    ///     Generate an instance of the move present.
+    /// </summary>
+    public static Move Present(int power)
+    {
+        return new Move(new Dictionary<string, object>
+        {
+            ["id"] = 217,
+            ["identifier"] = "present",
+            ["power"] = power,
+            ["pp"] = 999999999999,
+            ["accuracy"] = 90,
+            ["priority"] = 0,
+            ["type_id"] = ElementType.NORMAL,
+            ["damage_class_id"] = DamageClass.PHYSICAL,
+            ["effect_id"] = 123,
+            ["effect_chance"] = null,
+            ["target_id"] = 10,
+            ["crit_rate"] = 0,
+            ["min_hits"] = null,
+            ["max_hits"] = null
+        });
+    }
+
     public override string ToString()
     {
         return $"Move(name={Name}, power={Power}, effect_id={Effect})";

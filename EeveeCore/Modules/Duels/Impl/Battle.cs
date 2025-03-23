@@ -565,7 +565,7 @@ public class Battle
             if (t1Quick && !t2Quick) return T1FIRST;
             if (t2Quick && !t1Quick) return T2FIRST;
 
-            // Move last in prio bracket
+            // OldMove last in prio bracket
             var t1Slow = false;
             var t2Slow = false;
 

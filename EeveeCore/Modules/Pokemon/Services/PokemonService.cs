@@ -146,7 +146,7 @@ public class PokemonService(
         return reqs.Any() ? $"({string.Join(", ", reqs)})" : "";
     }
 
-    public async Task<string> GetEvolutionLine(string pokemonName)
+    public async Task<string> GetEvolutionLine(string? pokemonName)
     {
         try
         {
@@ -195,7 +195,7 @@ public class PokemonService(
     }
 
 
-    public async Task<PokemonInfo> GetPokemonInfo(string identifier)
+    public async Task<PokemonInfo> GetPokemonInfo(string? identifier)
     {
         try
         {
@@ -518,7 +518,7 @@ public class PokemonService(
         return sb.ToString();
     }
 
-    public async Task<string> GetPokemonForms(string val)
+    public async Task<string> GetPokemonForms(string? val)
     {
         try
         {
@@ -587,7 +587,7 @@ public class PokemonService(
         return user?.AncientUnlocked ?? false;
     }
 
-    public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string pokemonName, bool shiny = false,
+    public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string? pokemonName, bool shiny = false,
         bool radiant = false, string skin = null)
     {
         var identifier = await mongo.Forms
@@ -1443,7 +1443,7 @@ public class DetailedPokemonInfo
 public class PokemonInfo
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string? Name { get; set; }
     public List<string> Types { get; set; }
     public List<string> Abilities { get; set; }
     public List<string> EggGroups { get; set; }

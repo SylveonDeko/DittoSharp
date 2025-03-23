@@ -136,7 +136,7 @@ public class Weather(Battle battle) : ExpiringEffect(0)
         var msg = "";
         int? turns = null;
         ElementType? element = null;
-        string castform = null;
+        string? castform = null;
 
         if (WeatherType == weather)
             return "";
@@ -730,7 +730,7 @@ public class HeldItem
     }
 
     public Battle Battle { get; set; }
-    public Database.Models.Mongo.Pokemon.Item LastUsed { get; set; }
+    public Database.Models.Mongo.Pokemon.Item? LastUsed { get; set; }
     public bool EverHadItem { get; set; }
 
     // Properties to access the item's properties

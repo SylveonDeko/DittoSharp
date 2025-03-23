@@ -2,7 +2,7 @@ namespace EeveeCore.Modules.Spawn.Constants;
 
 public static class PokemonList
 {
-    public static List<string> LegendList =
+    public static List<string?> LegendList =
     [
         "Enamorus",
         "Tapu-koko",
@@ -130,7 +130,7 @@ public static class PokemonList
         "Ogerpon"
     ];
 
-    public static List<string> starterList =
+    public static List<string?> starterList =
     [
         "Grookey",
         "Decidueye-hisui",
@@ -219,7 +219,7 @@ public static class PokemonList
         "Quaquaval"
     ];
 
-    public static List<string> pseudoList =
+    public static List<string?> pseudoList =
     [
         "Deino",
         "Goodra-hisui",
@@ -260,7 +260,7 @@ public static class PokemonList
         "Baxcalibur"
     ];
 
-    public static List<string> pList =
+    public static List<string?> pList =
     [
         "Skwovet",
         "Greedent",
@@ -1168,7 +1168,7 @@ public static class PokemonList
         "Dipplin"
     ];
 
-    public static List<string> ubList =
+    public static List<string?> ubList =
     [
         "Nihilego",
         "Buzzwole",

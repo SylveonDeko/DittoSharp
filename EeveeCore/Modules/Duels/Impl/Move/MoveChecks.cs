@@ -118,6 +118,11 @@ public partial class Move
         return (true, msg);
     }
 
+    private static readonly int[] sourceArray2 = new[] { 340, 351 };
+    private static readonly int[] sourceArray1 = new[] { 112, 117, 356, 362, 384, 454, 488, 499 };
+    private static readonly string[] sourceArray0 = new[] { "h-rain", "h-sun", "h-wind" };
+    private static readonly int[] sourceArray = new[] { 116, 137, 138, 165 };
+
     /// <summary>
     ///     Checks if this move hits based on accuracy.
     /// </summary>
@@ -522,14 +527,14 @@ public partial class Move
                 return false;
         }
 
-        if (new[] { 340, 351 }.Contains(Effect) && !new[] { attacker, defender }.Any(p =>
+        if (sourceArray2.Contains(Effect) && !new[] { attacker, defender }.Any(p =>
                 p.TypeIds.Contains(ElementType.GRASS) && p.Grounded(battle) &&
                 p is { Dive: false, Dig: false, Fly: false, ShadowForce: false }))
             return false;
 
         if (Effect == 341 && defender.Owner.StickyWeb) return false;
 
-        if (new[] { 112, 117, 356, 362, 384, 454, 488, 499 }.Contains(Effect) &&
+        if (sourceArray1.Contains(Effect) &&
             new Random().Next(1, attacker.ProtectionChance + 1) != 1)
             return false;
 
@@ -555,8 +560,8 @@ public partial class Move
                 return false;
         }
 
-        if (new[] { 116, 137, 138, 165 }.Contains(Effect) &&
-            new[] { "h-rain", "h-sun", "h-wind" }.Contains(battle.Weather.Get()))
+        if (sourceArray.Contains(Effect) &&
+sourceArray0.Contains(battle.Weather.Get()))
             return false;
 
         if ((new[] { 8, 420, 444 }.Contains(Effect) && new[] { Ability.DAMP }.Contains(attacker.Ability())) ||
@@ -591,11 +596,8 @@ public partial class Move
                 return false;
         }
 
-        if (new[] { Ability.QUEENLY_MAJESTY, Ability.DAZZLING, Ability.ARMOR_TAIL }
-                .Contains(defender.Ability(attacker, this)) &&
-            GetPriority(attacker, defender, battle) > 0)
-            return false;
-
-        return true;
+        return !new[] { Ability.QUEENLY_MAJESTY, Ability.DAZZLING, Ability.ARMOR_TAIL }
+                   .Contains(defender.Ability(attacker, this)) ||
+               GetPriority(attacker, defender, battle) <= 0;
     }
 }

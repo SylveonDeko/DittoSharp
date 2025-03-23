@@ -3,7 +3,7 @@ namespace EeveeCore.Common.Constants;
 public static class PokemonConstants
 {
     // All Pokemon Lists combined
-    public static readonly List<string> TotalList = PseudoAndStarters.PseudoList
+    public static readonly List<string?> TotalList = PseudoAndStarters.PseudoList
         .Concat(PseudoAndStarters.StarterList)
         .Concat(LegendaryPokemon.LegendList)
         .Concat(LegendaryPokemon.UltraBeasts)

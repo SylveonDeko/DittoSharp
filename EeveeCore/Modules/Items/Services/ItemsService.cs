@@ -55,7 +55,7 @@ public class ItemsService(
     private readonly IDataCache _cache = cache;
     private readonly Random _random = new();
 
-    private bool IsFormed(string pokemonName)
+    private bool IsFormed(string? pokemonName)
     {
         return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
                pokemonName.EndsWith("-origin") || pokemonName.EndsWith("-10") || pokemonName.EndsWith("-complete") ||

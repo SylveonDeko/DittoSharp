@@ -174,7 +174,7 @@ public class SpawnService : INService
     }
 
 
-    private async Task<string> SelectPokemon((int Legend, int Ub, int Pseudo, int Starter) chances, bool ghost,
+    private async Task<string?> SelectPokemon((int Legend, int Ub, int Pseudo, int Starter) chances, bool ghost,
         bool ice, ulong guildId)
     {
         if (ghost)
@@ -194,7 +194,7 @@ public class SpawnService : INService
         return pokemon.ToLower();
     }
 
-    private async Task HandleVaultSpawn(ITextChannel channel, string pokemonName)
+    private async Task HandleVaultSpawn(ITextChannel channel, string? pokemonName)
     {
         if (_activeVaults.Contains(channel.Id))
             return;
@@ -264,7 +264,7 @@ public class SpawnService : INService
         }
     }
 
-    private string EncodePhrase(string phrase, int shift)
+    private string EncodePhrase(string? phrase, int shift)
     {
         var encoded = new StringBuilder();
         foreach (var c in phrase)
@@ -406,12 +406,12 @@ public class SpawnService : INService
         return (int)Math.Round(value);
     }
 
-    private string GetRandomFromList(IReadOnlyList<string> list)
+    private string? GetRandomFromList(IReadOnlyList<string?> list)
     {
         return list[_random.Next(list.Count)];
     }
 
-    private async Task<bool> ShadowHuntCheck(ulong userId, string pokemon)
+    private async Task<bool> ShadowHuntCheck(ulong userId, string? pokemon)
     {
         await using var dbContext = await _dbContextProvider.GetContextAsync();
         var user = await dbContext.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
@@ -430,7 +430,7 @@ public class SpawnService : INService
         return makeShadow;
     }
 
-    private async Task CreateAndSendSpawnMessage(ITextChannel channel, string pokemonName, bool isShiny, Guild config)
+    private async Task CreateAndSendSpawnMessage(ITextChannel channel, string? pokemonName, bool isShiny, Guild config)
     {
         // Get form info from MongoDB for validation
         var formInfo = await _mongoDb.Forms
@@ -486,7 +486,7 @@ public class SpawnService : INService
         }
     }
 
-    private async Task HandleMessageCollector(ITextChannel channel, IUserMessage spawnMsg, string pokemonName,
+    private async Task HandleMessageCollector(ITextChannel channel, IUserMessage spawnMsg, string? pokemonName,
         bool isShiny, Guild config, int legChance, int ubChance)
     {
         var catchOptions = GetCatchOptions(pokemonName);
@@ -578,9 +578,9 @@ public class SpawnService : INService
             }
     }
 
-    public List<string> GetCatchOptions(string pokemonName)
+    public List<string> GetCatchOptions(string? pokemonName)
     {
-        var options = new List<string> { pokemonName };
+        var options = new List<string?> { pokemonName };
 
         switch (pokemonName.ToLower())
         {
@@ -640,7 +640,7 @@ public class SpawnService : INService
         return _alwaysSpawn;
     }
 
-    private async Task<string> GetRandomPokemonOfType(int typeId)
+    private async Task<string?> GetRandomPokemonOfType(int typeId)
     {
         var pokemonOfType = await _mongoDb.PokemonTypes
             .Find(p => p.Types.Contains(typeId))
@@ -663,7 +663,7 @@ public class SpawnService : INService
     public async Task<CatchResult> HandleCatch(
         ulong userId,
         ulong guildId,
-        string pokemonName,
+        string? pokemonName,
         bool isShiny,
         int legendChance,
         int ubChance)
@@ -813,9 +813,9 @@ public class SpawnService : INService
         return string.Join("\n", debugMessages);
     }
 
-    private async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> CreatePokemon(
+    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> CreatePokemon(
         ulong userId,
-        string pokemonName,
+        string? pokemonName,
         bool shiny = false,
         bool boosted = false,
         bool radiant = false,

@@ -10,13 +10,13 @@ namespace EeveeCore.Modules.Duels.Impl;
 public class DuelPokemon
 {
     private readonly string _nickname;
-    private readonly string _startingName;
+    private readonly string? _startingName;
     private string _illusionDisplayName;
-    private string _illusionName;
-    public string _name;
+    private string? _illusionName;
+    public string? _name;
 
-    public DuelPokemon(int pokemonId, string name, string fullname,string nickname,
-        Dictionary<string, List<int>> baseStats, int hp,
+    public DuelPokemon(int pokemonId, string? name, string? fullname, string nickname,
+        Dictionary<string?, List<int>> baseStats, int hp,
         int hpIV, int atkIV, int defIV, int spatkIV, int spdefIV, int speedIV,
         int hpEV, int atkEV, int defEV, int spatkEV, int spdefEV, int speedEV,
         int level, Dictionary<string, double> natureStatDeltas, bool shiny, bool radiant, string skin,
@@ -220,12 +220,12 @@ public class DuelPokemon
     // ID from pfile
     public int PokemonId { get; private set; }
 
-    public string FullName { get; set; }
+    public string? FullName { get; set; }
 
-    public string Name { get; private set; }
+    public string? Name { get; private set; }
 
     // Stats
-    public Dictionary<string, List<int>> BaseStats { get; }
+    public Dictionary<string?, List<int>> BaseStats { get; }
     public int Hp { get; set; }
     public int Attack { get; private set; }
     public int Defense { get; private set; }
@@ -316,20 +316,20 @@ public class DuelPokemon
 
     // Moves
     // Optional[Move] - stores the last move used by this poke
-    public Move.Move LastMove { get; set; }
+    public Move.Move? LastMove { get; set; }
 
     // Optional[Tuple[int, DamageClass]] - stores the damage taken and the class of that damage.
     // Resets at the end of a turn.
-    public Tuple<int, DamageClass> LastMoveDamage { get; set; }
+    public Tuple<int, DamageClass>? LastMoveDamage { get; set; }
 
     // Boolean - stores whether or not the last move used by this poke failed.
     public bool LastMoveFailed { get; set; }
 
     // Optional[LockedMove] - stores the move this poke is currently locked into using due to it being a multi turn move.
-    public LockedMove LockedMove { get; set; }
+    public LockedMove? LockedMove { get; set; }
 
-    // Optional[Move] - stores the move this poke is currently locked into using due to a choice item.
-    public Move.Move ChoiceMove { get; set; }
+    // Optional[OldMove] - stores the move this poke is currently locked into using due to a choice item.
+    public Move.Move? ChoiceMove { get; set; }
 
     // ExpiringItem - stores the number of turns a specific move is disabled.
     public ExpiringItem Disable { get; set; }
@@ -953,7 +953,7 @@ public class DuelPokemon
         if (Ability() == Impl.Ability.MULTITYPE)
         {
             ElementType? e = null;
-            string f = null;
+            string? f = null;
             if (HeldItem.Get() == "draco-plate")
             {
                 e = ElementType.DRAGON;
@@ -1637,7 +1637,7 @@ public class DuelPokemon
 
             if (removeStats.Count > 0)
             {
-                Tuple<int, string> removeStat = removeStats[new Random().Next(removeStats.Count)];
+                var removeStat = removeStats[new Random().Next(removeStats.Count)];
                 msg += AppendStat(-1, this, null, removeStat.Item2, "its moodiness");
             }
         }
@@ -1694,7 +1694,7 @@ public class DuelPokemon
 
         if (Ability() == Impl.Ability.SHIELDS_DOWN && _name == "Minior" && Hp < StartingHp / 2)
         {
-            string newForm;
+            string? newForm;
             switch (Id % 7)
             {
                 case 0:
@@ -3017,7 +3017,7 @@ public class DuelPokemon
     ///     This changes its name and base stats, and may affect moves, abilities, and items.
     ///     Returns True if the poke successfully reformed.
     /// </summary>
-    public bool Form(string form)
+    public bool Form(string? form)
     {
         if (!BaseStats.ContainsKey(form)) return false;
         _name = form;
@@ -3219,22 +3219,17 @@ public class DuelPokemon
     }
 
     /// <summary>
-    ///     Returns a Move that can be used with assist, or null if none exists.
+    ///     Returns a OldMove that can be used with assist, or null if none exists.
     ///     This selects a random move from the pool of moves from pokes in the user's party that are eligable.
     /// </summary>
-    public Move.Move GetAssistMove()
+    public Move.Move? GetAssistMove()
     {
-        var moves = new List<Move.Move>();
-        for (var idx = 0; idx < Owner.Party.Count; idx++)
-        {
-            if (idx == Owner.LastIdx) continue;
-            foreach (var move in Owner.Party[idx].Moves)
-                if (move.SelectableByAssist())
-                    moves.Add(move);
-        }
+        var moves = (from t in Owner.Party.Where((t, idx) => idx != Owner.LastIdx)
+            from move in t.Moves
+            where move.SelectableByAssist()
+            select move).ToList();
 
-        if (moves.Count == 0) return null;
-        return moves[new Random().Next(moves.Count)];
+        return moves.Count == 0 ? null : moves[new Random().Next(moves.Count)];
     }
 
     /// <summary>
@@ -3243,6 +3238,7 @@ public class DuelPokemon
     public static async Task<DuelPokemon> Create(IInteractionContext ctx,
         Database.Models.PostgreSQL.Pokemon.Pokemon pokemon, IMongoService mongoService)
     {
+        // Initialize local variables from pokemon object
         var pn = pokemon.PokemonName;
         var nick = pokemon.Nickname;
         var hpiv = Math.Min(31, pokemon.HpIv);
@@ -3251,22 +3247,10 @@ public class DuelPokemon
         var spatkiv = Math.Min(31, pokemon.SpecialAttackIv);
         var spdefiv = Math.Min(31, pokemon.SpecialDefenseIv);
         var speediv = Math.Min(31, pokemon.SpeedIv);
-        var hpev = pokemon.HpEv;
-        var atkev = pokemon.AttackEv;
-        var defev = pokemon.DefenseEv;
-        var spaev = pokemon.SpecialAttackEv;
-        var spdev = pokemon.SpecialDefenseEv;
-        var speedev = pokemon.SpeedEv;
-        var plevel = pokemon.Level;
-        var shiny = pokemon.Shiny;
-        var radiant = pokemon.Radiant;
-        var skin = pokemon.Skin;
-        var id = pokemon.Id;
-        var hitem = pokemon.HeldItem;
         var happiness = pokemon.Happiness;
-        var moves = pokemon.Moves.ToList();
-        var abIndex = pokemon.AbilityIndex;
-        var nature = pokemon.Nature;
+        var hitem = pokemon.HeldItem;
+        var plevel = pokemon.Level;
+        var id = pokemon.Id;
         var gender = pokemon.Gender;
 
         // Validate IVs
@@ -3274,18 +3258,91 @@ public class DuelPokemon
         var ivPercentage = Math.Round(totalIvs / 186.0 * 100, 2);
         if (ivPercentage > 100.0) throw new ArgumentException($"IVs must be 100.0% or less, but got {ivPercentage}%");
 
+        // Normalize form name - check if it's a battle form that shouldn't start this way
+        pn = NormalizeFormName(pn, plevel);
+
+        // Prepare for potential mega evolution
+        string megaForm = null;
+        if (pn != "Rayquaza")
+            megaForm = hitem switch
+            {
+                "mega-stone" => pn + "-mega",
+                "mega-stone-x" => pn + "-mega-x",
+                "mega-stone-y" => pn + "-mega-y",
+                _ => null
+            };
+        else if (pokemon.Moves.Contains("dragon-ascent")) megaForm = pn + "-mega";
+
+        // Determine forms we need data for
+        var extraForms = GetExtraForms(pn);
+        if (megaForm != null)
+            extraForms.Add(megaForm);
+
+        // Create a list of tasks for parallel execution
+        var tasks = new List<Task>();
+
+        // Get form information
+        var formInfoTask = mongoService.Forms.Find(f => f.Identifier == pn.ToLower()).FirstOrDefaultAsync();
+        tasks.Add(formInfoTask);
+
         // Get nature data
-        var natureData = await mongoService.Natures.Find(n => n.Identifier == nature.ToLower()).FirstOrDefaultAsync();
-        var decStatId = natureData.DecreasedStatId;
-        var incStatId = natureData.IncreasedStatId;
+        var natureTask = mongoService.Natures.Find(n => n.Identifier == pokemon.Nature.ToLower()).FirstOrDefaultAsync();
+        tasks.Add(natureTask);
 
-        // Get stat types
-        var decStat = await mongoService.StatTypes.Find(s => s.StatId == decStatId).FirstOrDefaultAsync();
-        var incStat = await mongoService.StatTypes.Find(s => s.StatId == incStatId).FirstOrDefaultAsync();
+        // Get item data
+        var itemTask = mongoService.Items.Find(i => i.Identifier == hitem).FirstOrDefaultAsync();
+        tasks.Add(itemTask);
 
+        // Wait for these initial tasks to complete
+        await Task.WhenAll(tasks);
+
+        var formInfo = await formInfoTask;
+        var natureData = await natureTask;
+        var hitemData = await itemTask;
+
+        tasks.Clear();
+
+        // Get stat types for nature
+        var decStatTask = mongoService.StatTypes.Find(s => s.StatId == natureData.DecreasedStatId)
+            .FirstOrDefaultAsync();
+        var incStatTask = mongoService.StatTypes.Find(s => s.StatId == natureData.IncreasedStatId)
+            .FirstOrDefaultAsync();
+
+        // Get type data
+        var typeDataTask = mongoService.PokemonTypes.Find(pt => pt.PokemonId == formInfo.PokemonId)
+            .FirstOrDefaultAsync();
+
+        // Get stats data
+        var statsDataTask = mongoService.PokemonStats.Find(ps => ps.PokemonId == formInfo.PokemonId)
+            .FirstOrDefaultAsync();
+
+        // Get ability data
+        var abilityRecordsTask =
+            mongoService.PokeAbilities.Find(pa => pa.PokemonId == formInfo.PokemonId).ToListAsync();
+
+        // Check evolution
+        var pid = await GetBasePokemonId(pn, formInfo, mongoService);
+        var evoCheckTask = mongoService.PFile.Find(pf => pf.EvolvesFromSpeciesId == pid).FirstOrDefaultAsync();
+
+        // Wait for second batch of tasks
+        await Task.WhenAll(decStatTask, incStatTask, typeDataTask, statsDataTask, abilityRecordsTask, evoCheckTask);
+
+        var decStat = await decStatTask;
+        var incStat = await incStatTask;
+        var typeData = await typeDataTask;
+        var statsData = await statsDataTask;
+        var abilityRecords = await abilityRecordsTask;
+        var evoCheck = await evoCheckTask;
+
+        // Process stats
+        var stats = statsData.Stats.ToList();
+        var pokemonHp = stats[0];
+
+        // Process nature
         var decStatName = decStat.Identifier.Capitalize().Replace("-", " ");
         var incStatName = incStat.Identifier.Capitalize().Replace("-", " ");
 
+        // Initialize nature stat modifiers
         var natureStatDeltas = new Dictionary<string, double>
         {
             { "Attack", 1.0 },
@@ -3316,302 +3373,48 @@ public class DuelPokemon
             dislikedFlavor = flavorMap[decStatName];
         }
 
-        // Deform pokes that are formed into battle forms that they should not start off in
-        if (pn == "Mimikyu-busted") pn = "Mimikyu";
-        if (pn is "Cramorant-gorging" or "Cramorant-gulping") pn = "Cramorant";
-        if (pn == "Eiscue-noice") pn = "Eiscue";
-        if (pn == "Darmanitan-zen") pn = "Darmanitan";
-        if (pn == "Darmanitan-zen-galar") pn = "Darmanitan-galar";
-        if (pn == "Aegislash-blade") pn = "Aegislash";
-        if (pn is "Minior-red" or "Minior-orange" or "Minior-yellow" or "Minior-green" or "Minior-blue"
-            or "Minior-indigo" or "Minior-violet") pn = "Minior";
-        if (pn == "Wishiwashi" && plevel >= 20) pn = "Wishiwashi-school";
-        if (pn == "Wishiwashi-school" && plevel < 20) pn = "Wishiwashi";
-        if (pn == "Greninja-ash") pn = "Greninja";
-        if (pn == "Zygarde-complete") pn = "Zygarde";
-        if (pn == "Morpeko-hangry") pn = "Morpeko";
-        if (pn == "Cherrim-sunshine") pn = "Cherrim";
-        if (pn is "Castform-snowy" or "Castform-rainy" or "Castform-sunny") pn = "Castform";
-        if (pn.StartsWith("Arceus-")) pn = "Arceus";
-        if (pn.StartsWith("Silvally-")) pn = "Silvally";
-        if (pn == "Palafin-hero") pn = "Palafin";
-        if (pn.EndsWith("-mega-x") || pn.EndsWith("-mega-y")) pn = pn[..^7]; // Equivalent to pn[:-7] in Python
-        if (pn.EndsWith("-mega")) pn = pn[..^5]; // Equivalent to pn[:-5] in Python
-        // TODO: Meloetta, Shaymin
-
-        // Get form information
-        var formInfo = await mongoService.Forms.Find(f => f.Identifier == pn.ToLower()).FirstOrDefaultAsync();
-
-        // List of type ids
-        var typeData = await mongoService.PokemonTypes.Find(pt => pt.PokemonId == formInfo.PokemonId)
-            .FirstOrDefaultAsync();
-        var typeIds = typeData.Types.Select(t => (ElementType)t).ToList();
-
-        // 6 element list of stat values (int)
-        var statsData = await mongoService.PokemonStats.Find(ps => ps.PokemonId == formInfo.PokemonId)
-            .FirstOrDefaultAsync();
-        var stats = statsData.Stats.ToList();
-        var pokemonHp = stats[0];
-
-        // Store the base stats for all forms of this poke
-        var baseStats = new Dictionary<string, List<int>>
+        // Store base stats
+        var baseStats = new Dictionary<string?, List<int>>
         {
             { pn, stats }
         };
 
-        var extraForms = new List<string>();
+        // Get type IDs
+        var typeIds = typeData.Types.Select(t => (ElementType)t).ToList();
 
-        switch (pn)
-        {
-            case "Mimikyu":
-                extraForms.Add("Mimikyu-busted");
-                break;
-            case "Cramorant":
-                extraForms.AddRange(new[] { "Cramorant-gorging", "Cramorant-gulping" });
-                break;
-            case "Eiscue":
-                extraForms.Add("Eiscue-noice");
-                break;
-            case "Darmanitan":
-                extraForms.Add("Darmanitan-zen");
-                break;
-            case "Darmanitan-galar":
-                extraForms.Add("Darmanitan-zen-galar");
-                break;
-            case "Aegislash":
-                extraForms.Add("Aegislash-blade");
-                break;
-            case "Minior":
-                extraForms.AddRange(new[]
-                {
-                    "Minior-red", "Minior-orange", "Minior-yellow", "Minior-green",
-                    "Minior-blue", "Minior-indigo", "Minior-violet"
-                });
-                break;
-            case "Wishiwashi":
-                extraForms.Add("Wishiwashi-school");
-                break;
-            case "Wishiwashi-school":
-                extraForms.Add("Wishiwashi");
-                break;
-            case "Greninja":
-                extraForms.Add("Greninja-ash");
-                break;
-            case "Zygarde":
-            case "Zygarde-10":
-                extraForms.Add("Zygarde-complete");
-                break;
-            case "Morpeko":
-                extraForms.Add("Morpeko-hangry");
-                break;
-            case "Cherrim":
-                extraForms.Add("Cherrim-sunshine");
-                break;
-            case "Castform":
-                extraForms.AddRange(new[] { "Castform-snowy", "Castform-rainy", "Castform-sunny" });
-                break;
-            case "Arceus":
-                extraForms.AddRange(new[]
-                {
-                    "Arceus-dragon", "Arceus-dark", "Arceus-ground", "Arceus-fighting",
-                    "Arceus-fire", "Arceus-ice", "Arceus-bug", "Arceus-steel",
-                    "Arceus-grass", "Arceus-psychic", "Arceus-fairy", "Arceus-flying",
-                    "Arceus-water", "Arceus-ghost", "Arceus-rock", "Arceus-poison",
-                    "Arceus-electric"
-                });
-                break;
-            case "Silvally":
-                extraForms.AddRange(new[]
-                {
-                    "Silvally-psychic", "Silvally-fairy", "Silvally-flying", "Silvally-water",
-                    "Silvally-ghost", "Silvally-rock", "Silvally-poison", "Silvally-electric",
-                    "Silvally-dragon", "Silvally-dark", "Silvally-ground", "Silvally-fighting",
-                    "Silvally-fire", "Silvally-ice", "Silvally-bug", "Silvally-steel",
-                    "Silvally-grass"
-                });
-                break;
-            case "Palafin":
-                extraForms.Add("Palafin-hero");
-                break;
-        }
+        // Process abilities
+        var abIds = abilityRecords.Select(record => record.AbilityId).ToList();
+        var abId = abIds.Intersect(abilityRecords.Select(x => x.AbilityId)).FirstOrDefault();
 
-        string megaForm = null;
+        // Process evolution
+        var canStillEvolve = evoCheck != null;
+        if (pn == "Floette-eternal") canStillEvolve = false;
+
+        // Handle Shedinja special case
+        if (pn == "Shedinja")
+            pokemonHp = 1;
+        else
+            pokemonHp = (int)Math.Round((2 * pokemonHp + hpiv + pokemon.HpEv / 4.0) * plevel / 100 + plevel + 10);
+
+        // Process mega evolution data if applicable
         var megaAbilityId = 0;
         List<ElementType> megaTypeIds = null;
 
-        if (pn != "Rayquaza")
-        {
-            switch (hitem)
-            {
-                case "mega-stone":
-                    megaForm = pn + "-mega";
-                    break;
-                case "mega-stone-x":
-                    megaForm = pn + "-mega-x";
-                    break;
-                case "mega-stone-y":
-                    megaForm = pn + "-mega-y";
-                    break;
-            }
-        }
-        else
-        {
-            if (moves.Contains("dragon-ascent")) megaForm = pn + "-mega";
-        }
-
         if (megaForm != null)
         {
-            var megaFormInfo = await mongoService.Forms.Find(f => f.Identifier == megaForm.ToLower())
-                .FirstOrDefaultAsync();
-
-            if (megaFormInfo != null)
+            var megaDataTasks = await GetMegaData(megaForm, mongoService);
+            if (megaDataTasks.megaAbilityId != 0)
             {
-                var megaAbility = await mongoService.PokeAbilities.Find(pa => pa.PokemonId == megaFormInfo.PokemonId)
-                    .FirstOrDefaultAsync();
-
-                if (megaAbility == null)
-                    throw new InvalidOperationException("mega form missing ability in `poke_abilities`");
-
-                megaAbilityId = megaAbility.AbilityId;
-
-                var megaTypes = await mongoService.PokemonTypes.Find(pt => pt.PokemonId == megaFormInfo.PokemonId)
-                    .FirstOrDefaultAsync();
-
-                if (megaTypes == null) throw new InvalidOperationException("mega form missing types in `ptypes`");
-
-                megaTypeIds = megaTypes.Types.Select(x => (ElementType)x).ToList();
-                extraForms.Add(megaForm);
+                megaAbilityId = megaDataTasks.megaAbilityId;
+                megaTypeIds = megaDataTasks.megaTypeIds;
             }
         }
 
-        foreach (var formName in extraForms)
-        {
-            var formData = await mongoService.Forms.Find(f => f.Identifier == formName.ToLower()).FirstOrDefaultAsync();
-            var formStats = await mongoService.PokemonStats.Find(ps => ps.PokemonId == formData.PokemonId)
-                .FirstOrDefaultAsync();
-            baseStats[formName] = formStats.Stats.ToList();
-        }
+        // Process form stats
+        if (extraForms.Count > 0) await LoadFormStats(extraForms, baseStats, mongoService);
 
-        // Builds a list of the possible ability ids for this poke, `ab_index` is the currently selected ability from this list
-        var abilityRecords =
-            await mongoService.PokeAbilities.Find(pa => pa.PokemonId == formInfo.PokemonId).ToListAsync();
-
-        var abIds = abilityRecords.Select(record => record.AbilityId).ToList();
-
-        int abId;
-        try
-        {
-            abId = abIds.Intersect(abilityRecords.Select(x => x.AbilityId)).ToList().FirstOrDefault();
-        }
-        // Should never happen, but better safe than sorry
-        catch (IndexOutOfRangeException)
-        {
-            abId = abIds[0];
-        }
-
-        int pid;
-        // Check if Pokémon is a form variant
-        if (pn.EndsWith("-bug") || pn.EndsWith("-summer") || pn.EndsWith("-marine") || pn.EndsWith("-elegant") ||
-            pn.EndsWith("-poison") || pn.EndsWith("-average") || pn.EndsWith("-altered") || pn.EndsWith("-winter") ||
-            pn.EndsWith("-trash") || pn.EndsWith("-incarnate") || pn.EndsWith("-baile") || pn.EndsWith("-rainy") ||
-            pn.EndsWith("-steel") || pn.EndsWith("-star") || pn.EndsWith("-ash") || pn.EndsWith("-diamond") ||
-            pn.EndsWith("-pop-star") || pn.EndsWith("-fan") || pn.EndsWith("-school") || pn.EndsWith("-therian") ||
-            pn.EndsWith("-pau") || pn.EndsWith("-river") || pn.EndsWith("-poke-ball") || pn.EndsWith("-kabuki") ||
-            pn.EndsWith("-electric") || pn.EndsWith("-heat") || pn.EndsWith("-unbound") || pn.EndsWith("-chill") ||
-            pn.EndsWith("-archipelago") || pn.EndsWith("-zen") || pn.EndsWith("-normal") || pn.EndsWith("-mega-y") ||
-            pn.EndsWith("-resolute") || pn.EndsWith("-blade") || pn.EndsWith("-speed") || pn.EndsWith("-indigo") ||
-            pn.EndsWith("-dusk") || pn.EndsWith("-sky") || pn.EndsWith("-west") || pn.EndsWith("-sun") ||
-            pn.EndsWith("-dandy") || pn.EndsWith("-solo") || pn.EndsWith("-high-plains") || pn.EndsWith("-la-reine") ||
-            pn.EndsWith("-50") || pn.EndsWith("-unova-cap") || pn.EndsWith("-burn") || pn.EndsWith("-mega-x") ||
-            pn.EndsWith("-monsoon") || pn.EndsWith("-primal") || pn.EndsWith("-red-striped") ||
-            pn.EndsWith("-blue-striped") ||
-            pn.EndsWith("-white-striped") || pn.EndsWith("-ground") || pn.EndsWith("-super") ||
-            pn.EndsWith("-yellow") ||
-            pn.EndsWith("-polar") || pn.EndsWith("-cosplay") || pn.EndsWith("-ultra") || pn.EndsWith("-heart") ||
-            pn.EndsWith("-snowy") || pn.EndsWith("-sensu") || pn.EndsWith("-eternal") || pn.EndsWith("-douse") ||
-            pn.EndsWith("-defense") || pn.EndsWith("-sunshine") || pn.EndsWith("-psychic") || pn.EndsWith("-modern") ||
-            pn.EndsWith("-natural") || pn.EndsWith("-tundra") || pn.EndsWith("-flying") || pn.EndsWith("-pharaoh") ||
-            pn.EndsWith("-libre") || pn.EndsWith("-sunny") || pn.EndsWith("-autumn") || pn.EndsWith("-10") ||
-            pn.EndsWith("-orange") || pn.EndsWith("-standard") || pn.EndsWith("-land") || pn.EndsWith("-partner") ||
-            pn.EndsWith("-dragon") || pn.EndsWith("-plant") || pn.EndsWith("-pirouette") || pn.EndsWith("-male") ||
-            pn.EndsWith("-hoenn-cap") || pn.EndsWith("-violet") || pn.EndsWith("-spring") || pn.EndsWith("-fighting") ||
-            pn.EndsWith("-sandstorm") || pn.EndsWith("-original-cap") || pn.EndsWith("-neutral") ||
-            pn.EndsWith("-fire") ||
-            pn.EndsWith("-fairy") || pn.EndsWith("-attack") || pn.EndsWith("-black") || pn.EndsWith("-shock") ||
-            pn.EndsWith("-shield") || pn.EndsWith("-shadow") || pn.EndsWith("-grass") || pn.EndsWith("-continental") ||
-            pn.EndsWith("-overcast") || pn.EndsWith("-disguised") || pn.EndsWith("-exclamation") ||
-            pn.EndsWith("-origin") ||
-            pn.EndsWith("-garden") || pn.EndsWith("-blue") || pn.EndsWith("-matron") || pn.EndsWith("-red-meteor") ||
-            pn.EndsWith("-small") || pn.EndsWith("-rock-star") || pn.EndsWith("-belle") || pn.EndsWith("-alola-cap") ||
-            pn.EndsWith("-green") || pn.EndsWith("-active") || pn.EndsWith("-red") || pn.EndsWith("-mow") ||
-            pn.EndsWith("-icy-snow") || pn.EndsWith("-debutante") || pn.EndsWith("-east") || pn.EndsWith("-midday") ||
-            pn.EndsWith("-jungle") || pn.EndsWith("-frost") || pn.EndsWith("-midnight") || pn.EndsWith("-rock") ||
-            pn.EndsWith("-fancy") || pn.EndsWith("-busted") || pn.EndsWith("-ordinary") || pn.EndsWith("-water") ||
-            pn.EndsWith("-phd") || pn.EndsWith("-ice") || pn.EndsWith("-spiky-eared") || pn.EndsWith("-savanna") ||
-            pn.EndsWith("-original") || pn.EndsWith("-ghost") || pn.EndsWith("-meadow") || pn.EndsWith("-dawn") ||
-            pn.EndsWith("-question") || pn.EndsWith("-pom-pom") || pn.EndsWith("-female") ||
-            pn.EndsWith("-kalos-cap") ||
-            pn.EndsWith("-confined") || pn.EndsWith("-sinnoh-cap") || pn.EndsWith("-aria") || pn.EndsWith("-dark") ||
-            pn.EndsWith("-ocean") || pn.EndsWith("-wash") || pn.EndsWith("-white") || pn.EndsWith("-mega") ||
-            pn.EndsWith("-sandy") || pn.EndsWith("-complete") || pn.EndsWith("-large") || pn.EndsWith("-crowned") ||
-            pn.EndsWith("-ice-rider") || pn.EndsWith("-shadow-rider") || pn.EndsWith("-zen-galar") ||
-            pn.EndsWith("-rapid-strike") || pn.EndsWith("-noice") || pn.EndsWith("-hangry"))
-        {
-            var name = pn.ToLower().Split('-')[0];
-            var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
-            pid = originalFormInfo.PokemonId;
-        }
-        else
-        {
-            pid = formInfo.PokemonId;
-        }
-
-        // True if any possible future evo exists
-        var evoCheck = await mongoService.PFile.Find(pf => pf.EvolvesFromSpeciesId == pid).FirstOrDefaultAsync();
-        var canStillEvolve = evoCheck != null;
-
-        // Unreleased pokemon that is treated like a form in the bot, monkeypatch fix.
-        if (pn == "Floette-eternal") canStillEvolve = false;
-
-        // This stat can (/has to) be calculated ahead of time, as it does not change between forms.
-        // If transform copied HP, I would probably take up drinking...
-        pokemonHp = (int)Math.Round((2 * pokemonHp + hpiv + hpev / 4.0) * plevel / 100 + plevel + 10);
-
-        var hitemData = await mongoService.Items.Find(i => i.Identifier == hitem).FirstOrDefaultAsync();
-
-        if (pn == "Shedinja") pokemonHp = 1;
-
-        var weight = formInfo.Weight ?? 20;
-
-        var objectMoves = new List<Move.Move>();
-        foreach (var moveName in moves)
-        {
-            ElementType? typeOverride = null;
-            var moveIdentifier = moveName;
-
-            if (moveName.StartsWith("hidden-power-"))
-            {
-                var element = moveName.Split('-')[2];
-                moveIdentifier = "hidden-power";
-                typeOverride = (ElementType)Enum.Parse(typeof(ElementType), element.ToUpper());
-            }
-
-            // Get database move
-            var dbMove = await mongoService.Moves.Find(m => m.Identifier == moveIdentifier).FirstOrDefaultAsync();
-
-            if (dbMove == null)
-                // Fallback to tackle
-                dbMove = await mongoService.Moves.Find(m => m.Identifier == "tackle").FirstOrDefaultAsync();
-
-            // Create game move from database move
-            var gameMove = new Move.Move(dbMove);
-
-            // Apply type override if needed
-            if (typeOverride.HasValue) gameMove.Type = typeOverride.Value;
-
-            // Add to list
-            objectMoves.Add(gameMove);
-        }
+        // Process moves
+        var objectMoves = await ProcessMoves(pokemon.Moves.ToList(), mongoService);
 
         return new DuelPokemon(
             pid,
@@ -3626,28 +3429,204 @@ public class DuelPokemon
             spatkiv,
             spdefiv,
             speediv,
-            hpev,
-            atkev,
-            defev,
-            spaev,
-            spdev,
-            speedev,
+            pokemon.HpEv,
+            pokemon.AttackEv,
+            pokemon.DefenseEv,
+            pokemon.SpecialAttackEv,
+            pokemon.SpecialDefenseEv,
+            pokemon.SpeedEv,
             plevel,
             natureStatDeltas,
-            shiny.GetValueOrDefault(),
-            radiant.GetValueOrDefault(),
-            skin,
+            pokemon.Shiny.GetValueOrDefault(),
+            pokemon.Radiant.GetValueOrDefault(),
+            pokemon.Skin,
             typeIds,
             megaTypeIds,
             id,
             hitemData,
             happiness,
-            objectMoves,
+            objectMoves.ToList(),
             abId,
             megaAbilityId,
-            weight,
+            formInfo.Weight ?? 20,
             gender,
             canStillEvolve,
             dislikedFlavor);
+    }
+
+// Helper methods
+    private static string? NormalizeFormName(string? pn, int plevel)
+    {
+        return pn switch
+        {
+            "Mimikyu-busted" => "Mimikyu",
+            "Cramorant-gorging" or "Cramorant-gulping" => "Cramorant",
+            "Eiscue-noice" => "Eiscue",
+            "Darmanitan-zen" => "Darmanitan",
+            "Darmanitan-zen-galar" => "Darmanitan-galar",
+            "Aegislash-blade" => "Aegislash",
+            not null when pn.StartsWith("Minior-") && (pn.EndsWith("red") || pn.EndsWith("orange") ||
+                                                       pn.EndsWith("yellow") || pn.EndsWith("green") ||
+                                                       pn.EndsWith("blue") || pn.EndsWith("indigo") ||
+                                                       pn.EndsWith("violet")) => "Minior",
+            "Wishiwashi" when plevel >= 20 => "Wishiwashi-school",
+            "Wishiwashi-school" when plevel < 20 => "Wishiwashi",
+            "Greninja-ash" => "Greninja",
+            "Zygarde-complete" => "Zygarde",
+            "Morpeko-hangry" => "Morpeko",
+            "Cherrim-sunshine" => "Cherrim",
+            not null when pn.StartsWith("Castform-") => "Castform",
+            not null when pn.StartsWith("Arceus-") => "Arceus",
+            not null when pn.StartsWith("Silvally-") => "Silvally",
+            "Palafin-hero" => "Palafin",
+            not null when pn.EndsWith("-mega-x") || pn.EndsWith("-mega-y") => pn[..^7],
+            not null when pn.EndsWith("-mega") => pn[..^5],
+            _ => pn
+        };
+    }
+
+    private static List<string> GetExtraForms(string? pn)
+    {
+        return pn switch
+        {
+            "Mimikyu" => new List<string> { "Mimikyu-busted" },
+            "Cramorant" => new List<string> { "Cramorant-gorging", "Cramorant-gulping" },
+            "Eiscue" => new List<string> { "Eiscue-noice" },
+            "Darmanitan" => new List<string> { "Darmanitan-zen" },
+            "Darmanitan-galar" => new List<string> { "Darmanitan-zen-galar" },
+            "Aegislash" => new List<string> { "Aegislash-blade" },
+            "Minior" => new List<string>
+            {
+                "Minior-red", "Minior-orange", "Minior-yellow", "Minior-green",
+                "Minior-blue", "Minior-indigo", "Minior-violet"
+            },
+            "Wishiwashi" => new List<string> { "Wishiwashi-school" },
+            "Wishiwashi-school" => new List<string> { "Wishiwashi" },
+            "Greninja" => new List<string> { "Greninja-ash" },
+            "Zygarde" or "Zygarde-10" => new List<string> { "Zygarde-complete" },
+            "Morpeko" => new List<string> { "Morpeko-hangry" },
+            "Cherrim" => new List<string> { "Cherrim-sunshine" },
+            "Castform" => new List<string> { "Castform-snowy", "Castform-rainy", "Castform-sunny" },
+            "Arceus" => GetArceusFormsList(),
+            "Silvally" => GetSilvallyFormsList(),
+            "Palafin" => new List<string> { "Palafin-hero" },
+            _ => new List<string>()
+        };
+    }
+
+    private static List<string> GetArceusFormsList()
+    {
+        return
+        [
+            "Arceus-dragon", "Arceus-dark", "Arceus-ground", "Arceus-fighting",
+            "Arceus-fire", "Arceus-ice", "Arceus-bug", "Arceus-steel",
+            "Arceus-grass", "Arceus-psychic", "Arceus-fairy", "Arceus-flying",
+            "Arceus-water", "Arceus-ghost", "Arceus-rock", "Arceus-poison",
+            "Arceus-electric"
+        ];
+    }
+
+    private static List<string> GetSilvallyFormsList()
+    {
+        return new List<string>
+        {
+            "Silvally-psychic", "Silvally-fairy", "Silvally-flying", "Silvally-water",
+            "Silvally-ghost", "Silvally-rock", "Silvally-poison", "Silvally-electric",
+            "Silvally-dragon", "Silvally-dark", "Silvally-ground", "Silvally-fighting",
+            "Silvally-fire", "Silvally-ice", "Silvally-bug", "Silvally-steel",
+            "Silvally-grass"
+        };
+    }
+
+    private static async Task<int> GetBasePokemonId(string? pn, dynamic formInfo, IMongoService mongoService)
+    {
+        if (!IsFormVariant(pn)) return formInfo.PokemonId;
+        var name = pn.ToLower().Split('-')[0];
+        var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
+        return originalFormInfo.PokemonId;
+
+    }
+
+    private static bool IsFormVariant(string? pn)
+    {
+        return pn.Contains('-');
+    }
+
+    private static async Task<(int megaAbilityId, List<ElementType> megaTypeIds)> GetMegaData(string megaForm,
+        IMongoService mongoService)
+    {
+        var megaFormInfo = await mongoService.Forms.Find(f => f.Identifier == megaForm.ToLower())
+            .FirstOrDefaultAsync();
+
+        if (megaFormInfo == null)
+            return (0, null);
+
+        var megaAbilityTask = mongoService.PokeAbilities.Find(pa => pa.PokemonId == megaFormInfo.PokemonId)
+            .FirstOrDefaultAsync();
+        var megaTypesTask = mongoService.PokemonTypes.Find(pt => pt.PokemonId == megaFormInfo.PokemonId)
+            .FirstOrDefaultAsync();
+
+        await Task.WhenAll(megaAbilityTask, megaTypesTask);
+
+        var megaAbility = await megaAbilityTask;
+        var megaTypes = await megaTypesTask;
+
+        if (megaAbility == null)
+            throw new InvalidOperationException("mega form missing ability in `poke_abilities`");
+
+        if (megaTypes == null)
+            throw new InvalidOperationException("mega form missing types in `ptypes`");
+
+        return (megaAbility.AbilityId, megaTypes.Types.Select(x => (ElementType)x).ToList());
+    }
+
+    private static async Task LoadFormStats(List<string> forms, Dictionary<string?, List<int>> baseStats,
+        IMongoService mongoService)
+    {
+        var formTasks = forms.Select(formName => GetFormStats(formName, mongoService)).ToList();
+
+        (string? formName, List<int> stats)[] results = await Task.WhenAll(formTasks);
+
+        foreach (var (formName, stats) in results) baseStats[formName] = stats;
+    }
+
+    private static async Task<(string formName, List<int> stats)> GetFormStats(string formName,
+        IMongoService mongoService)
+    {
+        var formData = await mongoService.Forms.Find(f => f.Identifier == formName.ToLower()).FirstOrDefaultAsync();
+        var formStats = await mongoService.PokemonStats.Find(ps => ps.PokemonId == formData.PokemonId)
+            .FirstOrDefaultAsync();
+
+        return (formName, formStats.Stats.ToList());
+    }
+
+    private static async Task<Move.Move[]> ProcessMoves(List<string> moves, IMongoService mongoService)
+    {
+        var moveTasks = moves.Select(moveName => CreateMove(moveName, mongoService)).ToList();
+
+        return await Task.WhenAll(moveTasks);
+    }
+
+    private static async Task<Move.Move> CreateMove(string moveName, IMongoService mongoService)
+    {
+        ElementType? typeOverride = null;
+        var moveIdentifier = moveName;
+
+        if (moveName.StartsWith("hidden-power-"))
+        {
+            var element = moveName.Split('-')[2];
+            moveIdentifier = "hidden-power";
+            typeOverride = (ElementType)Enum.Parse(typeof(ElementType), element.ToUpper());
+        }
+
+        var dbMove = await mongoService.Moves.Find(m => m.Identifier == moveIdentifier).FirstOrDefaultAsync() ?? await mongoService.Moves.Find(m => m.Identifier == "tackle").FirstOrDefaultAsync();
+
+        // Create game move from database move
+        var gameMove = new Move.Move(dbMove);
+
+        // Apply type override if needed
+        if (typeOverride.HasValue) gameMove.Type = typeOverride.Value;
+
+        return gameMove;
     }
 }

@@ -185,7 +185,7 @@ public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
     }
 
     [ModalInteraction("catch_modal:*,*,*,*,*", true)]
-    public async Task HandleCatchModal(string pokemonName, bool shiny, string legendChance, string ubChance,
+    public async Task HandleCatchModal(string? pokemonName, bool shiny, string legendChance, string ubChance,
         ulong messageId, CatchModal modal)
     {
         await ctx.Interaction.DeferAsync();
