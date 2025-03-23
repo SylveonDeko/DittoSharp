@@ -16,15 +16,12 @@ public class Guild
     [BsonElement("prefix")] public string Prefix { get; set; }
 
     [BsonElement("disabled_channels")]
-    [BsonSerializer(typeof(NullableListSerializer<ulong>))]
     public List<ulong>? DisabledChannels { get; set; }
 
     [BsonElement("redirects")]
-    [BsonSerializer(typeof(NullableListSerializer<ulong>))]
     public List<ulong>? Redirects { get; set; }
 
     [BsonElement("disabled_spawn_channels")]
-    [BsonSerializer(typeof(NullableListSerializer<ulong>))]
     public List<ulong>? DisabledSpawnChannels { get; set; }
 
     [BsonElement("pin_spawns")] public bool PinSpawns { get; set; }
@@ -38,7 +35,6 @@ public class Guild
     [BsonElement("modal_view")] public bool ModalView { get; set; }
 
     [BsonElement("enabled_channels")]
-    [BsonSerializer(typeof(NullableListSerializer<ulong>))]
     public List<ulong>? EnabledChannels { get; set; }
 
     [BsonElement("enable_spawns_all")] public bool EnableSpawnsAll { get; set; }

@@ -81,7 +81,6 @@ public class Program
                     .AsSelfWithInterfaces()
                     .WithSingletonLifetime());
             });
-        BsonSerializer.RegisterSerializer(typeof(List<ulong>), new NullableListSerializer<ulong>());
 
         var host = builder.Build();
         await host.RunAsync();
