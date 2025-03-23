@@ -1,5 +1,3 @@
-// File: MoveStatusConditions.cs
-
 namespace EeveeCore.Modules.Duels.Impl.Move;
 
 public partial class Move
