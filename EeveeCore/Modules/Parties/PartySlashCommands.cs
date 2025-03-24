@@ -1,6 +1,5 @@
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
-using EeveeCore.Database;
 using EeveeCore.Modules.Parties.Services;
 using Microsoft.EntityFrameworkCore;
 

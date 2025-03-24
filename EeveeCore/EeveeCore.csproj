@@ -14,6 +14,7 @@
         <PackageReference Include="linq2db.EntityFrameworkCore" Version="9.1.0-preview.3"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.1"/>
         <PackageReference Include="MongoDB.Driver" Version="3.1.0"/>
+        <PackageReference Include="morelinq" Version="4.4.0" />
         <PackageReference Include="NonBlocking" Version="2.1.2"/>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3"/>
         <PackageReference Include="Scrutor" Version="6.0.1"/>
@@ -36,34 +37,9 @@
         <Content Update="config.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
-        <Content Remove="Modules\Duels\Impl\OldMove\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\abilities.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\forms.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\items.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\moves.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\natures.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\pfile.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\pokemon_stats.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\poke_abilities.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\ptypes.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\stat_types.json"/>
-        <_ContentIncludedByDefault Remove="Modules\Duels\Impl\Data\type_effectiveness.json"/>
     </ItemGroup>
 
     <ItemGroup>
         <None Include="data\**" CopyToOutputDirectory="PreserveNewest"/>
-        <None Remove="Modules\Duels\Impl\OldMove\**" />
     </ItemGroup>
-
-    <ItemGroup>
-      <Compile Remove="Modules\Duels\Impl\OldMove\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Remove="Modules\Duels\Impl\OldMove\**" />
-    </ItemGroup>
-
 </Project>

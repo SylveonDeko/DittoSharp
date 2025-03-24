@@ -2,11 +2,9 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using EeveeCore.Common;
-using EeveeCore.Services;
+using Discord.Interactions;
 using Fergun.Interactive;
 using Serilog;
-using ModuleInfo = Discord.Commands.ModuleInfo;
 
 namespace EeveeCore.Extensions;
 

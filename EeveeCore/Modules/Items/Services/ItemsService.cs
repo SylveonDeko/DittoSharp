@@ -1,9 +1,7 @@
 using System.Text.Json;
-using EeveeCore.Common;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.PostgreSQL.Game;
 using EeveeCore.Modules.Pokemon.Services;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;

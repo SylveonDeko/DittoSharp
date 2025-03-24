@@ -314,8 +314,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         {
             await using var dbContext = await _db.GetContextAsync();
 
-            // Calculate credits reward
-            // Calculate credits reward
             decimal battleMulti = 1;
 
 // Handle inventory which might be a string, JSON object, or dictionary

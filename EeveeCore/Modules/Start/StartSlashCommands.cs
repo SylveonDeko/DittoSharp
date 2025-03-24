@@ -1,4 +1,3 @@
-using Discord;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Start.Services;

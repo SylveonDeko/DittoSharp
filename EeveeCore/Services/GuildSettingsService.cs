@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using EeveeCore.Common;
 using EeveeCore.Database.Models.Mongo.Discord;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;

@@ -3,7 +3,6 @@ using System.Text;
 using Discord.Commands;
 using Discord.Interactions;
 using Discord.Net;
-using EeveeCore.Common;
 using EeveeCore.Common.Collections;
 using EeveeCore.Database.DbContextStuff;
 using Serilog;

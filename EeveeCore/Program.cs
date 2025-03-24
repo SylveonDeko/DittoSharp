@@ -1,15 +1,10 @@
 ﻿using Discord.Commands;
 using Discord.Interactions;
-using EeveeCore.Common;
 using EeveeCore.Common.ModuleBehaviors;
-using EeveeCore.Common.Mongo;
-using EeveeCore.Database;
 using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Serilog;
 using Serilog.Events;

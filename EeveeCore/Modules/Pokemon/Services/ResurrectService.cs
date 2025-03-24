@@ -1,6 +1,5 @@
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
-using EeveeCore.Services;
 using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 

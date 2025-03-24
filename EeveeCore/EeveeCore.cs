@@ -2,11 +2,9 @@
 using System.Reflection;
 using Discord.Commands;
 using Discord.Interactions;
-using EeveeCore.Common;
 using EeveeCore.Common.ModuleBehaviors;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.Mongo.Discord;
-using EeveeCore.Services;
 using Serilog;
 using TypeReader = Discord.Commands.TypeReader;
 

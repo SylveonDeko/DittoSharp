@@ -1,21 +1,17 @@
 using System.Text;
 using System.Text.Json;
-using EeveeCore.Common;
 using EeveeCore.Common.Constants;
-using EeveeCore.Database;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.Mongo.Discord;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Spawn.Constants;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Serilog;
 using Bot_User = EeveeCore.Database.Models.PostgreSQL.Bot.User;
-using User = EeveeCore.Database.Models.PostgreSQL.Bot.User;
 
 namespace EeveeCore.Modules.Spawn.Services;
 

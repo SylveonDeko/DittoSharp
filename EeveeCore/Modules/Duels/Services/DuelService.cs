@@ -1,13 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using StackExchange.Redis;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Duels.Impl;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 
 namespace EeveeCore.Modules.Duels.Services;

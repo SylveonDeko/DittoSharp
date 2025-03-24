@@ -3,7 +3,6 @@ using EeveeCore.Database.Models.Mongo.Game;
 using EeveeCore.Database.Models.Mongo.Pokemon;
 using MongoDB.Driver;
 using Pokemon_Type = EeveeCore.Database.Models.Mongo.Pokemon.Type;
-using Type = EeveeCore.Database.Models.Mongo.Pokemon.Type;
 
 namespace EeveeCore.Services.Impl;
 
