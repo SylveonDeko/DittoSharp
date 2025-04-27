@@ -9,7 +9,6 @@ public partial class Move
     public string Use(DuelPokemon attacker, DuelPokemon defender, Battle battle, bool usePP = true,
         bool overrideSleep = false, bool bounced = false)
     {
-        // This handles an edge case for moves that cause the target to swap out
         if (attacker.HasMoved && usePP) return "";
 
         Used = true;
@@ -19,7 +18,6 @@ public partial class Move
             attacker.LastMove = this;
             attacker.BeakBlast = false;
             attacker.DestinyBond = false;
-            // Reset semi-invulnerable status in case this is turn 2
             attacker.Dive = false;
             attacker.Dig = false;
             attacker.Fly = false;
@@ -31,10 +29,11 @@ public partial class Move
         var msg = "";
 
         // Check status conditions that may prevent move usage
-        msg += CheckStatusConditions(attacker, defender, battle, usePP, overrideSleep);
-        if (msg.Contains("return msg;")) return msg;
+        var (statusMsg, shouldAbortStatus) = CheckStatusConditions(attacker, defender, battle, usePP, overrideSleep);
+        msg += statusMsg;
+        if (shouldAbortStatus) return msg;
 
-        // OldMove announcement and PP management
+        // Move announcement and PP management
         if (!bounced)
         {
             msg += $"{attacker.Name} used {PrettyName}!\n";
@@ -65,12 +64,14 @@ public partial class Move
         msg += HandleStanceChange(attacker);
 
         // Powder damage
-        msg += HandlePowderEffects(attacker, defender, battle, currentType);
-        if (msg.Contains("return msg;")) return msg;
+        var (powderMsg, shouldAbortPowder) = HandlePowderEffects(attacker, defender, battle, currentType);
+        msg += powderMsg;
+        if (shouldAbortPowder) return msg;
 
         // Snatch steal
-        msg += HandleSnatch(attacker, defender, battle);
-        if (msg.Contains("return msg;")) return msg;
+        var (snatchMsg, shouldAbortSnatch) = HandleSnatch(attacker, defender, battle);
+        msg += snatchMsg;
+        if (shouldAbortSnatch) return msg;
 
         // Check Fail
         if (!CheckExecutable(attacker, defender, battle))
@@ -87,10 +88,9 @@ public partial class Move
 
         // Process move effects
         msg += ProcessMoveEffects(attacker, defender, battle, currentType, effectChance, bounced);
-        if (msg.Contains("return msg;")) return msg;
 
         // Calculate damage if applicable
-        int numHits = 0;
+        var numHits = 0;
         msg += CalculateDamage(attacker, defender, battle, currentType, ref numHits);
 
         // Fusion Flare/Bolt effect tracking
@@ -115,12 +115,10 @@ public partial class Move
         msg += HandleLifeOrb(attacker, defender, battle);
 
         // Dancer Ability - Runs at the end of move usage
-        if (defender.Ability(attacker, this) == Ability.DANCER && IsDance() && usePP)
-        {
-            var hm = defender.HasMoved;
-            msg += Use(defender, attacker, battle, false);
-            defender.HasMoved = hm;
-        }
+        if (defender.Ability(attacker, this) != Ability.DANCER || !IsDance() || !usePP) return msg;
+        var hm = defender.HasMoved;
+        msg += Use(defender, attacker, battle, false);
+        defender.HasMoved = hm;
 
         return msg;
     }

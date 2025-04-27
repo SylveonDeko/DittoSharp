@@ -4,8 +4,19 @@ using EeveeCore.Modules.Start.Services;
 
 namespace EeveeCore.Modules.Start.Components;
 
+/// <summary>
+///     Handles interaction components for the starter selection process.
+///     Processes type selection and starter Pokémon selection buttons and menus.
+/// </summary>
+/// <param name="startService">The service that handles starter creation and user registration.</param>
 public class StartInteractionModule(StartService startService) : EeveeCoreSlashModuleBase<StartService>
 {
+    /// <summary>
+    ///     Handles type selection button interactions.
+    ///     Shows a select menu with starter options for the chosen type.
+    /// </summary>
+    /// <param name="type">The type of starter selected (grass, water, or fire).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("start:type:*")]
     public async Task HandleTypeSelection(string type)
     {
@@ -46,6 +57,13 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
         }
     }
 
+    /// <summary>
+    ///     Handles starter Pokémon selection from the dropdown menu.
+    ///     Registers the user and creates their starter Pokémon.
+    /// </summary>
+    /// <param name="type">The type of starter selected (grass, water, or fire).</param>
+    /// <param name="values">The selected starter Pokémon name.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("start:starter:*")]
     public async Task HandleStarterSelection(string type, string?[] values)
     {
@@ -56,7 +74,7 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
             return;
         }
 
-        string? selectedStarter = values[0];
+        var selectedStarter = values[0];
 
         // Register the user if they're new
         var registrationResult = await startService.RegisterNewUser(ctx.User.Id);

@@ -3,15 +3,32 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EeveeCore.Modules.Parties.Services;
 
+/// <summary>
+///     Provides functionality for managing Pokémon egg hatcheries.
+///     Handles operations for adding, removing, and monitoring eggs in different hatchery groups
+///     with varying incubation rates and slot limits based on user's Patreon tier.
+/// </summary>
+/// <param name="db">The database context for accessing egg and user data.</param>
+/// <param name="client">The Discord client for user and channel interactions.</param>
 public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) : INService
 {
     private const string PremiumX2Icon = "<:premiumX2:1064764945578852382>";
     private const string PremiumX3Icon = "<:premiumX3:1064764942848376893>";
+
+    /// <summary>
+    ///     Dictionary storing paged results for users viewing hatchery data.
+    ///     Maps user IDs to their current page state.
+    /// </summary>
     private readonly ConcurrentDictionary<ulong, (List<EmbedBuilder> Pages, int CurrentPage)> _pagedResults = new();
 
     /// <summary>
-    ///     Store a paged result for a user
+    ///     Stores a paged result for a user.
+    ///     Used for maintaining pagination state when browsing hatchery information.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="pages">The list of embeds representing each page.</param>
+    /// <param name="currentPage">The current page index being viewed.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public Task StorePagedResult(ulong userId, List<EmbedBuilder> pages, int currentPage)
     {
         _pagedResults[userId] = (pages, currentPage);
@@ -19,8 +36,14 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Get a paged result for a user
+    ///     Retrieves a paged result for a user.
+    ///     Used when a user navigates through hatchery pages.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the user's
+    ///     pages and current page index, or null if not found.
+    /// </returns>
     public Task<(List<EmbedBuilder> Pages, int CurrentPage)> GetPagedResult(ulong userId)
     {
         if (_pagedResults.TryGetValue(userId, out var result)) return Task.FromResult(result);
@@ -29,8 +52,12 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Update a paged result for a user
+    ///     Updates a user's current page index in their paged result.
+    ///     Called when a user navigates to a different page.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="newPage">The new page index to set.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public Task UpdatePagedResult(ulong userId, int newPage)
     {
         if (_pagedResults.TryGetValue(userId, out var result)) _pagedResults[userId] = (result.Pages, newPage);
@@ -39,8 +66,15 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Get the hatchery view embed for a specific group
+    ///     Generates an embed displaying a user's hatchery information for a specific group.
+    ///     Shows eggs in each slot along with their incubation progress.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="group">The hatchery group number (1-3).</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns an EmbedBuilder
+    ///     with the hatchery information, or null if the group is invalid.
+    /// </returns>
     public async Task<EmbedBuilder> GetHatcheryViewEmbed(ulong userId, short group)
     {
         // Validate group number
@@ -111,8 +145,17 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Add an egg to the hatchery
+    ///     Adds an egg to a specific slot in a hatchery group.
+    ///     Performs validation checks for slot access based on Patreon tier.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="eggIndex">The index of the egg in the user's Pokémon collection.</param>
+    /// <param name="group">The hatchery group number (1-3).</param>
+    /// <param name="slot">The slot number within the group (1-10).</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> AddEggToHatchery(ulong userId, int eggIndex, short group,
         int slot)
     {
@@ -225,8 +268,15 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Remove an egg from the hatchery
+    ///     Removes an egg from a specific slot in a hatchery group.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="group">The hatchery group number (1-3).</param>
+    /// <param name="slot">The slot number within the group (1-10).</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> RemoveEggFromHatchery(ulong userId, int group, int slot)
     {
         try
@@ -288,8 +338,25 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Set multiple eggs in a hatchery group
+    ///     Sets multiple eggs in a hatchery group simultaneously.
+    ///     Used for batch processing of egg placement.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="group">The hatchery group number (1-3).</param>
+    /// <param name="slot1">The egg index for slot 1, or null if not changed.</param>
+    /// <param name="slot2">The egg index for slot 2, or null if not changed.</param>
+    /// <param name="slot3">The egg index for slot 3, or null if not changed.</param>
+    /// <param name="slot4">The egg index for slot 4, or null if not changed.</param>
+    /// <param name="slot5">The egg index for slot 5, or null if not changed.</param>
+    /// <param name="slot6">The egg index for slot 6, or null if not changed.</param>
+    /// <param name="slot7">The egg index for slot 7, or null if not changed.</param>
+    /// <param name="slot8">The egg index for slot 8, or null if not changed.</param>
+    /// <param name="slot9">The egg index for slot 9, or null if not changed.</param>
+    /// <param name="slot10">The egg index for slot 10, or null if not changed.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a dictionary
+    ///     mapping group numbers to lists of successfully added slot numbers.
+    /// </returns>
     public async Task<Dictionary<int, List<int>>> SetMultipleEggs(ulong userId, short group, int? slot1, int? slot2,
         int? slot3,
         int? slot4, int? slot5, int? slot6, int? slot7, int? slot8, int? slot9, int? slot10)
@@ -318,8 +385,16 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Swap two eggs in the hatchery
+    ///     Swaps two eggs between slots in the hatchery system.
+    ///     Can swap eggs between different groups.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="egg1Id">The ID of the first egg to swap.</param>
+    /// <param name="egg2Id">The ID of the second egg to swap.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> SwapEggs(ulong userId, ulong egg1Id, ulong egg2Id)
     {
         try
@@ -625,8 +700,18 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Get all hatchery data for a specific group
+    ///     Retrieves hatchery data for a specific user and group.
+    ///     Collects information about available slots, max slots, and egg data for display.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="group">The hatchery group number (1-3).</param>
+    /// <param name="patreonTier">The user's Patreon tier for slot access validation.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with:
+    ///     - Number of available slots
+    ///     - Maximum number of slots based on Patreon tier
+    ///     - List of slot data (slot number, egg name, index in party, step counter)
+    /// </returns>
     private async
         Task<(int AvailableSlots, int MaxSlots,
             List<(int SlotNumber, string EggName, int? PokemonNumber, int StepCounter)>
@@ -714,8 +799,14 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Get the user's Patreon tier
+    ///     Determines a user's Patreon tier from their database record.
+    ///     Used for feature access validation like premium hatchery slots.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the user's PatreonTier.
+    ///     Returns PatreonTier.None if the user is not found or has no Patreon status.
+    /// </returns>
     private async Task<PatreonTier> GetPatreonTier(ulong userId)
     {
         var user = await db.Users
@@ -738,8 +829,13 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     }
 
     /// <summary>
-    ///     Get a user's name from their ID
+    ///     Retrieves a user's Discord username from their ID.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the user's username,
+    ///     or "Unknown User" if the user cannot be found.
+    /// </returns>
     private async Task<string> GetUserNameAsync(ulong userId)
     {
         try
@@ -755,12 +851,32 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
 }
 
 /// <summary>
-///     Enum for Patreon tiers
+///     Defines Patreon subscription tiers that determine feature access levels.
+///     Higher tiers provide access to more slots in the egg hatchery.
 /// </summary>
 public enum PatreonTier
 {
+    /// <summary>
+    ///     No Patreon subscription, access to standard features only.
+    ///     Allows access to 6 hatchery slots per group.
+    /// </summary>
     None = 0,
+
+    /// <summary>
+    ///     Silver tier Patreon subscription.
+    ///     Allows access to 6 hatchery slots per group (same as None).
+    /// </summary>
     Silver = 1,
+
+    /// <summary>
+    ///     Gold tier Patreon subscription.
+    ///     Allows access to 7 hatchery slots per group.
+    /// </summary>
     Gold = 2,
+
+    /// <summary>
+    ///     Crystal tier Patreon subscription.
+    ///     Allows access to 10 hatchery slots per group.
+    /// </summary>
     Crystal = 3
 }

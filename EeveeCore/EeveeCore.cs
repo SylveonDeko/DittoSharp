@@ -10,8 +10,16 @@ using TypeReader = Discord.Commands.TypeReader;
 
 namespace EeveeCore;
 
+/// <summary>
+///     The main class for EeveeCore, responsible for initializing services, handling events, and managing the bot's
+///     lifecycle.
+/// </summary>
 public class EeveeCore
 {
+    /// <summary>
+    ///     Initializes a new instance of the EeveeCore class.
+    /// </summary>
+    /// <param name="services">The service provider for dependency injection.</param>
     public EeveeCore(IServiceProvider services)
     {
         Services = services;
@@ -22,17 +30,39 @@ public class EeveeCore
         GuildSettingsService = Services.GetRequiredService<GuildSettingsService>();
     }
 
+    /// <summary>
+    ///     Gets the credentials used by the bot.
+    /// </summary>
     public BotCredentials Credentials { get; }
     private int ReadyCount { get; set; }
+
+    /// <summary>
+    ///     Gets the Discord client used by the bot.
+    /// </summary>
     public DiscordShardedClient Client { get; }
     private GuildSettingsService GuildSettingsService { get; }
     private CommandService CommandService { get; }
+
+    /// <summary>
+    ///     Gets or sets the color used for successful operations.
+    /// </summary>
     public static Color OkColor { get; set; } = new(67, 160, 71);
+
+    /// <summary>
+    ///     Gets or sets the color used for error operations.
+    /// </summary>
     public static Color ErrorColor { get; set; } = new(229, 57, 53);
+
+    /// <summary>
+    ///     Gets a TaskCompletionSource that completes when the bot is ready.
+    /// </summary>
     public TaskCompletionSource<bool> Ready { get; } = new();
     private IServiceProvider Services { get; }
     private IDataCache Cache { get; }
 
+    /// <summary>
+    ///     Event that occurs when the bot joins a guild.
+    /// </summary>
     public event Func<Guild, Task> JoinedGuild = delegate { return Task.CompletedTask; };
 
     private void LoadTypeReaders(Assembly assembly)
@@ -165,6 +195,11 @@ public class EeveeCore
         return Task.CompletedTask;
     }
 
+
+    /// <summary>
+    ///     Runs the bot, initializing all necessary components and services.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task RunAsync()
     {
         var sw = Stopwatch.StartNew();

@@ -3,12 +3,18 @@ using EeveeCore.Modules.Duels.Impl.Helpers;
 namespace EeveeCore.Modules.Duels.Impl;
 
 /// <summary>
-///     Represents a genereric pokemon trainer.
+///     Represents a generic pokemon trainer.
 ///     This class outlines the methods that Trainer objects
 ///     should have, but should not be used directly.
 /// </summary>
 public class Trainer
 {
+    /// <summary>
+    ///     Initializes a new instance of the Trainer class with the specified name and party.
+    ///     Sets up all battlefield conditions and effects for the trainer's side.
+    /// </summary>
+    /// <param name="name">The name of the trainer.</param>
+    /// <param name="party">The list of Pokémon in the trainer's party.</param>
     public Trainer(string name, List<DuelPokemon> party)
     {
         Name = name;
@@ -42,85 +48,180 @@ public class Trainer
         NextSubstitute = 0;
     }
 
+    /// <summary>
+    ///     Gets or sets the name of the trainer.
+    /// </summary>
     public string Name { get; set; }
-    public List<DuelPokemon> Party { get; set; }
-    public DuelPokemon CurrentPokemon { get; set; }
-    public TaskCompletionSource<bool> Event { get; set; }
-    public TrainerAction SelectedAction { get; set; }
-
-    // Boolean - True if this trainer's pokemon was removed in such a way that it needs to return mid-turn.
-    public bool MidTurnRemove { get; set; }
-
-    // Optional[BatonPass] - Holds data baton passed from the previous pokemon to the next, if applicable.
-    public BatonPass BatonPass { get; set; }
-
-    // Int - Stacks of spikes on this trainer's side of the field
-    public int Spikes { get; set; }
-
-    // Int - Stacks of toxic spikes on this trainer's side of the field
-    public int ToxicSpikes { get; set; }
-
-    // Boolean - Whether stealth rocks are on this trainer's side of the field
-    public bool StealthRock { get; set; }
-
-    // Boolean - Whether a sticky web is on this trainer's side of the field
-    public bool StickyWeb { get; set; }
-
-    // Int - The last index of Party that was selected
-    public int LastIdx { get; set; }
-
-    public ExpiringWish Wish { get; set; }
-    public ExpiringEffect AuroraVeil { get; set; }
-    public ExpiringEffect LightScreen { get; set; }
-    public ExpiringEffect Reflect { get; set; }
-    public ExpiringEffect Mist { get; set; }
-
-    // ExpiringEffect - Stores the number of turns that pokes are protected from NV effects
-    public ExpiringEffect Safeguard { get; set; }
-
-    // Boolean - Whether the next poke to swap in should be restored via healing wish
-    public bool HealingWish { get; set; }
-
-    // Boolean - Whether the next poke to swap in should be restored via lunar dance
-    public bool LunarDance { get; set; }
-
-    // ExpiringEffect - Stores the number of turns that pokes have doubled speed
-    public ExpiringEffect Tailwind { get; set; }
-
-    // ExpiringEffect - Stores the number of turns that electric moves have 1/3 power
-    public ExpiringEffect MudSport { get; set; }
-
-    // ExpiringEffect - Stores the number of turns that fire moves have 1/3 power
-    public ExpiringEffect WaterSport { get; set; }
-
-    // ExpiringEffect - Stores the fact that a party member recently fainted.
-    public ExpiringEffect Retaliate { get; set; }
-
-    // ExpiringItem - Stores the turns until future sight attacks this trainer's pokemon.
-    public ExpiringItem FutureSight { get; set; }
-
-    // Boolean - Whether or not any of this trainer's pokemon have mega evolved yet this battle.
-    public bool HasMegaEvolved { get; set; }
-
-    // Int - Stores the number of times a pokemon in this trainer's party has fainted, including after being revived.
-    public int NumFainted { get; set; }
-
-    // Int - Stores the HP of the subsitute this trainer's next pokemon on the field will receive.
-    public int NextSubstitute { get; set; }
-
 
     /// <summary>
-    ///     Returns True if this trainer still has at least one pokemon that is alive.
+    ///     Gets or sets the list of Pokémon in the trainer's party.
     /// </summary>
+    public List<DuelPokemon> Party { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the trainer's currently active Pokémon.
+    /// </summary>
+    public DuelPokemon CurrentPokemon { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the task completion source used for asynchronous action selection.
+    /// </summary>
+    public TaskCompletionSource<bool> Event { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the action selected by the trainer for the current turn.
+    /// </summary>
+    public TrainerAction SelectedAction { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether this trainer's Pokémon was removed in such a way
+    ///     that it needs to return mid-turn.
+    /// </summary>
+    public bool MidTurnRemove { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the data baton passed from the previous Pokémon to the next, if applicable.
+    /// </summary>
+    public BatonPass BatonPass { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of layers of Spikes on this trainer's side of the field.
+    /// </summary>
+    public int Spikes { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of layers of Toxic Spikes on this trainer's side of the field.
+    /// </summary>
+    public int ToxicSpikes { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether Stealth Rock is on this trainer's side of the field.
+    /// </summary>
+    public bool StealthRock { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether Sticky Web is on this trainer's side of the field.
+    /// </summary>
+    public bool StickyWeb { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the index of the last Pokémon that was selected in the party.
+    /// </summary>
+    public int LastIdx { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Wish effect active on this trainer's side of the field.
+    /// </summary>
+    public ExpiringWish Wish { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Aurora Veil effect active on this trainer's side of the field.
+    ///     Reduces damage from physical and special attacks for 5 turns.
+    /// </summary>
+    public ExpiringEffect AuroraVeil { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Light Screen effect active on this trainer's side of the field.
+    ///     Reduces damage from special attacks for 5 turns.
+    /// </summary>
+    public ExpiringEffect LightScreen { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Reflect effect active on this trainer's side of the field.
+    ///     Reduces damage from physical attacks for 5 turns.
+    /// </summary>
+    public ExpiringEffect Reflect { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Mist effect active on this trainer's side of the field.
+    ///     Prevents stat reductions from opposing Pokémon for 5 turns.
+    /// </summary>
+    public ExpiringEffect Mist { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Safeguard effect active on this trainer's side of the field.
+    ///     Prevents non-volatile status conditions for 5 turns.
+    /// </summary>
+    public ExpiringEffect Safeguard { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the next Pokémon to swap in
+    ///     should be restored via Healing Wish.
+    /// </summary>
+    public bool HealingWish { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the next Pokémon to swap in
+    ///     should be restored via Lunar Dance.
+    /// </summary>
+    public bool LunarDance { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Tailwind effect active on this trainer's side of the field.
+    ///     Doubles the Speed of all Pokémon for 4 turns.
+    /// </summary>
+    public ExpiringEffect Tailwind { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Mud Sport effect active on this trainer's side of the field.
+    ///     Reduces the power of Electric-type moves to 1/3 for 5 turns.
+    /// </summary>
+    public ExpiringEffect MudSport { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Water Sport effect active on this trainer's side of the field.
+    ///     Reduces the power of Fire-type moves to 1/3 for 5 turns.
+    /// </summary>
+    public ExpiringEffect WaterSport { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Retaliate effect that tracks when a party member recently fainted.
+    ///     Doubles the power of the move Retaliate for 1 turn.
+    /// </summary>
+    public ExpiringEffect Retaliate { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Future Sight effect that stores the turns until
+    ///     Future Sight attacks this trainer's Pokémon.
+    /// </summary>
+    public ExpiringItem FutureSight { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether any of this trainer's Pokémon
+    ///     have Mega Evolved yet this battle.
+    /// </summary>
+    public bool HasMegaEvolved { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of times a Pokémon in this trainer's party has fainted,
+    ///     including after being revived.
+    /// </summary>
+    public int NumFainted { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the HP of the Substitute this trainer's next Pokémon
+    ///     on the field will receive.
+    /// </summary>
+    public int NextSubstitute { get; set; }
+
+    /// <summary>
+    ///     Determines whether this trainer still has at least one Pokémon that is alive.
+    /// </summary>
+    /// <returns>
+    ///     True if the trainer has at least one Pokémon with HP greater than 0,
+    ///     False otherwise.
+    /// </returns>
     public bool HasAlivePokemon()
     {
         return Party.Any(poke => poke.Hp > 0);
     }
 
     /// <summary>
-    ///     Updates this trainer for a new turn.
-    ///     Returns a formatted message.
+    ///     Updates this trainer for a new turn, handling all turn-based effects
+    ///     on the trainer's side of the field.
     /// </summary>
+    /// <param name="battle">The current battle context.</param>
+    /// <returns>A formatted message describing effects that occurred or expired.</returns>
     public string NextTurn(Battle battle)
     {
         var msg = "";
@@ -152,8 +253,15 @@ public class Trainer
     }
 
     /// <summary>
-    ///     Switch the currently active poke to the given slot.
+    ///     Switches the currently active Pokémon to the one at the specified party slot.
     /// </summary>
+    /// <param name="slot">The index of the party slot to switch to.</param>
+    /// <param name="midTurn">
+    ///     Whether the switch is occurring in the middle of a turn rather than as a turn action.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    ///     Thrown when the slot is out of bounds or the Pokémon has no HP.
+    /// </exception>
     public void SwitchPoke(int slot, bool midTurn = false)
     {
         if (slot < 0 || slot >= Party.Count) throw new ArgumentException("out of bounds");
@@ -165,16 +273,27 @@ public class Trainer
     }
 
     /// <summary>
-    ///     Returns True if this trainer is a human player, False if it is an AI.
+    ///     Determines whether this trainer is a human player or an AI.
+    ///     This method should be overridden by derived classes.
     /// </summary>
+    /// <returns>
+    ///     True if the trainer is a human player, False if it is an AI.
+    /// </returns>
     public virtual bool IsHuman()
     {
         throw new NotImplementedException();
     }
 
     /// <summary>
-    ///     Returns a list of indexes of pokes in the party that can be swapped to.
+    ///     Determines which Pokémon in the party can be legally swapped to, accounting for
+    ///     trapping effects, abilities, and other battle conditions.
     /// </summary>
+    /// <param name="defender">The opposing Pokémon.</param>
+    /// <param name="battle">The current battle context.</param>
+    /// <param name="checkTrap">Whether to check for trapping effects that prevent switching.</param>
+    /// <returns>
+    ///     A list of valid party indexes that can be switched to.
+    /// </returns>
     public List<int> ValidSwaps(DuelPokemon defender, Battle battle, bool checkTrap = true)
     {
         if (CurrentPokemon != null)
@@ -208,12 +327,16 @@ public class Trainer
     }
 
     /// <summary>
-    ///     https://www.smogon.com/dp/articles/move_restrictions
-    ///     Returns
-    ///     - ("forced", OldMove) - The move-action this trainer is FORCED to use.
-    ///     - ("idxs", List[int]) - The indexes of moves that are valid to CHOOSE to use.
-    ///     - ("struggle", List[int]) - If the user attempts to use any move, use struggle instead (no valid moves).
+    ///     Determines which moves the current Pokémon can legally use, accounting for
+    ///     restrictions like PP, Taunt, Choice items, and other battle conditions.
     /// </summary>
+    /// <param name="defender">The opposing Pokémon.</param>
+    /// <returns>
+    ///     A ValidMovesResult object describing the moves that can be used:
+    ///     - Forced: When the Pokémon must use a specific move (e.g., due to being locked into it)
+    ///     - ValidIndexes: A list of valid move indexes to choose from
+    ///     - Struggle: When no moves can be used, and Struggle must be used instead
+    /// </returns>
     public ValidMovesResult ValidMoves(DuelPokemon defender)
     {
         // Check if they are FORCED to use a certain move
@@ -266,37 +389,105 @@ public class Trainer
         return ValidMovesResult.ValidIndexes(result);
     }
 
+    /// <summary>
+    ///     Represents an action a trainer can take during their turn.
+    ///     Base class for specific action types like moves and switches.
+    /// </summary>
     public abstract class TrainerAction
     {
+        /// <summary>
+        ///     Gets a value indicating whether this action is a switch action.
+        /// </summary>
         public abstract bool IsSwitch { get; }
     }
 
-    public class MoveAction(Move.Move move) : TrainerAction
+    /// <summary>
+    ///     Represents a move action chosen by a trainer.
+    /// </summary>
+    public class MoveAction : TrainerAction
     {
-        public Move.Move Move { get; set; } = move;
+        /// <summary>
+        ///     Initializes a new instance of the MoveAction class with the specified move.
+        /// </summary>
+        /// <param name="move">The move to use.</param>
+        public MoveAction(Move.Move move)
+        {
+            Move = move;
+        }
 
+        /// <summary>
+        ///     Gets or sets the move to use.
+        /// </summary>
+        public Move.Move Move { get; set; }
+
+        /// <summary>
+        ///     Gets a value indicating whether this action is a switch action.
+        ///     Always returns false for move actions.
+        /// </summary>
         public override bool IsSwitch => false;
     }
 
-    public class SwitchAction(int switchIndex) : TrainerAction
+    /// <summary>
+    ///     Represents a switch action chosen by a trainer.
+    /// </summary>
+    public class SwitchAction : TrainerAction
     {
-        public int SwitchIndex { get; set; } = switchIndex;
+        /// <summary>
+        ///     Initializes a new instance of the SwitchAction class with the specified switch index.
+        /// </summary>
+        /// <param name="switchIndex">The index of the party slot to switch to.</param>
+        public SwitchAction(int switchIndex)
+        {
+            SwitchIndex = switchIndex;
+        }
 
+        /// <summary>
+        ///     Gets or sets the index of the party slot to switch to.
+        /// </summary>
+        public int SwitchIndex { get; set; }
+
+        /// <summary>
+        ///     Gets a value indicating whether this action is a switch action.
+        ///     Always returns true for switch actions.
+        /// </summary>
         public override bool IsSwitch => true;
     }
 }
 
 /// <summary>
-///     Represents a pokemon trainer that is a discord.Member.
+///     Represents a Pokémon trainer that is a Discord user.
+///     Handles interactions with human players through Discord.
 /// </summary>
-public class MemberTrainer(IUser member, List<DuelPokemon> party) : Trainer(member.Username, party)
+public class MemberTrainer : Trainer
 {
-    public ulong Id { get; set; } = member.Id;
-    public IUser Member { get; set; } = member;
+    /// <summary>
+    ///     Initializes a new instance of the MemberTrainer class with the specified Discord member and party.
+    /// </summary>
+    /// <param name="member">The Discord user representing this trainer.</param>
+    /// <param name="party">The list of Pokémon in the trainer's party.</param>
+    public MemberTrainer(IUser member, List<DuelPokemon> party) : base(member.Username, party)
+    {
+        Id = member.Id;
+        Member = member;
+    }
 
     /// <summary>
-    ///     Returns True if this trainer is a human player, False if it is an AI.
+    ///     Gets or sets the Discord ID of the member.
     /// </summary>
+    public ulong Id { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the Discord user object representing this trainer.
+    /// </summary>
+    public IUser Member { get; set; }
+
+    /// <summary>
+    ///     Determines whether this trainer is a human player or an AI.
+    ///     Always returns true for MemberTrainer since it represents a human player.
+    /// </summary>
+    /// <returns>
+    ///     Always returns true.
+    /// </returns>
     public override bool IsHuman()
     {
         return true;
@@ -304,13 +495,26 @@ public class MemberTrainer(IUser member, List<DuelPokemon> party) : Trainer(memb
 }
 
 /// <summary>
-///     Represents a pokemon trainer that is a NPC.
+///     Represents a Pokémon trainer that is an NPC (Non-Player Character).
+///     Provides AI-controlled behavior for battles.
 /// </summary>
-public class NPCTrainer(List<DuelPokemon> party) : Trainer("Trainer John", party)
+public class NPCTrainer : Trainer
 {
-    //// <summary>
-    /// Request a normal move from this trainer AI.
+    /// <summary>
+    ///     Initializes a new instance of the NPCTrainer class with the specified party.
+    ///     Uses a default trainer name "Trainer John".
     /// </summary>
+    /// <param name="party">The list of Pokémon in the trainer's party.</param>
+    public NPCTrainer(List<DuelPokemon> party) : base("Trainer John", party)
+    {
+    }
+
+    /// <summary>
+    ///     Selects and sets a move action for this AI trainer.
+    ///     Currently uses a simple random selection among valid moves.
+    /// </summary>
+    /// <param name="defender">The opposing Pokémon.</param>
+    /// <param name="battle">The current battle context.</param>
     public void Move(DuelPokemon defender, Battle battle)
     {
         var moveResult = ValidMoves(defender);
@@ -337,8 +541,14 @@ public class NPCTrainer(List<DuelPokemon> party) : Trainer("Trainer John", party
     }
 
     /// <summary>
-    ///     Request a swap choice from this trainer AI.
+    ///     Selects a Pokémon to switch to and performs the switch for this AI trainer.
+    ///     Currently uses a simple random selection among valid switches.
     /// </summary>
+    /// <param name="defender">The opposing Pokémon.</param>
+    /// <param name="battle">The current battle context.</param>
+    /// <param name="midTurn">
+    ///     Whether the switch is occurring in the middle of a turn rather than as a turn action.
+    /// </param>
     public void Swap(DuelPokemon defender, Battle battle, bool midTurn = false)
     {
         var validSwaps = ValidSwaps(defender, battle, false);
@@ -353,8 +563,12 @@ public class NPCTrainer(List<DuelPokemon> party) : Trainer("Trainer John", party
     }
 
     /// <summary>
-    ///     Returns True if this trainer is a human player, False if it is an AI.
+    ///     Determines whether this trainer is a human player or an AI.
+    ///     Always returns false for NPCTrainer since it represents an AI-controlled character.
     /// </summary>
+    /// <returns>
+    ///     Always returns false.
+    /// </returns>
     public override bool IsHuman()
     {
         return false;

@@ -118,10 +118,10 @@ public partial class Move
         return (true, msg);
     }
 
-    private static readonly int[] sourceArray2 = new[] { 340, 351 };
-    private static readonly int[] sourceArray1 = new[] { 112, 117, 356, 362, 384, 454, 488, 499 };
-    private static readonly string[] sourceArray0 = new[] { "h-rain", "h-sun", "h-wind" };
-    private static readonly int[] sourceArray = new[] { 116, 137, 138, 165 };
+    private static readonly int[] sourceArray2 = [340, 351];
+    private static readonly int[] sourceArray1 = [112, 117, 356, 362, 384, 454, 488, 499];
+    private static readonly string[] sourceArray0 = ["h-rain", "h-sun", "h-wind"];
+    private static readonly int[] sourceArray = [116, 137, 138, 165];
 
     /// <summary>
     ///     Checks if this move hits based on accuracy.

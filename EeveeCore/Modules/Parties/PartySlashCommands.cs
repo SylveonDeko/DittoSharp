@@ -5,15 +5,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EeveeCore.Modules.Parties;
 
+/// <summary>
+///     Provides Discord slash commands for managing Pokémon parties.
+///     Allows users to create, view, modify, and manage multiple party configurations.
+/// </summary>
 [Group("party", "Commands for loading, registering, and deleting parties")]
-public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<PartyService>
+public class PartyModule() : EeveeCoreSlashModuleBase<PartyService>
 {
+    /// <summary>
+    ///     Displays an interactive menu for configuring a party.
+    ///     Shows current party composition and allows modification via buttons.
+    /// </summary>
+    /// <param name="partyName">The name of the party to configure (autocompleted).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("setup", "Menu for party configuration")]
     public async Task PartySetup([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName)
     {
         // Fetches party information and creates a party configuration menu
         var (description, party, partyPokeIds, pokemonIndices, pokemonNames) =
-            await partyService.GetPartySetupData(ctx.User.Id, partyName);
+            await Service.GetPartySetupData(ctx.User.Id, partyName);
 
         if (party == null)
         {
@@ -53,10 +63,16 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
         await ctx.Interaction.RespondAsync(embed: embed.Build(), components: components.Build(), ephemeral: true);
     }
 
+    /// <summary>
+    ///     Displays information about a party's Pokémon composition.
+    ///     Shows the current active party if no party name is provided.
+    /// </summary>
+    /// <param name="partyName">The name of the party to view, or null for the active party (autocompleted).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("view", "View your loaded party or another party you have saved")]
     public async Task PartyView([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName = null)
     {
-        var embed = await partyService.GetPartyViewEmbed(ctx.User.Id, partyName);
+        var embed = await Service.GetPartyViewEmbed(ctx.User.Id, partyName);
 
         if (embed == null)
         {
@@ -67,6 +83,13 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
         await ctx.Interaction.RespondAsync(embed: embed.Build());
     }
 
+    /// <summary>
+    ///     Adds a Pokémon to a specified slot in the active party.
+    ///     Uses the currently selected Pokémon if no specific index is provided.
+    /// </summary>
+    /// <param name="slot">The slot number to add the Pokémon to (1-6).</param>
+    /// <param name="poke">The index of the Pokémon in the user's collection, or 0 to use the selected Pokémon.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("add", "Add a pokemon to a slot in your party")]
     public async Task PartyAdd(int slot, int poke = 0)
     {
@@ -76,7 +99,7 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             return;
         }
 
-        var result = await partyService.AddPokemonToParty(ctx.User.Id, slot, poke);
+        var result = await Service.AddPokemonToParty(ctx.User.Id, slot, poke);
 
         if (result.Success)
             await ConfirmAsync(result.Message);
@@ -84,6 +107,12 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             await ErrorAsync(result.Message);
     }
 
+    /// <summary>
+    ///     Removes a Pokémon from a specified slot in the active party.
+    ///     Leaves the slot empty after removal.
+    /// </summary>
+    /// <param name="slot">The slot number to remove the Pokémon from (1-6).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("remove", "Remove a pokemon from a slot in your party")]
     public async Task PartyRemove(int slot)
     {
@@ -93,7 +122,7 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             return;
         }
 
-        var result = await partyService.RemovePokemonFromParty(ctx.User.Id, slot);
+        var result = await Service.RemovePokemonFromParty(ctx.User.Id, slot);
 
         if (result.Success)
             await ConfirmAsync(result.Message);
@@ -101,6 +130,12 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             await ErrorAsync(result.Message);
     }
 
+    /// <summary>
+    ///     Saves the current active party under a specified name.
+    ///     Overwrites any existing party with the same name.
+    /// </summary>
+    /// <param name="partyName">The name to save the party under (max 20 characters).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("register", "Register your current party with a name")]
     public async Task PartyRegister(string partyName)
     {
@@ -112,7 +147,7 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             return;
         }
 
-        var result = await partyService.RegisterParty(ctx.User.Id, partyName);
+        var result = await Service.RegisterParty(ctx.User.Id, partyName);
 
         if (result.Success)
             await ConfirmAsync(result.Message);
@@ -120,13 +155,19 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             await ErrorAsync(result.Message);
     }
 
+    /// <summary>
+    ///     Deletes a saved party configuration.
+    ///     Requires confirmation before deletion.
+    /// </summary>
+    /// <param name="partyName">The name of the party to delete (autocompleted).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("deregister", "Deregister a Party from your saved partys")]
     public async Task PartyDeregister([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName)
     {
         partyName = partyName.ToLower();
 
         // Check if the party exists
-        var partyExists = await partyService.DoesPartyExist(ctx.User.Id, partyName);
+        var partyExists = await Service.DoesPartyExist(ctx.User.Id, partyName);
 
         if (!partyExists)
         {
@@ -144,7 +185,7 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             return;
         }
 
-        var result = await partyService.DeregisterParty(ctx.User.Id, partyName);
+        var result = await Service.DeregisterParty(ctx.User.Id, partyName);
 
         if (result.Success)
             await ctx.Interaction.ModifyOriginalResponseAsync(props => props.Content = result.Message);
@@ -152,12 +193,18 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             await ctx.Interaction.ModifyOriginalResponseAsync(props => props.Content = $"Error: {result.Message}");
     }
 
+    /// <summary>
+    ///     Loads a saved party into the active party slot.
+    ///     Replaces the current active party configuration.
+    /// </summary>
+    /// <param name="partyName">The name of the party to load (autocompleted).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("load", "Load a registered party save by name")]
     public async Task PartyLoad([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName)
     {
         partyName = partyName.ToLower();
 
-        var result = await partyService.LoadParty(ctx.User.Id, partyName);
+        var result = await Service.LoadParty(ctx.User.Id, partyName);
 
         if (result.Success)
             await ConfirmAsync(result.Message);
@@ -165,10 +212,15 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
             await ErrorAsync(result.Message);
     }
 
+    /// <summary>
+    ///     Displays a list of all saved party configurations for the user.
+    ///     Shows party names that can be referenced in other commands.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("list", "List your saved partys")]
     public async Task PartyList()
     {
-        var parties = await partyService.GetUserParties(ctx.User.Id);
+        var parties = await Service.GetUserParties(ctx.User.Id);
 
         if (parties == null || !parties.Any())
         {
@@ -185,8 +237,21 @@ public class PartyModule(PartyService partyService) : EeveeCoreSlashModuleBase<P
     }
 }
 
-public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashModuleBase<PartyService>
+/// <summary>
+///     Handles component interactions for the party system.
+///     Processes button clicks, modals, and other interactive elements 
+///     related to party management.
+/// </summary>
+/// <param name="Service">The service that handles party data operations.</param>
+public class PartyInteractionModule(PartyService Service) : EeveeCoreSlashModuleBase<PartyService>
 {
+    /// <summary>
+    ///     Handles interactions with party slot buttons.
+    ///     Opens a modal to input Pokémon ID for the selected slot.
+    /// </summary>
+    /// <param name="slotNumber">The slot number the user clicked (1-6).</param>
+    /// <param name="partyName">The name of the party being modified.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("party:slot:*:*")]
     public async Task HandlePartySlot(string slotNumber, string partyName)
     {
@@ -199,6 +264,14 @@ public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashM
         await ctx.Interaction.RespondWithModalAsync(modal.Build());
     }
 
+    /// <summary>
+    ///     Processes submissions from the add Pokémon modal.
+    ///     Updates the specified party with the selected Pokémon.
+    /// </summary>
+    /// <param name="slotNumberStr">The slot number as a string (1-6).</param>
+    /// <param name="partyName">The name of the party being modified.</param>
+    /// <param name="modal">The modal containing the Pokémon ID input.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ModalInteraction("party:add:*:*")]
     public async Task HandleAddPokemonModal(string slotNumberStr, string partyName, AddPokemonModal modal)
     {
@@ -212,7 +285,7 @@ public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashM
                 return;
             }
 
-            var result = await partyService.AddPokemonToPartySlot(ctx.User.Id, slotNumber, pokeId, partyName);
+            var result = await Service.AddPokemonToPartySlot(ctx.User.Id, slotNumber, pokeId, partyName);
 
             if (!result.Success)
             {
@@ -222,7 +295,7 @@ public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashM
 
             // Get updated party details and create updated UI
             var (description, updatedParty, partyPokeIds, pokemonIndices, pokemonNames) =
-                await partyService.GetPartySetupData(ctx.User.Id, partyName);
+                await Service.GetPartySetupData(ctx.User.Id, partyName);
 
             var embed = new EmbedBuilder()
                 .WithTitle($"Slot {slotNumber} Updated!")
@@ -268,6 +341,11 @@ public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashM
         }
     }
 
+    /// <summary>
+    ///     Handles the close menu button interaction.
+    ///     Clears the setup menu and displays a message.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("party:close")]
     public async Task HandleCloseMenu()
     {
@@ -281,9 +359,25 @@ public class PartyInteractionModule(PartyService partyService) : EeveeCoreSlashM
     }
 }
 
-// Autocomplete handler for party names
+/// <summary>
+///     Provides autocomplete functionality for party names.
+///     Suggests existing party names matching the user's input.
+/// </summary>
+/// <param name="db">The database context for querying party data.</param>
 public class PartyNameAutocompleteHandler(EeveeCoreContext db) : AutocompleteHandler
 {
+    /// <summary>
+    ///     Generates autocomplete suggestions for party names.
+    ///     Filters suggestions based on user input and displays up to 25 results.
+    /// </summary>
+    /// <param name="context">The interaction context.</param>
+    /// <param name="autocompleteInteraction">The autocomplete interaction data.</param>
+    /// <param name="parameter">The parameter being autocompleted.</param>
+    /// <param name="services">The service provider for dependency injection.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns an
+    ///     AutocompletionResult containing matching party names.
+    /// </returns>
     public override async Task<AutocompletionResult> GenerateSuggestionsAsync(IInteractionContext context,
         IAutocompleteInteraction autocompleteInteraction, IParameterInfo parameter, IServiceProvider services)
     {
@@ -308,12 +402,22 @@ public class PartyNameAutocompleteHandler(EeveeCoreContext db) : AutocompleteHan
     }
 }
 
-// Modal for adding Pokemon to a party
+/// <summary>
+///     Defines the modal form for adding a Pokémon to a party slot.
+///     Collects the Pokémon number from the user's input.
+/// </summary>
 public class AddPokemonModal : IModal
 {
+    /// <summary>
+    ///     The Pokémon number/index from the user's collection.
+    ///     Input by the user in the modal text field.
+    /// </summary>
     [InputLabel("Pokemon Number from your pokemon list")]
     [ModalTextInput("pokemon", maxLength: 15)]
     public string Pokemon { get; set; }
 
+    /// <summary>
+    ///     The title displayed at the top of the modal.
+    /// </summary>
     public string Title => "Add a pokemon to your party";
 }

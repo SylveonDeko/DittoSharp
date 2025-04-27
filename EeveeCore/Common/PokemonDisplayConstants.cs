@@ -1,30 +1,37 @@
 namespace EeveeCore.Common;
 
+/// <summary>
+/// Provides constant strings for displaying Pokémon stat attributes in a formatted manner.
+/// </summary>
 public static class PokemonDisplayConstants
 {
+    /// <summary>
+    /// Formatted display string for the HP (Hit Points) stat.
+    /// </summary>
     public const string HP_DISPLAY = "`HP:`";
-    public const string ATK_DISPLAY = "`ATK:`";
-    public const string DEF_DISPLAY = "`DEF:`";
-    public const string SPATK_DISPLAY = "`SPATK:`";
-    public const string SPDEF_DISPLAY = "`SPDEF:`";
-    public const string SPE_DISPLAY = "`SPEED:`";
 
-    public static readonly string[] CUSTOM_POKES =
-    [
-        "Onehitmonchan",
-        "Xerneas-brad",
-        "Lucariosouta",
-        "Cubone-freki",
-        "Glaceon-glaceon",
-        "Scorbunny-sav",
-        "Palkia-gompp",
-        "Alacatzam",
-        "Magearna-curtis",
-        "Arceus-tatogod",
-        "Enamorus-therian-forme",
-        "Kubfu-rapid-strike",
-        "Palkia-lord",
-        "Dialga-lord",
-        "Missingno"
-    ];
+    /// <summary>
+    /// Formatted display string for the ATK (Attack) stat.
+    /// </summary>
+    public const string ATK_DISPLAY = "`ATK:`";
+
+    /// <summary>
+    /// Formatted display string for the DEF (Defense) stat.
+    /// </summary>
+    public const string DEF_DISPLAY = "`DEF:`";
+
+    /// <summary>
+    /// Formatted display string for the SPATK (Special Attack) stat.
+    /// </summary>
+    public const string SPATK_DISPLAY = "`SPATK:`";
+
+    /// <summary>
+    /// Formatted display string for the SPDEF (Special Defense) stat.
+    /// </summary>
+    public const string SPDEF_DISPLAY = "`SPDEF:`";
+
+    /// <summary>
+    /// Formatted display string for the SPE (Speed) stat.
+    /// </summary>
+    public const string SPE_DISPLAY = "`SPEED:`";
 }

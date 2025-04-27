@@ -4,13 +4,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EeveeCore.Modules.Parties.Services;
 
+/// <summary>
+///     Provides functionality for managing Pokémon parties.
+///     Handles operations for creating, viewing, and modifying parties,
+///     with support for saving multiple party configurations.
+/// </summary>
+/// <param name="db">The database context for accessing party and user data.</param>
+/// <param name="client">The Discord client for user and channel interactions.</param>
 public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : INService
 {
+    /// <summary>
+    ///     Dictionary storing paged results for users viewing party data.
+    ///     Maps user IDs to their current page state.
+    /// </summary>
     private readonly ConcurrentDictionary<ulong, (List<EmbedBuilder> Pages, int CurrentPage)> _pagedResults = new();
 
     /// <summary>
-    ///     Creates a formatted table string from rows and headers
+    ///     Creates a formatted table string from rows and headers.
+    ///     Used for displaying party information in a structured format.
     /// </summary>
+    /// <param name="rows">List of rows, where each row is a list of string values.</param>
+    /// <param name="headers">List of column headers for the table.</param>
+    /// <returns>A formatted string representing the table with proper alignment.</returns>
     public string FormatTable(List<List<string?>> rows, List<string> headers)
     {
         // Calculate column widths
@@ -52,8 +67,20 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Get party details for setup menu
+    ///     Retrieves party details for the setup menu.
+    ///     Collects and formats information about the party's Pokémon for display.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name of the party to retrieve.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with:
+    ///     - Description text for the embed
+    ///     - Array of party Pokémon IDs
+    ///     - Array of party Pokémon IDs formatted for display
+    ///     - Array of Pokémon indices in the user's collection
+    ///     - Array of Pokémon names
+    ///     Returns null values if the party doesn't exist and can't be created.
+    /// </returns>
     public async
         Task<(string Description, ulong[] Party, ulong[] PartyPokeIds, int[] PokemonIndices, string[] PokemonNames)>
         GetPartySetupData(ulong userId, string partyName)
@@ -140,15 +167,22 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         };
 
         var description = "Use the buttons below to set pokemon to a corresponding slot number in your party\n";
-        description += $"**```\n{FormatTable(table, new List<string> { "Slot #", "PokeID", "Name" })}\n```**";
+        description += $"**```\n{FormatTable(table, ["Slot #", "PokeID", "Name"])}\n```**";
         description += $"\nMenu Timeout: ~<t:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 122}:R>";
 
         return (description, partyPokemonIds, partyPokeIds, pokemonIndices, pokemonNames);
     }
 
     /// <summary>
-    ///     Get an embed displaying party information
+    ///     Generates an embed displaying party information.
+    ///     Shows Pokémon in each slot along with their collection indices.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name of the party to view, or null to view the active party.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns an EmbedBuilder
+    ///     with the party information, or null if the party doesn't exist.
+    /// </returns>
     public async Task<EmbedBuilder> GetPartyViewEmbed(ulong userId, string partyName = null)
     {
         var embed = new EmbedBuilder()
@@ -238,8 +272,18 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Add a Pokemon to the party
+    ///     Adds a Pokémon to the active party.
+    ///     Places the specified or currently selected Pokémon in the given slot.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="slot">The slot number to place the Pokémon in (1-6).</param>
+    /// <param name="pokeIndex">
+    ///     The index of the Pokémon in the user's collection, or 0 to use the currently selected Pokémon.
+    /// </param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> AddPokemonToParty(ulong userId, int slot, int pokeIndex = 0)
     {
         // Adjust slot for zero-based indexing
@@ -291,8 +335,15 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Remove a Pokemon from the party
+    ///     Removes a Pokémon from the active party.
+    ///     Clears the specified slot in the user's party.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="slot">The slot number to clear (1-6).</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> RemovePokemonFromParty(ulong userId, int slot)
     {
         // Adjust slot for zero-based indexing
@@ -322,8 +373,15 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Register a party with a name
+    ///     Registers a party with a name.
+    ///     Creates a new saved party or updates an existing one using the current active party.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name to assign to the party.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> RegisterParty(ulong userId, string partyName)
     {
         // Check if user exists
@@ -369,8 +427,14 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Check if a party exists
+    ///     Checks if a party with the specified name exists for the user.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name of the party to check for.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns true if the party exists,
+    ///     or false if it doesn't.
+    /// </returns>
     public async Task<bool> DoesPartyExist(ulong userId, string partyName)
     {
         return await db.Parties
@@ -378,8 +442,15 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Deregister a party
+    ///     Deregisters a party.
+    ///     Removes a saved party from the database.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name of the party to deregister.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> DeregisterParty(ulong userId, string partyName)
     {
         // Find the party
@@ -396,8 +467,15 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Load a party into the user's active party
+    ///     Loads a saved party into the user's active party.
+    ///     Replaces the current active party with the saved configuration.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="partyName">The name of the party to load.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> LoadParty(ulong userId, string partyName)
     {
         // Find the party
@@ -430,8 +508,13 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Get a list of the user's saved parties
+    ///     Retrieves a list of saved parties for a user.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a list of party names.
+    ///     Returns an empty list if the user has no saved parties.
+    /// </returns>
     public async Task<List<string>> GetUserParties(ulong userId)
     {
         var parties = await db.Parties
@@ -443,8 +526,17 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Add a Pokemon to a specific party slot
+    ///     Adds a Pokémon to a specific slot in a saved party.
+    ///     Creates the party if it doesn't exist.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="slot">The slot number to place the Pokémon in (1-6).</param>
+    /// <param name="pokeIndex">The index of the Pokémon in the user's collection.</param>
+    /// <param name="partyName">The name of the party to modify.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a tuple with
+    ///     a success indicator and a result message.
+    /// </returns>
     public async Task<(bool Success, string Message)> AddPokemonToPartySlot(ulong userId, int slot, int pokeIndex,
         string partyName)
     {
@@ -535,8 +627,13 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Store a paged result for a user
+    ///     Stores a paged result for a user.
+    ///     Used for maintaining pagination state when browsing party information.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="pages">The list of embeds representing each page.</param>
+    /// <param name="currentPage">The current page index being viewed.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public Task StorePagedResult(ulong userId, List<EmbedBuilder> pages, int currentPage)
     {
         _pagedResults[userId] = (pages, currentPage);
@@ -544,8 +641,14 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Get a paged result for a user
+    ///     Retrieves a paged result for a user.
+    ///     Used when a user navigates through party pages.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the user's
+    ///     pages and current page index, or null if not found.
+    /// </returns>
     public Task<(List<EmbedBuilder> Pages, int CurrentPage)> GetPagedResult(ulong userId)
     {
         if (_pagedResults.TryGetValue(userId, out var result)) return Task.FromResult(result);
@@ -554,8 +657,12 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     }
 
     /// <summary>
-    ///     Update a paged result for a user
+    ///     Updates a user's current page index in their paged result.
+    ///     Called when a user navigates to a different page.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="newPage">The new page index to set.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public Task UpdatePagedResult(ulong userId, int newPage)
     {
         if (_pagedResults.TryGetValue(userId, out var result)) _pagedResults[userId] = (result.Pages, newPage);
@@ -565,18 +672,36 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
 }
 
 /// <summary>
-///     Result class for service operations
+///     Result class for service operations.
+///     Provides a standardized way to return success/failure status and messages.
 /// </summary>
 public class ServiceResult
 {
+    /// <summary>
+    ///     Indicates whether the operation was successful.
+    /// </summary>
     public bool Success { get; set; }
+
+    /// <summary>
+    ///     Contains a descriptive message about the result of the operation.
+    /// </summary>
     public string Message { get; set; }
 
+    /// <summary>
+    ///     Creates a success result with the specified message.
+    /// </summary>
+    /// <param name="message">The success message.</param>
+    /// <returns>A ServiceResult indicating success.</returns>
     public static ServiceResult FromSuccess(string message)
     {
         return new ServiceResult { Success = true, Message = message };
     }
 
+    /// <summary>
+    ///     Creates an error result with the specified message.
+    /// </summary>
+    /// <param name="message">The error message.</param>
+    /// <returns>A ServiceResult indicating failure.</returns>
     public static ServiceResult FromError(string message)
     {
         return new ServiceResult { Success = false, Message = message };

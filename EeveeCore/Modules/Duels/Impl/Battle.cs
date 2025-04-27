@@ -9,13 +9,23 @@ using SkiaSharp;
 namespace EeveeCore.Modules.Duels.Impl;
 
 /// <summary>
-///     Represents a battle between two trainers and their pokemon.
-///     This object holds all necessary information for a battle & runs the battle.
+///     Represents a battle between two trainers and their Pokémon.
+///     This class holds all necessary information for a battle and manages its execution.
 /// </summary>
 public class Battle
 {
     private readonly IMongoService _mongoService;
 
+    /// <summary>
+    ///     Initializes a new instance of the Battle class.
+    ///     Sets up the battle environment, trainers, and their Pokémon.
+    /// </summary>
+    /// <param name="context">The interaction context for this battle.</param>
+    /// <param name="channel">The message channel where battle messages will be sent.</param>
+    /// <param name="trainer1">The first trainer in the battle.</param>
+    /// <param name="trainer2">The second trainer in the battle.</param>
+    /// <param name="mongoService">The MongoDB service for accessing game data.</param>
+    /// <param name="inverseBattle">Whether this is an inverse battle where type effectiveness is reversed.</param>
     public Battle(IInteractionContext context, IMessageChannel channel, Trainer? trainer1, Trainer? trainer2,
         IMongoService mongoService, bool inverseBattle = false)
     {
@@ -45,28 +55,104 @@ public class Battle
         Msg = "";
     }
 
+    /// <summary>
+    ///     Gets or sets the interaction context for this battle.
+    /// </summary>
     public IInteractionContext Context { get; private set; }
+
+    /// <summary>
+    ///     Gets the message channel where battle messages will be sent.
+    /// </summary>
     public IMessageChannel Channel { get; }
+
+    /// <summary>
+    ///     Gets the first trainer in the battle.
+    /// </summary>
     public Trainer? Trainer1 { get; }
+
+    /// <summary>
+    ///     Gets the second trainer in the battle.
+    /// </summary>
     public Trainer? Trainer2 { get; }
+
+    /// <summary>
+    ///     Gets the background number used for the battle scene.
+    /// </summary>
     public int BgNum { get; private set; }
+
+    /// <summary>
+    ///     Gets the Trick Room effect, which reverses speed priority.
+    /// </summary>
     public ExpiringEffect TrickRoom { get; }
+
+    /// <summary>
+    ///     Gets the Magic Room effect, which nullifies held items.
+    /// </summary>
     public ExpiringEffect MagicRoom { get; }
+
+    /// <summary>
+    ///     Gets the Wonder Room effect, which swaps Defense and Special Defense.
+    /// </summary>
     public ExpiringEffect WonderRoom { get; }
+
+    /// <summary>
+    ///     Gets the Gravity effect, which affects certain moves and abilities.
+    /// </summary>
     public ExpiringEffect Gravity { get; }
+
+    /// <summary>
+    ///     Gets the current weather condition in the battle.
+    /// </summary>
     public Weather Weather { get; }
+
+    /// <summary>
+    ///     Gets the current terrain effect in the battle.
+    /// </summary>
     public Terrain Terrain { get; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the Plasma Fists effect is active,
+    ///     which changes Normal-type moves to Electric-type.
+    /// </summary>
     public bool PlasmaFists { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the current turn number of the battle.
+    /// </summary>
     public int Turn { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the effect ID of the last move used, for moves that check previous move effects.
+    /// </summary>
     public int? LastMoveEffect { get; set; }
+
+    /// <summary>
+    ///     Gets the list of moves available for Metronome to select from.
+    /// </summary>
     public List<dynamic> MetronomeMoves { get; private set; }
+
+    /// <summary>
+    ///     Gets the type effectiveness chart for this battle.
+    ///     Maps (attacking type, defending type) tuples to effectiveness percentages.
+    /// </summary>
     public Dictionary<(ElementType, ElementType), int> TypeEffectiveness { get; }
+
+    /// <summary>
+    ///     Gets a value indicating whether this is an inverse battle where type effectiveness is reversed.
+    /// </summary>
     public bool InverseBattle { get; private set; }
+
+    /// <summary>
+    ///     Gets or sets the current message buffer for battle text.
+    /// </summary>
     public string Msg { get; set; }
 
     /// <summary>
-    ///     Generates and sends the main battle message with the UI, similar to the Python generate_main_battle_message
+    ///     Generates and sends the main battle message with the UI.
+    ///     Creates an embed with the battle image and interaction buttons.
     /// </summary>
+    /// <param name="renderer">The renderer used to generate the battle image.</param>
+    /// <returns>The sent message for later reference.</returns>
     public async Task<IUserMessage> GenerateMainBattleMessage(DuelRenderer renderer)
     {
         // Create embed for battle
@@ -101,8 +187,10 @@ public class Battle
     }
 
     /// <summary>
-    ///     Runs the duel.
+    ///     Runs the entire battle from start to finish.
+    ///     Manages turn flow, move execution, and determines the winner.
     /// </summary>
+    /// <returns>The winning trainer, or null if there was no clear winner.</returns>
     public async Task<Trainer?> Run()
     {
         Msg = "";
@@ -163,6 +251,7 @@ public class Battle
 
         Trainer? winner = null;
 
+        // Main battle loop
         while (true)
         {
             // Swap pokes for any users w/o an active poke
@@ -501,9 +590,11 @@ public class Battle
     }
 
     /// <summary>
-    ///     Determines which move should go.
-    ///     Returns the two trainers and their moves, in the order they should go.
+    ///     Determines which trainer's move should be executed first based on speed, priority, and other factors.
+    ///     Returns the two trainers in the order they should act.
     /// </summary>
+    /// <param name="checkMove">Whether to check move properties when determining order.</param>
+    /// <returns>A tuple of trainers in the order they should act.</returns>
     public (Trainer?, Trainer) WhoFirst(bool checkMove = true)
     {
         (Trainer? Trainer1, Trainer Trainer2) T1FIRST = (Trainer1, Trainer2);
@@ -603,9 +694,10 @@ public class Battle
     }
 
     /// <summary>
-    ///     Send the msg in a boilerplate embed.
-    ///     Handles the message being too long.
+    ///     Sends the accumulated battle message as embeds.
+    ///     Handles splitting messages that exceed Discord's character limit.
     /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task SendMsg()
     {
         if (string.IsNullOrEmpty(Msg))
@@ -645,11 +737,13 @@ public class Battle
     }
 
     /// <summary>
-    ///     Called when swapper does not have a pokemon selected, and needs a new one.
-    ///     Prompts the swapper to pick a pokemon.
-    ///     If midTurn is set to True, the pokemon is being swapped in the middle of a turn (NOT at the start of a turn).
-    ///     Returns null if the trainer swapped, and the trainer that won if they did not.
+    ///     Handles Pokémon swapping when a trainer needs to select a new Pokémon.
+    ///     Prompts the trainer to choose and manages the swap process.
     /// </summary>
+    /// <param name="swapper">The trainer who needs to select a new Pokémon.</param>
+    /// <param name="otherTrainer">The opposing trainer.</param>
+    /// <param name="midTurn">Whether the swap is occurring mid-turn rather than at the beginning of a turn.</param>
+    /// <returns>The winning trainer if the swapper fails to select a Pokémon, or null if the swap succeeds.</returns>
     public async Task<Trainer?> RunSwap(Trainer? swapper, Trainer? otherTrainer, bool midTurn = false)
     {
         await SendMsg();
@@ -725,8 +819,11 @@ public class Battle
     }
 
     /// <summary>
-    ///     Handle mega evolving pokemon who mega evolve this turn.
+    ///     Handles Mega Evolution of eligible Pokémon.
+    ///     Applies form changes, ability changes, and type changes.
     /// </summary>
+    /// <param name="t1">The first trainer in the battle.</param>
+    /// <param name="t2">The second trainer in the battle.</param>
     public void HandleMegas(Trainer? t1, Trainer? t2)
     {
         foreach (var (at, dt) in new[] { (t1, t2), (t2, t1) })

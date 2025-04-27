@@ -6,6 +6,10 @@ using Serilog;
 
 namespace EeveeCore.Services;
 
+/// <summary>
+///     Service responsible for managing Discord guild configurations.
+///     Provides methods for retrieving and updating guild settings with proper database context management.
+/// </summary>
 public class GuildSettingsService : IAsyncDisposable
 {
     private const string PrefixCacheKey = "prefix:{0}";
@@ -17,6 +21,13 @@ public class GuildSettingsService : IAsyncDisposable
     private readonly IMongoService _mongo;
     private readonly Channel<(ulong GuildId, Guild Config)> _updateChannel;
 
+    /// <summary>
+    ///     Initializes a new instance of the GuildSettingsService.
+    /// </summary>
+    /// <param name="mongo">Provider for mongo access</param>
+    /// <param name="cache">Memory cache for storing frequently accessed guild settings.</param>
+    /// <param name="creds">Bot credentials.</param>
+    /// <exception cref="ArgumentNullException">Thrown when any required dependency is null.</exception>
     public GuildSettingsService(
         IMongoService mongo,
         BotCredentials creds,
@@ -32,6 +43,7 @@ public class GuildSettingsService : IAsyncDisposable
         _ = ProcessConfigUpdatesAsync();
     }
 
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         _updateChannel.Writer.Complete();
@@ -40,6 +52,14 @@ public class GuildSettingsService : IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    ///     Retrieves the command prefix for a specified guild with caching.
+    /// </summary>
+    /// <param name="guild">The Discord guild to get the prefix for. Can be null for default prefix.</param>
+    /// <returns>
+    ///     The guild's custom prefix if set, otherwise the default bot prefix.
+    ///     Returns default prefix if guild is null.
+    /// </returns>
     public async Task<string> GetPrefix(IGuild? guild)
     {
         if (guild is null)
@@ -57,6 +77,13 @@ public class GuildSettingsService : IAsyncDisposable
             CacheDuration);
     }
 
+    /// <summary>
+    ///     Sets a new command prefix for a specified guild and updates cache.
+    /// </summary>
+    /// <param name="guild">The Discord guild to set the prefix for.</param>
+    /// <param name="prefix">The new prefix to set.</param>
+    /// <returns>The newly set prefix.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when either guild or prefix is null.</exception>
     public async Task<string> SetPrefix(IGuild guild, string prefix)
     {
         ArgumentNullException.ThrowIfNull(guild);
@@ -79,6 +106,12 @@ public class GuildSettingsService : IAsyncDisposable
         return prefix;
     }
 
+    /// <summary>
+    ///     Gets the guild configuration for the specified guild ID with caching.
+    /// </summary>
+    /// <param name="guildId">The ID of the guild to get configuration for.</param>
+    /// <returns>The guild configuration.</returns>
+    /// <exception cref="Exception">Thrown when failing to get guild config.</exception>
     public async Task<Guild> GetGuildConfigAsync(
         ulong guildId,
         [CallerMemberName] string callerName = "",
@@ -130,6 +163,13 @@ public class GuildSettingsService : IAsyncDisposable
         return config;
     }
 
+    /// <summary>
+    ///     Updates the guild configuration for a specified guild with proper cache invalidation.
+    /// </summary>
+    /// <param name="guildId">The ID of the guild to update configuration for.</param>
+    /// <param name="config">The updated guild configuration.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="Exception">Thrown when the update operation fails.</exception>
     public async Task UpdateGuildConfigAsync(
         ulong guildId,
         Guild config,

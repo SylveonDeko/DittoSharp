@@ -5,8 +5,9 @@ public partial class Move
     /// <summary>
     ///     Checks status conditions that may prevent move usage.
     /// </summary>
-    /// <returns>A string of formatted results of the check.</returns>
-    private string CheckStatusConditions(DuelPokemon attacker, DuelPokemon defender, Battle battle, bool usePP,
+    /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
+    private (string message, bool shouldAbort) CheckStatusConditions(DuelPokemon attacker, DuelPokemon defender,
+        Battle battle, bool usePP,
         bool overrideSleep)
     {
         var msg = "";
@@ -29,7 +30,7 @@ public partial class Move
                 msg += $"{attacker.Name} is frozen solid!\n";
                 if (Effect == 28) attacker.LockedMove = null;
 
-                return msg;
+                return (msg, true); // Abort move execution
             }
         }
 
@@ -38,7 +39,7 @@ public partial class Move
             msg += $"{attacker.Name} is paralyzed! It can't move!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
         if (attacker.Infatuated == defender && new Random().Next(0, 2) == 0)
@@ -46,7 +47,7 @@ public partial class Move
             msg += $"{attacker.Name} is in love with {defender.Name} and can't bare to hurt them!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
         if (attacker.Flinched)
@@ -54,7 +55,7 @@ public partial class Move
             msg += $"{attacker.Name} flinched! It can't move!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
         if (attacker.NonVolatileEffect.Sleep())
@@ -69,7 +70,7 @@ public partial class Move
                 msg += $"{attacker.Name} is fast asleep!\n";
                 if (Effect == 28) attacker.LockedMove = null;
 
-                return msg;
+                return (msg, true); // Abort move execution
             }
         }
 
@@ -82,7 +83,7 @@ public partial class Move
             msg += msgadd;
             if (Effect == 28) attacker.LockedMove = null;
 
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
         if (attacker.Ability() == Ability.TRUANT && attacker.TruantTurn % 2 == 1)
@@ -90,10 +91,10 @@ public partial class Move
             msg += $"{attacker.Name} is loafing around!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
-        return msg;
+        return (msg, false); // Continue move execution
     }
 
     /// <summary>
@@ -123,8 +124,9 @@ public partial class Move
     /// <summary>
     ///     Handles powder effects for fire-type moves.
     /// </summary>
-    /// <returns>A string of formatted results.</returns>
-    private string HandlePowderEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, ElementType currentType)
+    /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
+    private (string message, bool shouldAbort) HandlePowderEffects(DuelPokemon attacker, DuelPokemon defender,
+        Battle battle, ElementType currentType)
     {
         var msg = "";
 
@@ -132,17 +134,17 @@ public partial class Move
         if (attacker.Powdered && currentType == ElementType.FIRE && battle.Weather.Get() != "h-rain")
         {
             msg += attacker.Damage(attacker.StartingHp / 4, battle, source: "its powder exploding");
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
-        return msg;
+        return (msg, false); // Continue move execution
     }
 
     /// <summary>
     ///     Handles snatch effects for status moves.
     /// </summary>
-    /// <returns>A string of formatted results.</returns>
-    private string HandleSnatch(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
+    private (string message, bool shouldAbort) HandleSnatch(DuelPokemon attacker, DuelPokemon defender, Battle battle)
     {
         var msg = "";
 
@@ -151,9 +153,9 @@ public partial class Move
         {
             msg += $"{defender.Name} snatched the move!\n";
             msg += Use(defender, attacker, battle, false);
-            return msg;
+            return (msg, true); // Abort move execution
         }
 
-        return msg;
+        return (msg, false); // Continue move execution
     }
 }

@@ -10,15 +10,24 @@ using Serilog;
 
 namespace EeveeCore.Modules.Items.Services;
 
-public class ItemsService(
-    IMongoService mongoDb,
+/// <summary>
+///     Provides functionality for managing Pokémon items, equipment, and purchases.
+///     Handles item operations such as equipping, unequipping, buying, and applying items to Pokémon.
+///     Also manages special items like evolution stones, berries, and market spaces.
+/// </summary>
+public class ItemsService(IMongoService mongoDb,
     DbContextProvider dbContextProvider,
-    PokemonService pokemonService,
-    IDataCache cache)
-    : INService
+    PokemonService pokemonService) : INService
 {
+    /// <summary>
+    ///     The maximum number of market slots a user can have.
+    /// </summary>
     private const int MaxMarketSlots = 10;
 
+    /// <summary>
+    ///     Set of items that can be actively applied to Pokémon for evolution or other effects,
+    ///     rather than being equipped as held items.
+    /// </summary>
     private readonly HashSet<string> _activeItemList =
     [
         "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone",
@@ -32,6 +41,9 @@ public class ItemsService(
         "gimmighoul-coin", "deep-sea-scale", "deep-sea-tooth", "friendship-stone"
     ];
 
+    /// <summary>
+    ///     Set of all berry items that can be used in the game.
+    /// </summary>
     private readonly HashSet<string> _berryList =
     [
         "cheri-berry", "chesto-berry", "pecha-berry", "rawst-berry", "aspear-berry",
@@ -50,9 +62,22 @@ public class ItemsService(
         "kee-berry", "maranga-berry"
     ];
 
-    private readonly IDataCache _cache = cache;
+    /// <summary>
+    ///     Cache service for storing and retrieving frequently used data.
+    /// </summary>
+    private readonly IDataCache _cache;
+    
+    /// <summary>
+    ///     Random number generator for various operations.
+    /// </summary>
     private readonly Random _random = new();
 
+    /// <summary>
+    ///     Determines if a Pokémon is in a formed state (mega, primal, etc.).
+    ///     Used to prevent certain item operations on formed Pokémon.
+    /// </summary>
+    /// <param name="pokemonName">The name of the Pokémon to check.</param>
+    /// <returns>True if the Pokémon is in a formed state, false otherwise.</returns>
     private bool IsFormed(string? pokemonName)
     {
         return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
@@ -62,6 +87,15 @@ public class ItemsService(
                pokemonName.EndsWith("-blade");
     }
 
+    /// <summary>
+    ///     Prepares for item removal by validating the user's selected Pokémon and its held item.
+    ///     Checks for various conditions that would prevent item removal, such as formed Pokémon.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>
+    ///     A tuple containing operation success status, error message if applicable,
+    ///     held item, Pokémon name, and the user's inventory.
+    /// </returns>
     public async Task<(bool Success, string Message, string HeldItem, string PokemonName, Dictionary<string, int> Items
             )>
         PrepItemRemove(ulong userId)
@@ -95,6 +129,11 @@ public class ItemsService(
         return (true, null, data.HeldItem, data.PokemonName, items);
     }
 
+    /// <summary>
+    ///     Unequips an item from the user's selected Pokémon and adds it to their inventory.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> Unequip(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
@@ -118,6 +157,12 @@ public class ItemsService(
         return new CommandResult { Message = $"Successfully unequipped a {prepResult.HeldItem} from selected Pokemon" };
     }
 
+    /// <summary>
+    ///     Removes an item from the user's selected Pokémon without adding it to their inventory.
+    ///     The item is effectively discarded.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> Drop(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
@@ -133,6 +178,12 @@ public class ItemsService(
         return new CommandResult { Message = $"Successfully Dropped the {prepResult.HeldItem}" };
     }
 
+    /// <summary>
+    ///     Transfers an item from the user's selected Pokémon to another Pokémon in their party.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="pokemonNumber">The party position of the target Pokémon (1-based).</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> Transfer(ulong userId, int pokemonNumber)
     {
         var prepResult = await PrepItemRemove(userId);
@@ -164,6 +215,13 @@ public class ItemsService(
         };
     }
 
+    /// <summary>
+    ///     Equips an item to the user's selected Pokémon.
+    ///     Handles special items like ability capsules, vitamins, and various held items.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="itemName">The name of the item to equip.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> Equip(ulong userId, string itemName)
     {
         itemName = string.Join("-", itemName.Split()).ToLower();
@@ -365,6 +423,14 @@ public class ItemsService(
         return new CommandResult { Message = $"You have successfully given your selected Pokemon a {itemName}" };
     }
 
+    /// <summary>
+    ///     Applies an item to the user's selected Pokémon.
+    ///     Used for evolution stones and other items that trigger immediate effects.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="itemName">The name of the item to apply.</param>
+    /// <param name="channel">The Discord channel for sending messages.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> Apply(ulong userId, string itemName, IMessageChannel channel)
     {
         itemName = string.Join("-", itemName.Split()).ToLower();
@@ -421,6 +487,13 @@ public class ItemsService(
         return new CommandResult { Message = $"Your {itemName} was consumed!" };
     }
 
+    /// <summary>
+    ///     Buys an item from the shop and either adds it to the user's inventory or
+    ///     equips it to their selected Pokémon based on the item type.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="itemName">The name of the item to buy.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> BuyItem(ulong userId, string itemName)
     {
         itemName = itemName.Replace(" ", "-").ToLower();
@@ -593,6 +666,13 @@ public class ItemsService(
             { Message = $"You have successfully bought the {itemName} for your {selectedPokemon.PokemonName}" };
     }
 
+    /// <summary>
+    ///     Buys additional daycare spaces for the user.
+    ///     Each space costs 10,000 credits.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="amount">The number of daycare spaces to buy.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> BuyDaycare(ulong userId, int amount)
     {
         if (amount < 0) return new CommandResult { Message = "Yeah... negative numbers won't work here. Try again" };
@@ -622,6 +702,14 @@ public class ItemsService(
         return new CommandResult { Message = $"You have successfully bought {amount} daycare space{plural}!" };
     }
 
+    /// <summary>
+    ///     Buys vitamins to increase EVs (Effort Values) of the user's selected Pokémon.
+    ///     Each vitamin costs 100 credits and adds 10 EVs to a specific stat.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="itemName">The name of the vitamin to buy.</param>
+    /// <param name="amount">The amount of the vitamin to buy.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> BuyVitamins(ulong userId, string itemName, int amount)
     {
         amount = Math.Max(0, amount);
@@ -691,6 +779,13 @@ public class ItemsService(
         }
     }
 
+    /// <summary>
+    ///     Buys and applies Rare Candy to level up the user's selected Pokémon.
+    ///     Each candy costs 100 credits and adds one level, up to a maximum of level 100.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="amount">The number of Rare Candies to buy and use.</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> BuyCandy(ulong userId, int amount)
     {
         await using var db = await dbContextProvider.GetContextAsync();
@@ -752,6 +847,14 @@ public class ItemsService(
         }
     }
 
+    /// <summary>
+    ///     Buys a treasure chest that can contain rare Pokémon or items.
+    ///     Chests can be purchased with either credits or redeems and have weekly purchase limits.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="chestType">The type of chest to buy (rare, mythic, or legend).</param>
+    /// <param name="creditsOrRedeems">The currency to use for purchase (credits or redeems).</param>
+    /// <returns>A CommandResult containing the operation result message.</returns>
     public async Task<CommandResult> BuyChest(ulong userId, string chestType, string creditsOrRedeems)
     {
         var ct = chestType.ToLower().Trim();
@@ -895,6 +998,13 @@ public class ItemsService(
         };
     }
 
+    /// <summary>
+    ///     Buys redeems for the user, which can be used to redeem special Pokémon or items.
+    ///     Redeems cost 60,000 credits each and have a weekly purchase limit of 100.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="amount">The number of redeems to buy, or null to show current purchase stats.</param>
+    /// <returns>A CommandResult containing the operation result message or status information.</returns>
     public async Task<CommandResult> BuyRedeems(ulong userId, int? amount = null)
     {
         if (amount.HasValue && amount.Value < 1) return new CommandResult { Message = "Nice try..." };
@@ -989,11 +1099,30 @@ public class ItemsService(
         };
     }
 
+    /// <summary>
+    ///     Represents the result of a command operation, containing a message, embed, and success status.
+    /// </summary>
     public record CommandResult
     {
+        /// <summary>
+        ///     Gets the message to display to the user.
+        /// </summary>
         public string Message { get; init; }
+        
+        /// <summary>
+        ///     Gets the embed to display to the user, if any.
+        /// </summary>
         public Embed Embed { get; init; }
+        
+        /// <summary>
+        ///     Gets a value indicating whether the message should be ephemeral (only visible to the command user).
+        /// </summary>
         public bool Ephemeral { get; init; }
+        
+        /// <summary>
+        ///     Gets a value indicating whether the operation was successful.
+        ///     An operation is considered successful if it produced either a message or an embed.
+        /// </summary>
         public bool Success => !string.IsNullOrEmpty(Message) || Embed != null;
     }
 }

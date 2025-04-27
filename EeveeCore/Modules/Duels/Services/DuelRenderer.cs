@@ -6,16 +6,26 @@ using SkiaSharp;
 
 namespace EeveeCore.Modules.Duels.Services;
 
+/// <summary>
+///     Provides functionality for rendering Pokémon battles as images.
+///     Handles generating visual elements like team previews, battle scenes, weather effects,
+///     and Pokémon status displays using SkiaSharp graphics.
+/// </summary>
 public class DuelRenderer(IMongoService mongoService) : INService
 {
     private const string ResourcePath = "data/";
-    private readonly HttpClient _httpClient = new();
     private readonly Dictionary<string, SKBitmap> _imageCache = new();
 
+
     /// <summary>
-    ///     Generate and send a team preview image
+    ///     Generates and sends a team preview image as a Discord message.
+    ///     Creates an embed with the team preview image and components for selecting a lead Pokémon.
     /// </summary>
-    public async Task<IUserMessage> GenerateTeamPreview(Battle? battle)
+    /// <param name="battle">The Battle object containing the trainers and their parties.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the sent Discord message.
+    /// </returns>
+    public async Task GenerateTeamPreview(Battle? battle)
     {
         // Create embed for team preview
         var embed = new EmbedBuilder()
@@ -36,7 +46,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
             .Build();
 
         // Send the message
-        return await battle.Channel.SendFileAsync(
+        await battle.Channel.SendFileAsync(
             memoryStream,
             "team_preview.png",
             embed: embed.Build(),
@@ -44,8 +54,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Generate a team preview image
+    ///     Generates a team preview image showing both trainers' Pokémon parties.
+    ///     Creates a stylized background with trainer names and Pokémon sprites.
     /// </summary>
+    /// <param name="battle">The Battle object containing the trainers and their parties.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the generated SKImage.
+    /// </returns>
     private async Task<SKImage> GenerateTeamPreviewImage(Battle? battle)
     {
         var width = 800;
@@ -107,8 +122,12 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw a Pokémon style pattern background
+    ///     Draws a Pokémon-style patterned background on the canvas.
+    ///     Creates a gradient background with subtle pattern overlay similar to Pokémon games.
     /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
     private void DrawPokemonStyleBackground(SKCanvas canvas, int width, int height)
     {
         // Draw gradient background similar to Pokémon games
@@ -117,7 +136,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
             Shader = SKShader.CreateLinearGradient(
                 new SKPoint(0, 0),
                 new SKPoint(0, height),
-                new[] { new SKColor(226, 246, 255), new SKColor(187, 227, 255) },
+                [new SKColor(226, 246, 255), new SKColor(187, 227, 255)],
                 null,
                 SKShaderTileMode.Clamp)
         };
@@ -136,8 +155,16 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw a trainer's team on the preview
+    ///     Draws a trainer's team of Pokémon on the canvas.
+    ///     Displays each Pokémon's sprite and information in a stylized box.
     /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="trainer">The trainer whose team to draw.</param>
+    /// <param name="x">The starting X position for drawing the team.</param>
+    /// <param name="y">The starting Y position for drawing the team.</param>
+    /// <param name="width">The width allocated for the team display.</param>
+    /// <param name="height">The height allocated for the team display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawTrainerTeam(SKCanvas canvas, Trainer? trainer, int x, int y, int width, int height)
     {
         var pokemonPerRow = 2;
@@ -175,21 +202,26 @@ public class DuelRenderer(IMongoService mongoService) : INService
             var fileName = await GetPokemonFileName(pokemon, mongoService);
             var sprite = await LoadPokemonBitmap($"pixel_sprites/{fileName}");
 
-            if (sprite != null)
-            {
-                // Draw Pokémon sprite with shadow
-                DrawPokemonWithShadow(canvas, sprite, pokemonX + 10, pokemonY + 5, 64, 64);
+            if (sprite == null) continue;
+            // Draw Pokémon sprite with shadow
+            DrawPokemonWithShadow(canvas, sprite, pokemonX + 10, pokemonY + 5, 64, 64);
 
-                // Draw Pokémon name and level in Pokémon style box
-                DrawPokemonInfoBox(canvas, pokemon.Name, pokemon.Level, pokemonX + 80, pokemonY + 20, 180, 50);
-            }
+            // Draw Pokémon name and level in Pokémon style box
+            DrawPokemonInfoBox(canvas, pokemon.Name, pokemon.Level, pokemonX + 80, pokemonY + 20, 180, 50);
         }
     }
 
     /// <summary>
-    ///     Draw a Pokémon sprite with shadow effect
+    ///     Draws a Pokémon sprite with a shadow effect underneath.
+    ///     Adds depth and style to the Pokémon display.
     /// </summary>
-    private void DrawPokemonWithShadow(SKCanvas canvas, SKBitmap sprite, float x, float y, float width, float height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="sprite">The Pokémon sprite bitmap to draw.</param>
+    /// <param name="x">The X position to draw the sprite.</param>
+    /// <param name="y">The Y position to draw the sprite.</param>
+    /// <param name="width">The width to scale the sprite to.</param>
+    /// <param name="height">The height to scale the sprite to.</param>
+    private static void DrawPokemonWithShadow(SKCanvas canvas, SKBitmap sprite, float x, float y, float width, float height)
     {
         // Draw shadow
         using var shadowPaint = new SKPaint
@@ -206,9 +238,17 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw Pokémon info box in Pokémon game style
+    ///     Draws a Pokémon information box with name and level.
+    ///     Creates a styled box similar to Pokémon games for displaying Pokémon details.
     /// </summary>
-    private void DrawPokemonInfoBox(SKCanvas canvas, string name, int level, float x, float y, float width,
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="name">The name of the Pokémon.</param>
+    /// <param name="level">The level of the Pokémon.</param>
+    /// <param name="x">The X position to draw the info box.</param>
+    /// <param name="y">The Y position to draw the info box.</param>
+    /// <param name="width">The width of the info box.</param>
+    /// <param name="height">The height of the info box.</param>
+    private static void DrawPokemonInfoBox(SKCanvas canvas, string name, int level, float x, float y, float width,
         float height)
     {
         // Draw box background
@@ -253,46 +293,19 @@ public class DuelRenderer(IMongoService mongoService) : INService
         canvas.DrawText($"Lv. {level}", x + 10, y + 45, levelPaint);
     }
 
-    /// <summary>
-    ///     Generate and send a main battle message
-    /// </summary>
-    public async Task<IUserMessage> GenerateMainBattleMessage(Battle battle)
-    {
-        // Create embed for battle
-        var embed = new EmbedBuilder()
-            .WithTitle($"Battle between {battle.Trainer1.Name} and {battle.Trainer2.Name}")
-            .WithColor(new Color(255, 182, 193))
-            .WithFooter("Who Wins!?");
-
-        // Generate battle image
-        using var battleImage = await GenerateBattleImage(battle);
-        using var memoryStream = new MemoryStream();
-        battleImage.Encode(SKEncodedImageFormat.Png, 100).SaveTo(memoryStream);
-        memoryStream.Position = 0;
-
-        // Create components for battle actions
-        var components = new ComponentBuilder()
-            .WithButton("View your actions", "battle:actions")
-            .Build();
-
-        // Update battle interaction turn
-        battle.SetCurrentInteractionTurn(battle.Turn);
-
-        // Send the message
-        return await battle.Channel.SendFileAsync(
-            memoryStream,
-            "battle.png",
-            embed: embed.Build(),
-            components: components);
-    }
 
     /// <summary>
-    ///     Generate a battle image
+    ///     Generates the main battle image showing the current battle scene.
+    ///     Displays the background, weather effects, Pokémon, and their status.
     /// </summary>
+    /// <param name="battle">The Battle object containing the current battle state.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the generated SKImage.
+    /// </returns>
     public async Task<SKImage> GenerateBattleImage(Battle battle)
     {
-        var width = 800;
-        var height = 450;
+        const int width = 800;
+        const int height = 450;
 
         using var surface = SKSurface.Create(new SKImageInfo(width, height));
         var canvas = surface.Canvas;
@@ -317,97 +330,14 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw battle interface with Pokémon-style menu
+    ///     Draws the battle background based on the background number.
+    ///     Loads a background image or falls back to a gradient if the image is not found.
     /// </summary>
-    private void DrawBattleInterface(SKCanvas canvas, int width, int height)
-    {
-        // Draw main battle menu box
-        using var menuBgPaint = new SKPaint
-        {
-            Color = new SKColor(248, 248, 248),
-            IsAntialias = true
-        };
-
-        using var menuBorderPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 2
-        };
-
-        var menuRect = new SKRoundRect(new SKRect(10, height - 120, width - 10, height - 10), 15, 15);
-        canvas.DrawRoundRect(menuRect, menuBgPaint);
-        canvas.DrawRoundRect(menuRect, menuBorderPaint);
-
-        // Draw the four battle options
-        DrawBattleOption(canvas, "FIGHT", 30, height - 105, 180, 40);
-        DrawBattleOption(canvas, "BAG", 230, height - 105, 180, 40);
-        DrawBattleOption(canvas, "POKEMON", 430, height - 105, 180, 40);
-        DrawBattleOption(canvas, "RUN", 630, height - 105, 140, 40);
-
-        // Draw text area for battle messages
-        using var textBgPaint = new SKPaint
-        {
-            Color = new SKColor(240, 240, 240),
-            IsAntialias = true
-        };
-
-        var textRect = new SKRoundRect(new SKRect(30, height - 55, width - 30, height - 20), 10, 10);
-        canvas.DrawRoundRect(textRect, textBgPaint);
-        canvas.DrawRoundRect(textRect, menuBorderPaint);
-
-        using var textPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 16,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        canvas.DrawText("What will you do?", 50, height - 30, textPaint);
-    }
-
-    /// <summary>
-    ///     Draw a battle menu option button
-    /// </summary>
-    private void DrawBattleOption(SKCanvas canvas, string text, float x, float y, float width, float height)
-    {
-        using var bgPaint = new SKPaint
-        {
-            Color = new SKColor(220, 220, 220),
-            IsAntialias = true
-        };
-
-        using var borderPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1
-        };
-
-        var rect = new SKRoundRect(new SKRect(x, y, x + width, y + height), 8, 8);
-        canvas.DrawRoundRect(rect, bgPaint);
-        canvas.DrawRoundRect(rect, borderPaint);
-
-        using var textPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true,
-            TextAlign = SKTextAlign.Center,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        canvas.DrawText(text, x + width / 2, y + height / 2 + 6, textPaint);
-    }
-
-    /// <summary>
-    ///     Draw the battle background
-    /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="bgNum">The background number to load.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawBackground(SKCanvas canvas, int bgNum, int width, int height)
     {
         var bgPath = Path.Combine(ResourcePath, "backgrounds", $"bg{bgNum}.png");
@@ -426,7 +356,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
                 Shader = SKShader.CreateLinearGradient(
                     new SKPoint(0, 0),
                     new SKPoint(0, height),
-                    new[] { new SKColor(135, 206, 235), new SKColor(34, 139, 34) },
+                    [new SKColor(135, 206, 235), new SKColor(34, 139, 34)],
                     null,
                     SKShaderTileMode.Clamp)
             };
@@ -435,8 +365,14 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw weather effects
+    ///     Draws weather effects on the battle scene based on the current weather type.
+    ///     Renders visual elements for different weather conditions like rain, sun, sandstorm, etc.
     /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="weatherType">The current weather type as a string.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawWeatherEffect(SKCanvas canvas, string? weatherType, int width, int height)
     {
         switch (weatherType)
@@ -460,9 +396,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw rain effect
+    ///     Draws a rain effect on the battle scene.
+    ///     Creates falling raindrops and adds a blue overlay.
     /// </summary>
-    private void DrawRainEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawRainEffect(SKCanvas canvas, int width, int height)
     {
         var random = new Random();
 
@@ -494,9 +434,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw sun effect
+    ///     Draws a sun effect on the battle scene.
+    ///     Creates a sun with rays and adds a yellow overlay.
     /// </summary>
-    private void DrawSunEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawSunEffect(SKCanvas canvas, int width, int height)
     {
         // Draw sun
         using var sunPaint = new SKPaint();
@@ -533,9 +477,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw sandstorm effect
+    ///     Draws a sandstorm effect on the battle scene.
+    ///     Creates flying sand particles and adds a sandy overlay.
     /// </summary>
-    private void DrawSandstormEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawSandstormEffect(SKCanvas canvas, int width, int height)
     {
         var random = new Random();
 
@@ -564,9 +512,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw hail effect
+    ///     Draws a hail effect on the battle scene.
+    ///     Creates hail particles and adds a bluish overlay.
     /// </summary>
-    private void DrawHailEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawHailEffect(SKCanvas canvas, int width, int height)
     {
         var random = new Random();
 
@@ -595,9 +547,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw fog effect
+    ///     Draws a fog effect on the battle scene.
+    ///     Creates a misty overlay with fog patches.
     /// </summary>
-    private void DrawFogEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawFogEffect(SKCanvas canvas, int width, int height)
     {
         // Draw fog overlay
         using var fogPaint = new SKPaint
@@ -627,9 +583,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw trick room effect
+    ///     Draws a Trick Room effect on the battle scene.
+    ///     Creates a distorted grid pattern with purple tint.
     /// </summary>
-    private void DrawTrickRoomEffect(SKCanvas canvas, int width, int height)
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    private static void DrawTrickRoomEffect(SKCanvas canvas, int width, int height)
     {
         // Draw grid pattern
         using var gridPaint = new SKPaint
@@ -655,8 +615,14 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw the Pokémon on the battle scene
+    ///     Draws the Pokémon on the battle scene.
+    ///     Renders both trainers' Pokémon or substitutes if active.
     /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="battle">The Battle object containing the current battle state.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawBattlePokemon(SKCanvas canvas, Battle battle, int width, int height)
     {
         // Draw player's Pokémon (left side, back view like in Pokémon games)
@@ -727,8 +693,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw Pokémon status and HP bars
+    ///     Draws the Pokémon status displays and HP bars.
+    ///     Shows information about both trainers' active Pokémon.
     /// </summary>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="battle">The Battle object containing the current battle state.</param>
+    /// <param name="width">The width of the canvas.</param>
+    /// <param name="height">The height of the canvas.</param>
     private void DrawPokemonStatus(SKCanvas canvas, Battle battle, int width, int height)
     {
         // Draw player's Pokémon info (bottom left) in Pokémon style - like in Image 1
@@ -748,9 +719,16 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Draw Pokémon style HP bar with proper spacing
+    ///     Draws a Pokémon-style HP bar with name, level, and current HP.
+    ///     Creates a stylized display similar to the Pokémon games.
     /// </summary>
-    private void DrawPokemonGameStyleHpBar(SKCanvas canvas, DuelPokemon pokemon, float x, float y, float width,
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="pokemon">The Pokémon whose HP to display.</param>
+    /// <param name="x">The X position to draw the HP bar.</param>
+    /// <param name="y">The Y position to draw the HP bar.</param>
+    /// <param name="width">The width of the HP bar.</param>
+    /// <param name="isPlayer">Whether this is the player's Pokémon (affects display style).</param>
+    private static void DrawPokemonGameStyleHpBar(SKCanvas canvas, DuelPokemon pokemon, float x, float y, float width,
         bool isPlayer)
     {
         using var boxPath = new SKPath();
@@ -861,11 +839,19 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
     }
 
-
     /// <summary>
-    ///     Get the filename for a Pokémon's sprite
+    ///     Gets the filename for a Pokémon's sprite based on its properties.
+    ///     Determines the correct sprite file based on Pokémon ID, form, shiny status, etc.
     /// </summary>
-    private async Task<string> GetPokemonFileName(DuelPokemon pokemon, IMongoService mongo)
+    /// <param name="pokemon">The Pokémon to get the sprite for.</param>
+    /// <param name="mongo">The MongoDB service for accessing Pokémon data.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the sprite filename.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    ///     Thrown when an invalid Pokémon name is provided.
+    /// </exception>
+    private static async Task<string> GetPokemonFileName(DuelPokemon pokemon, IMongoService mongo)
     {
         var identifier = await mongo.Forms
             .Find(f => f.Identifier.Equals(pokemon._name.ToLower(), StringComparison.CurrentCultureIgnoreCase))
@@ -921,30 +907,37 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Load a Pokémon bitmap
+    ///     Loads a Pokémon bitmap from the specified relative path.
+    ///     Falls back to a placeholder if the image cannot be found.
     /// </summary>
+    /// <param name="relativePath">The relative path to the Pokémon sprite.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the loaded SKBitmap.
+    /// </returns>
     private async Task<SKBitmap> LoadPokemonBitmap(string relativePath)
     {
         var fullPath = Path.Combine(ResourcePath, relativePath);
 
         // Check if file exists
-        if (!File.Exists(fullPath))
-        {
-            // Try fallback
-            var fallbackPath = Path.Combine(ResourcePath, "images", "unknown.png");
-            if (File.Exists(fallbackPath))
-                return await LoadBitmapFromFile(fallbackPath);
+        if (File.Exists(fullPath)) return await LoadBitmapFromFile(fullPath);
+        // Try fallback
+        var fallbackPath = Path.Combine(ResourcePath, "images", "unknown.png");
+        if (File.Exists(fallbackPath))
+            return await LoadBitmapFromFile(fallbackPath);
 
-            // Create a placeholder
-            return CreatePlaceholderBitmap();
-        }
+        // Create a placeholder
+        return CreatePlaceholderBitmap();
 
-        return await LoadBitmapFromFile(fullPath);
     }
 
     /// <summary>
-    ///     Load bitmap from file
+    ///     Loads a bitmap from a file, using caching for better performance.
+    ///     Returns a cached version if the image was loaded previously.
     /// </summary>
+    /// <param name="path">The full path to the image file.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the loaded SKBitmap.
+    /// </returns>
     private async Task<SKBitmap> LoadBitmapFromFile(string path)
     {
         // Check cache first
@@ -967,9 +960,11 @@ public class DuelRenderer(IMongoService mongoService) : INService
     }
 
     /// <summary>
-    ///     Create a placeholder bitmap
+    ///     Creates a placeholder bitmap with a question mark.
+    ///     Used when a requested image cannot be found or loaded.
     /// </summary>
-    private SKBitmap CreatePlaceholderBitmap()
+    /// <returns>A placeholder SKBitmap with a question mark.</returns>
+    private static SKBitmap CreatePlaceholderBitmap()
     {
         var bitmap = new SKBitmap(64, 64);
         using var canvas = new SKCanvas(bitmap);

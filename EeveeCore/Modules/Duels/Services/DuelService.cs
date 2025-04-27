@@ -7,6 +7,11 @@ using EeveeCore.Services.Impl;
 
 namespace EeveeCore.Modules.Duels.Services;
 
+/// <summary>
+///     Provides functionality for managing Pokémon battles between users.
+///     Handles battle registration, tracking, cooldowns, and cleanup.
+///     Maintains both in-memory and Redis-based persistence of battle state.
+/// </summary>
 public class DuelService : INService
 {
     private readonly IMongoService _mongoService;
@@ -14,11 +19,22 @@ public class DuelService : INService
     private readonly DbContextProvider _db;
     private readonly RedisCache _redis;
     private DateTime? _duelResetTime;
-    private const string DATE_FORMAT = "MM/dd/yyyy, HH:mm:ss";
+    private const string DateFormat = "MM/dd/yyyy, HH:mm:ss";
 
-    // Active battles dictionary - accessible from both PokemonBattleModule and DuelInteractionHandler
+    /// <summary>
+    ///     Dictionary of active battles, keyed by a tuple of the two users' IDs.
+    ///     Accessible from both PokemonBattleModule and DuelInteractionHandler.
+    /// </summary>
     private readonly Dictionary<(ulong, ulong), Battle> _activeBattles = new();
 
+    /// <summary>
+    ///     Initializes a new instance of the DuelService class with required dependencies.
+    ///     Sets up Redis for tracking battle cooldowns and states.
+    /// </summary>
+    /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
+    /// <param name="db">The database context provider for Entity Framework operations.</param>
+    /// <param name="client">The Discord client for user and channel interactions.</param>
+    /// <param name="redis">The Redis cache for cooldown and battle state persistence.</param>
     public DuelService(
         IMongoService mongoService,
         DbContextProvider db,
@@ -34,6 +50,11 @@ public class DuelService : INService
         _ = InitializeAsync();
     }
 
+    /// <summary>
+    ///     Initializes Redis hash maps for tracking duel cooldowns and reset times.
+    ///     Sets up example values to ensure the hash maps exist and retrieves or sets the duel reset time.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task InitializeAsync()
     {
         try
@@ -52,11 +73,11 @@ public class DuelService : INService
             if (!resetTime.HasValue)
             {
                 _duelResetTime = DateTime.UtcNow;
-                await db.StringSetAsync("duelcooldownreset", _duelResetTime.Value.ToString(DATE_FORMAT));
+                await db.StringSetAsync("duelcooldownreset", _duelResetTime.Value.ToString(DateFormat));
             }
             else
             {
-                _duelResetTime = DateTime.ParseExact(resetTime.ToString(), DATE_FORMAT, null);
+                _duelResetTime = DateTime.ParseExact(resetTime.ToString(), DateFormat, null);
             }
         }
         catch (Exception ex)
@@ -66,8 +87,15 @@ public class DuelService : INService
     }
 
     /// <summary>
-    ///     Gets a user's Pokémon party from the database
+    ///     Retrieves a user's Pokémon party from the database and converts it to DuelPokemon objects.
+    ///     Creates a MemberTrainer with the party and sets up owner references.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="ctx">The interaction context for Discord operations.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns a list of DuelPokemon objects.
+    ///     Returns an empty list if the user has no party or an error occurs.
+    /// </returns>
     public async Task<List<DuelPokemon>> GetUserPokemonParty(ulong userId, IInteractionContext ctx)
     {
         var duelPokemon = new List<DuelPokemon>();
@@ -134,8 +162,14 @@ public class DuelService : INService
     #region Battle Management
 
     /// <summary>
-    /// Registers a battle and handles both local tracking and Redis persistence
+    ///     Registers a battle in both the local dictionary and Redis for persistence.
+    ///     Sets up user battle flags and metadata with appropriate expiration times.
     /// </summary>
+    /// <param name="userId1">The Discord ID of the first user in the battle.</param>
+    /// <param name="userId2">The Discord ID of the second user in the battle, or 0 for NPC battles.</param>
+    /// <param name="battle">The Battle object to register.</param>
+    /// <param name="interactionId">The Discord interaction ID used as a unique battle identifier.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task RegisterBattle(ulong userId1, ulong userId2, Battle battle, ulong interactionId)
     {
         try
@@ -160,12 +194,11 @@ public class DuelService : INService
 
             // Store battle metadata in a hash
             var battleKey = $"battle:{interactionId}";
-            await db.HashSetAsync(battleKey, new HashEntry[]
-            {
+            await db.HashSetAsync(battleKey, [
                 new("user1", userId1),
                 new("user2", userId2),
                 new("created", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
-            });
+            ]);
 
             // Set expiration to 2 hours (max battle duration)
             await db.KeyExpireAsync(battleKey, TimeSpan.FromHours(2));
@@ -185,8 +218,13 @@ public class DuelService : INService
     }
 
     /// <summary>
-    /// Finds a battle for a user from the local dictionary
+    ///     Finds a battle that a specified user is participating in.
+    ///     Searches the local dictionary of active battles.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user to find a battle for.</param>
+    /// <returns>
+    ///     The Battle object if found, or null if the user is not in an active battle.
+    /// </returns>
     public Battle FindBattle(ulong userId)
     {
         foreach (var kvp in _activeBattles)
@@ -203,8 +241,14 @@ public class DuelService : INService
     }
 
     /// <summary>
-    /// Checks if a user is in a battle (checks both local dictionary and Redis)
+    ///     Determines whether a user is currently in a battle.
+    ///     Checks both the local dictionary and Redis for battle state.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user to check.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns true if the user is in a battle,
+    ///     false otherwise.
+    /// </returns>
     public async Task<bool> IsUserInBattle(ulong userId)
     {
         // Check local dictionary first
@@ -229,8 +273,12 @@ public class DuelService : INService
     }
 
     /// <summary>
-    /// Ends a battle and cleans up all references in both dictionary and Redis
+    ///     Ends a battle and cleans up all references in both the local dictionary and Redis.
+    ///     Removes battle metadata and user battle flags.
     /// </summary>
+    /// <param name="battle">The Battle object to end.</param>
+    /// <param name="battleId">The optional battle ID for Redis cleanup. If null, only local cleanup is performed.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task EndBattle(Battle battle, string battleId = null)
     {
         try

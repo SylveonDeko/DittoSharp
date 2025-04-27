@@ -27,14 +27,14 @@ public partial class Move
         {
             if (attacker.Ability() == Ability.PROTEAN)
             {
-                attacker.TypeIds = new List<ElementType> { currentType };
+                attacker.TypeIds = [currentType];
                 var t = currentType.ToString().ToLower();
                 msg += $"{attacker.Name} transformed into a {t} type using its protean!\n";
             }
 
             if (attacker.Ability() == Ability.LIBERO)
             {
-                attacker.TypeIds = new List<ElementType> { currentType };
+                attacker.TypeIds = [currentType];
                 var t = currentType.ToString().ToLower();
                 msg += $"{attacker.Name} transformed into a {t} type using its libero!\n";
             }

@@ -12,26 +12,43 @@ using Serilog;
 
 namespace EeveeCore.Modules.Duels;
 
-public class DuelInteractionHandler(
-    IMongoService mongoService,
+/// <summary>
+///     Handles component interactions for Pokémon battles.
+///     Processes user input via buttons and commands during battles,
+///     manages battle state, and coordinates battle flow.
+/// </summary>
+/// /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
+/// <param name="battleRenderer">The renderer for creating battle images.</param>
+/// <param name="dbContext">The database context provider for Entity Framework operations.</param>
+/// <param name="client">The Discord client for user and channel interactions.</param>
+public class DuelInteractionHandler(IMongoService mongoService,
     DuelRenderer battleRenderer,
     DbContextProvider dbContext,
-    DiscordShardedClient client)
-    : EeveeCoreSlashModuleBase<DuelService>
+    DiscordShardedClient client) : EeveeCoreSlashModuleBase<DuelService>
 {
     private static readonly Dictionary<(ulong, ulong), Battle?> ActiveBattles = new();
 
-    private static readonly string[] PregameGifs = new[]
-    {
+    /// <summary>
+    ///     Collection of GIFs to display during battle loading screens.
+    /// </summary>
+    private static readonly string[] PregameGifs =
+    [
         "https://skylarr1227.github.io/images/duel1.gif",
         "https://skylarr1227.github.io/images/duel2.gif",
         "https://skylarr1227.github.io/images/duel3.gif",
         "https://skylarr1227.github.io/images/duel4.gif"
-    };
-
+    ];
     /// <summary>
-    ///     Runs a battle in a background task.
+    ///     Runs a battle in a background task, handling the battle flow,
+    ///     error conditions, and post-battle rewards.
     /// </summary>
+    /// <param name="battle">The Battle object to run.</param>
+    /// <param name="dbProvider">The database context provider for Entity Framework operations.</param>
+    /// <param name="client">The Discord client for user and channel interactions.</param>
+    /// <param name="duelService">The duel service for managing battle state.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns the winning Trainer.
+    /// </returns>
     public static async Task<Trainer> RunBattle(Battle battle, DbContextProvider dbProvider,
         DiscordShardedClient client, DuelService duelService)
     {
@@ -162,8 +179,14 @@ public class DuelInteractionHandler(
     }
 
     /// <summary>
-    ///     Splits a long error message into manageable chunks
+    ///     Splits a long error message into manageable chunks for Discord messages.
+    ///     Discord has a character limit for messages, so long stack traces need to be paginated.
     /// </summary>
+    /// <param name="message">The error message or stack trace to paginate.</param>
+    /// <param name="errorId">The unique identifier for the error.</param>
+    /// <returns>
+    ///     A list of string chunks, each under the Discord message character limit.
+    /// </returns>
     private static List<string> PaginateErrorMessage(string message, ulong errorId)
     {
         const int maxLength = 1900; // Limit for code blocks in Discord
@@ -197,8 +220,10 @@ public class DuelInteractionHandler(
     }
 
     /// <summary>
-    ///     Removes the battle from active battles
+    ///     Removes a battle from the active battles dictionary.
+    ///     Cleans up both user-to-user and reverse mappings.
     /// </summary>
+    /// <param name="battle">The Battle object to remove from tracking.</param>
     private static void CleanupBattle(Battle? battle)
     {
         if (battle.Trainer1 is MemberTrainer memberTrainer1 && battle.Trainer2 is MemberTrainer memberTrainer2)
@@ -208,6 +233,13 @@ public class DuelInteractionHandler(
         }
     }
 
+    /// <summary>
+    ///     Handles accepting a duel challenge.
+    ///     Creates the appropriate battle type based on the challenge parameters.
+    /// </summary>
+    /// <param name="challengerId">The Discord ID of the user who initiated the challenge.</param>
+    /// <param name="battleType">The type of battle: single, party, inverse, or normal.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("duel:accept:*:*")]
     public async Task AcceptDuel(string challengerId, string battleType)
     {
@@ -272,6 +304,12 @@ public class DuelInteractionHandler(
         }
     }
 
+    /// <summary>
+    ///     Handles rejecting a duel challenge.
+    ///     Updates the original challenge message to indicate rejection.
+    /// </summary>
+    /// <param name="challengerId">The Discord ID of the user who initiated the challenge.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("duel:reject:*")]
     public async Task RejectDuel(string challengerId)
     {
@@ -282,6 +320,11 @@ public class DuelInteractionHandler(
         });
     }
 
+    /// <summary>
+    ///     Handles the request to select a lead Pokémon at the start of a battle.
+    ///     Displays buttons for each available Pokémon in the trainer's party.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:select_lead")]
     public async Task SelectLead()
     {
@@ -322,6 +365,12 @@ public class DuelInteractionHandler(
             ephemeral: true);
     }
 
+    /// <summary>
+    ///     Handles the selection of a lead Pokémon at the start of a battle.
+    ///     Sets the chosen Pokémon as the current active Pokémon for the trainer.
+    /// </summary>
+    /// <param name="index">The index of the selected Pokémon in the party.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:lead:*")]
     public async Task SelectLeadPokemon(int index)
     {
@@ -361,6 +410,11 @@ public class DuelInteractionHandler(
         }
     }
 
+    /// <summary>
+    ///     Displays available battle actions for the current turn.
+    ///     Shows move buttons, swap option, and other actions based on the battle state.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:actions")]
     public async Task ViewActions()
     {
@@ -452,6 +506,12 @@ public class DuelInteractionHandler(
         await ctx.Interaction.RespondAsync("Pick an action:", components: components.Build(), ephemeral: true);
     }
 
+    /// <summary>
+    ///     Handles the selection of a move during battle.
+    ///     Sets the chosen move as the trainer's action for the current turn.
+    /// </summary>
+    /// <param name="moveIdStr">The index of the selected move or "struggle" for Struggle move.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:move:*")]
     public async Task SelectMove(string moveIdStr)
     {
@@ -490,6 +550,11 @@ public class DuelInteractionHandler(
             $"You picked {selectedMove.PrettyName}. Waiting for opponent.");
     }
 
+    /// <summary>
+    ///     Displays available Pokémon to swap to during battle.
+    ///     Shows buttons for each valid swap option based on battle conditions.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:swap_request")]
     public async Task SwapRequest()
     {
@@ -531,6 +596,12 @@ public class DuelInteractionHandler(
         });
     }
 
+    /// <summary>
+    ///     Handles the selection of a Pokémon to swap to during battle.
+    ///     Sets the swap action as the trainer's action for the current turn.
+    /// </summary>
+    /// <param name="index">The index of the selected Pokémon in the party.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:swap:*")]
     public async Task SwapPokemon(int index)
     {
@@ -565,6 +636,11 @@ public class DuelInteractionHandler(
         }
     }
 
+    /// <summary>
+    ///     Displays a confirmation prompt for forfeiting a battle.
+    ///     Shows confirm and cancel buttons to prevent accidental forfeits.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:forfeit")]
     public async Task ForfeitPrompt()
     {
@@ -577,6 +653,11 @@ public class DuelInteractionHandler(
             ephemeral: true);
     }
 
+    /// <summary>
+    ///     Handles confirmation of a battle forfeit.
+    ///     Signals the forfeit to the battle system and updates the message.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:forfeit_confirm")]
     public async Task ForfeitConfirm()
     {
@@ -600,6 +681,11 @@ public class DuelInteractionHandler(
         });
     }
 
+    /// <summary>
+    ///     Handles cancellation of a battle forfeit.
+    ///     Updates the message to indicate the forfeit was cancelled.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:forfeit_cancel")]
     public async Task ForfeitCancel()
     {
@@ -610,6 +696,11 @@ public class DuelInteractionHandler(
         });
     }
 
+    /// <summary>
+    ///     Toggles the mega evolution state for the current Pokémon.
+    ///     Updates the battle action buttons to reflect the new state.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:mega_toggle")]
     public async Task ToggleMegaEvolution()
     {
@@ -690,6 +781,11 @@ public class DuelInteractionHandler(
         });
     }
 
+    /// <summary>
+    ///     Displays available Pokémon to swap to when a mid-turn swap is required.
+    ///     Shows buttons for each valid swap option.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:view_swap")]
     public async Task ViewSwapOptions()
     {
@@ -728,6 +824,12 @@ public class DuelInteractionHandler(
             ephemeral: true);
     }
 
+    /// <summary>
+    ///     Handles the selection of a Pokémon during a mid-turn swap.
+    ///     Switches to the selected Pokémon and signals completion of the swap.
+    /// </summary>
+    /// <param name="index">The index of the selected Pokémon in the party.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("battle:mid_swap:*")]
     public async Task MidSwapPokemon(int index)
     {
@@ -758,6 +860,12 @@ public class DuelInteractionHandler(
         }
     }
 
+    /// <summary>
+    ///     Sets up and handles a 1v1 single Pokémon battle.
+    ///     Verifies both trainers have valid selected Pokémon and creates the battle.
+    /// </summary>
+    /// <param name="challenger">The Discord user who initiated the challenge.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleSingleBattle(IUser challenger)
     {
         await using var db = await dbContext.GetContextAsync();
@@ -810,8 +918,8 @@ public class DuelInteractionHandler(
         var opponentDuelPoke = await DuelPokemon.Create(ctx, opponentPoke, mongoService);
 
         // Create trainers
-        var trainer1 = new MemberTrainer(challenger, new List<DuelPokemon> { challengerDuelPoke });
-        var trainer2 = new MemberTrainer(ctx.User, new List<DuelPokemon> { opponentDuelPoke });
+        var trainer1 = new MemberTrainer(challenger, [challengerDuelPoke]);
+        var trainer2 = new MemberTrainer(ctx.User, [opponentDuelPoke]);
 
         // Create battle
         var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService);
@@ -834,6 +942,13 @@ public class DuelInteractionHandler(
         _ = RunBattle(battle, dbContext, client, Service);
     }
 
+    /// <summary>
+    ///     Sets up and handles a party battle (6v6) with all Pokémon in both trainers' parties.
+    ///     Verifies both trainers have valid parties and creates the battle.
+    /// </summary>
+    /// <param name="challenger">The Discord user who initiated the challenge.</param>
+    /// <param name="inverseBattle">Whether this is an inverse battle (type effectiveness is reversed).</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePartyBattle(IUser challenger, bool inverseBattle)
     {
         // Get party Pokemon for both users

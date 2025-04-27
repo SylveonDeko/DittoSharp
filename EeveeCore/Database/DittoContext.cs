@@ -1,5 +1,4 @@
-﻿using EeveeCore.Database.Models.PostgreSQL.Ai;
-using EeveeCore.Database.Models.PostgreSQL.Art;
+﻿using EeveeCore.Database.Models.PostgreSQL.Art;
 using EeveeCore.Database.Models.PostgreSQL.Bot;
 using EeveeCore.Database.Models.PostgreSQL.Game;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
@@ -7,6 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EeveeCore.Database;
 
+/// <summary>
+/// Represents the main database context for the EeveeCore Pokémon bot system.
+/// This class provides access to all database entities through DbSet properties,
+/// organized into logical categories for Pokémon, Bot, Art, and Game models.
+/// </summary>
 public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbContext(options)
 {
     #region Pokemon Models
@@ -36,6 +40,9 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     /// </summary>
     public DbSet<EggHatchery> EggHatcheries { get; set; }
 
+    /// <summary>
+    ///     Represents archived Pokémon data
+    /// </summary>
     public DbSet<DeadPokemon> DeadPokemons { get; set; }
 
     /// <summary>
@@ -75,19 +82,6 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
 
     #endregion
 
-    #region AI Models
-
-    /// <summary>
-    ///     Represents AI image generations
-    /// </summary>
-    public DbSet<AiGeneration> AiGenerations { get; set; }
-
-    /// <summary>
-    ///     Represents themes for AI image generation
-    /// </summary>
-    public DbSet<AiTheme> AiThemes { get; set; }
-
-    #endregion
 
     #region Bot Models
 
@@ -125,11 +119,6 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     ///     Represents general donations
     /// </summary>
     public DbSet<Donation> Donations { get; set; }
-
-    /// <summary>
-    ///     Represents stored messages
-    /// </summary>
-    public DbSet<Message> Messages { get; set; }
 
     /// <summary>
     ///     Represents new user registrations
@@ -205,11 +194,6 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     public DbSet<CurrentEvent> CurrentEvents { get; set; }
 
     /// <summary>
-    ///     Represents EeveeCore Bitty items
-    /// </summary>
-    public DbSet<EeveeCoreBitty> EeveeCoreBitties { get; set; }
-
-    /// <summary>
     ///     Represents gifts
     /// </summary>
     public DbSet<Gift> Gifts { get; set; }
@@ -259,10 +243,6 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     /// </summary>
     public DbSet<TradeLog> TradeLogs { get; set; }
 
-    /// <summary>
-    ///     Represents user EeveeCore Bitty collections
-    /// </summary>
-    public DbSet<UserEeveeCoreBitty> UserEeveeCoreBitties { get; set; }
 
     #endregion
 }

@@ -11,6 +11,10 @@ using IResult = Discord.Interactions.IResult;
 
 namespace EeveeCore.Services;
 
+/// <summary>
+///     Handles command parsing and execution, integrating with various services to process Discord interactions and
+///     messages.
+/// </summary>
 public class CommandHandler : INService
 {
     private const int GlobalCommandsCooldown = 750;
@@ -25,8 +29,22 @@ public class CommandHandler : INService
     private readonly GuildSettingsService _guildSettings;
     private readonly InteractionService _interactions;
     private readonly ConcurrentHashSet<ulong> _usersOnShortCooldown = [];
+    /// <summary>
+    /// Gets the IServiceProvider for the bot.
+    /// </summary>
     public readonly IServiceProvider Services;
 
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="CommandHandler" /> class.
+    /// </summary>
+    /// <param name="client">The Discord client.</param>
+    /// <param name="db">The database service.</param>
+    /// <param name="commands">The service for handling commands.</param>
+    /// <param name="services">The service provider for dependency injection.</param>
+    /// <param name="interactions">The service for handling interactions.</param>
+    /// <param name="guildSettings">The guild settings service.</param>
+    /// <param name="eventHandler">The event handler for discord events.</param>
+    /// <param name="cache">The data cache service.</param>
     public CommandHandler(
         DiscordShardedClient client,
         CommandService commands,
@@ -54,13 +72,22 @@ public class CommandHandler : INService
         _interactions.SlashCommandExecuted += HandleSlashCommand;
     }
 
+    /// <summary>
+    /// Runs when a command is executed.
+    /// </summary>
     public event Func<IUserMessage, CommandInfo, Task> CommandExecuted = delegate { return Task.CompletedTask; };
 
+    /// <summary>
+    /// Runs when a command errored.
+    /// </summary>
     public event Func<CommandInfo, ITextChannel, string, IUser?, Task> CommandErrored = delegate
     {
         return Task.CompletedTask;
     };
 
+    /// <summary>
+    /// Runs the handle event found in HelpService.
+    /// </summary>
     public event Func<IUserMessage, Task> OnMessageNoTrigger = delegate { return Task.CompletedTask; };
 
     private async Task HandleMessageAsync(IMessage msg)
@@ -92,6 +119,11 @@ public class CommandHandler : INService
             });
     }
 
+    /// <summary>
+    /// Executes a command in the given channel in the queue.
+    /// </summary>
+    /// <param name="channelId">The channel id o the channel to run a command in.</param>
+    /// <returns>Whether the run was successful.</returns>
     public async Task<bool> ExecuteCommandsInChannelAsync(ulong channelId)
     {
         if (_commandParseLock.GetValueOrDefault(channelId) ||
@@ -384,10 +416,5 @@ public class CommandHandler : INService
         return (from mention in mentions
             where content.StartsWith(mention + " ", StringComparison.InvariantCulture)
             select mention.Length + 1).FirstOrDefault();
-    }
-
-    public void Dispose()
-    {
-        _clearUsersOnShortCooldown?.Dispose();
     }
 }

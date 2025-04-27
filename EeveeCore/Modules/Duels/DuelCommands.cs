@@ -10,6 +10,11 @@ using Serilog;
 
 namespace EeveeCore.Modules.Duels;
 
+/// <summary>
+///     Provides Discord slash commands for initiating and managing Pokémon battles.
+///     Handles different battle types including challenge, single, party, inverse, and NPC duels.
+///     Manages cooldowns, battle initiation, and rewards for NPC battles.
+/// </summary>
 [Group("duel", "Duel related commands")]
 public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 {
@@ -18,6 +23,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     private readonly DiscordShardedClient _client;
     private readonly RedisCache _redis;
 
+    /// <summary>
+    ///     Collection of GIFs to display during battle loading screens.
+    /// </summary>
     private static readonly string[] PregameGifs =
     [
         "https://skylarr1227.github.io/images/duel1.gif",
@@ -26,8 +34,18 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         "https://skylarr1227.github.io/images/duel4.gif"
     ];
 
+    /// <summary>
+    ///     Date format used for storing and parsing timestamps in Redis.
+    /// </summary>
     private const string DATE_FORMAT = "MM/dd/yyyy, HH:mm:ss";
 
+    /// <summary>
+    ///     Initializes a new instance of the PokemonBattleModule class with required dependencies.
+    /// </summary>
+    /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
+    /// <param name="db">The database context provider for Entity Framework operations.</param>
+    /// <param name="client">The Discord client for user and channel interactions.</param>
+    /// <param name="redis">The Redis cache for cooldown management.</param>
     public PokemonBattleModule(
         IMongoService mongoService,
         DbContextProvider db,
@@ -40,6 +58,13 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         _redis = redis;
     }
 
+    /// <summary>
+    ///     Initiates a challenge to another user for a Pokémon battle.
+    ///     Provides buttons for the opponent to accept or reject the challenge.
+    /// </summary>
+    /// <param name="opponent">The user to challenge.</param>
+    /// <param name="battleType">The type of battle: normal or inverse.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("challenge", "Challenge another user to a Pokémon battle")]
     public async Task ChallengeBattle(IUser opponent,
         [Choice("Normal", "normal")] [Choice("Inverse", "inverse")]
@@ -67,6 +92,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             components: components);
     }
 
+    /// <summary>
+    ///     Initiates a 1v1 single Pokémon duel with another user.
+    ///     Checks cooldowns and provides buttons for the opponent to accept or reject.
+    /// </summary>
+    /// <param name="opponent">The user to duel.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("single", "1v1 duel with another user's selected pokemon")]
     public async Task SingleDuel(IUser opponent)
     {
@@ -97,6 +128,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             components: components);
     }
 
+    /// <summary>
+    ///     Initiates a 6v6 party duel with another user's full party.
+    ///     Checks cooldowns and provides buttons for the opponent to accept or reject.
+    /// </summary>
+    /// <param name="opponent">The user to duel.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("party", "6v6 duel with another user's selected party")]
     public async Task PartyDuel(IUser opponent)
     {
@@ -127,6 +164,13 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             components: components);
     }
 
+    /// <summary>
+    ///     Initiates a 6v6 inverse battle with another user's full party.
+    ///     In inverse battles, type effectiveness is reversed.
+    ///     Checks cooldowns and provides buttons for the opponent to accept or reject.
+    /// </summary>
+    /// <param name="opponent">The user to duel.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("inverse", "6v6 inverse battle with another user's selected party")]
     public async Task InverseDuel(IUser opponent)
     {
@@ -158,6 +202,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             components: components);
     }
 
+    /// <summary>
+    ///     Initiates a 1v1 duel with an NPC (AI-controlled) trainer.
+    ///     Consumes energy, finds a suitable NPC Pokémon, and runs the battle asynchronously.
+    ///     Provides rewards if the player wins.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("npc", "1v1 duel with an NPC AI")]
     public async Task NpcDuel()
     {
@@ -268,8 +318,8 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             var npcPokemonDuel = await DuelPokemon.Create(ctx, npcPokemon, _mongoService);
 
             // Create trainers
-            var playerTrainer = new MemberTrainer(ctx.User, new List<DuelPokemon> { playerPokemon });
-            var npcTrainer = new NPCTrainer(new List<DuelPokemon> { npcPokemonDuel });
+            var playerTrainer = new MemberTrainer(ctx.User, [playerPokemon]);
+            var npcTrainer = new NPCTrainer([npcPokemonDuel]);
 
             // Create battle
             var battle = new Battle(ctx, ctx.Channel, playerTrainer, npcTrainer, _mongoService);
@@ -304,10 +354,16 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         }
     }
 
-// Separate method to handle NPC battle rewards
     /// <summary>
-    ///     Handle NPC battle rewards
+    ///     Handles rewards for winning an NPC battle.
+    ///     Grants credits, updates achievements, and gives XP to Pokémon that participated.
+    ///     Applies battle multipliers from user inventory if present.
     /// </summary>
+    /// <param name="userId">The Discord ID of the user who won.</param>
+    /// <param name="winner">The winning Trainer object.</param>
+    /// <param name="battle">The Battle object that was completed.</param>
+    /// <param name="userData">The user's database record for updating.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task HandleNpcRewards(ulong userId, Trainer winner, Battle battle, dynamic userData)
     {
         try
@@ -316,7 +372,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 
             decimal battleMulti = 1;
 
-// Handle inventory which might be a string, JSON object, or dictionary
+            // Handle inventory which might be a string, JSON object, or dictionary
             try
             {
                 if (userData.Inventory != null)
@@ -437,6 +493,16 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         }
     }
 
+    /// <summary>
+    ///     Checks cooldowns for PvP duels to prevent spam and enforce daily limits.
+    ///     Verifies channel permissions, command cooldowns, and daily duel count.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user initiating the duel.</param>
+    /// <param name="opponentId">The Discord ID of the opponent.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns true if the duel can proceed,
+    ///     false if it is blocked by cooldowns.
+    /// </returns>
     private async Task<bool> CheckDuelCooldowns(ulong userId, ulong opponentId)
     {
         // Check channel permissions
@@ -520,7 +586,15 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         }
     }
 
-    // Simplified cooldown check for NPC duels
+    /// <summary>
+    ///     Checks cooldowns for NPC duels, which have simpler rules than PvP duels.
+    ///     Verifies channel permissions and command cooldowns but does not enforce daily limits.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user initiating the NPC duel.</param>
+    /// <returns>
+    ///     A task representing the asynchronous operation that returns true if the duel can proceed,
+    ///     false if it is blocked by cooldowns.
+    /// </returns>
     private async Task<bool> CheckNpcDuelCooldowns(ulong userId)
     {
         // Check channel permissions

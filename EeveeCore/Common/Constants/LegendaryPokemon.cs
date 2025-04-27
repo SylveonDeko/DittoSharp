@@ -1,7 +1,13 @@
 namespace EeveeCore.Common.Constants;
 
+/// <summary>
+/// Provides collections of legendary and special Pokémon categorized by their classification.
+/// </summary>
 public static class LegendaryPokemon
 {
+    /// <summary>
+    /// Gets a list of all legendary Pokémon names from various generations.
+    /// </summary>
     public static readonly string[] LegendList =
     [
         "Enamorus", "Tapu-koko", "Tapu-lele", "Tapu-bulu", "Tapu-fini", "Cosmog",
@@ -21,6 +27,9 @@ public static class LegendaryPokemon
         "Ting-lu", "Chien-pao", "Wo-chien", "Chi-yu", "Miraidon"
     ];
 
+    /// <summary>
+    /// Gets a list of all Ultra Beast Pokémon names that originate from Ultra Space.
+    /// </summary>
     public static readonly string[] UltraBeasts =
     [
         "Nihilego", "Buzzwole", "Pheromosa", "Xurkitree", "Celesteela", "Kartana",

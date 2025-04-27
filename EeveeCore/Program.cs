@@ -14,8 +14,16 @@ namespace EeveeCore;
 
 using EventHandler = Services.EventHandler;
 
+/// <summary>
+///     The main entry point class for the Mewdeko application.
+/// </summary>
 public class Program
 {
+    /// <summary>
+    ///     The entry point of the application.
+    /// </summary>
+    /// <param name="args">Command-line arguments passed to the application.</param>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation of running the application.</returns>
     public static async Task Main(string[] args)
     {
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -82,13 +90,30 @@ public class Program
     }
 }
 
+/// <summary>
+///     A hosted service that manages the lifecycle EeveeCore.
+/// </summary>
+/// <remarks>
+///     This class implements <see cref="IHostedService" /> to integrate with the .NET Core hosting model.
+///     It's responsible for starting and stopping the EeveeCore as part of the application's lifecycle.
+/// </remarks>
 public class EeveeCoreService(EeveeCore eeveeCore) : IHostedService
 {
+    /// <summary>
+    ///     Starts EeveeCore.
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> that can be used to cancel the start operation.</param>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation of starting the bot.</returns>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await eeveeCore.RunAsync();
     }
 
+    /// <summary>
+    ///     Stops EeveeCore.
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken" /> that can be used to cancel the stop operation.</param>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation of stopping the bot.</returns>
     public Task StopAsync(CancellationToken cancellationToken)
     {
         Environment.Exit(0);

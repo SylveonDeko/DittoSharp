@@ -13,13 +13,17 @@ namespace EeveeCore.Modules.Pokemon;
 
 /// <summary>
 ///     Provides Discord slash commands for Pokemon-related functionality.
+///     Includes commands for viewing, managing, and interacting with Pokemon in the user's collection.
 /// </summary>
+/// <param name="interactivity">Service for handling interactive components like pagination.</param>
+/// <param name="dbContextProvider">Provider for database context access.</param>
 [Group("pokemon", "Pokemon related commands")]
 public class PokemonSlashCommands(InteractiveService interactivity, DbContextProvider dbContextProvider)
     : EeveeCoreSlashModuleBase<PokemonService>
 {
     /// <summary>
     ///     Represents the different Pokemon variant types.
+    ///     Used for specifying special forms when viewing Pokemon information.
     /// </summary>
     public enum PokemonVariantType
     {
@@ -33,6 +37,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
         Shadow
     }
 
+    /// <summary>
+    ///     Collection of footer texts that are randomly displayed in embeds.
+    ///     Contains tips, information, and promotional messages for users.
+    /// </summary>
     private readonly string[] _footers =
     [
         "Use /donate for exclusive rewards - Thank you everyone for your continued support!",
@@ -43,10 +51,15 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
         "We are always looking for new help! Art Team, Staff Team, and Dev team-ask in the official server!"
     ];
 
+    /// <summary>
+    ///     Random number generator for various randomized elements.
+    ///     Used for selecting random footers and generating random colors for embeds.
+    /// </summary>
     private readonly Random _random = new();
 
     /// <summary>
     ///     Selects a Pokemon by its ID number.
+    ///     Makes the specified Pokemon the user's active Pokemon for commands that operate on the selected Pokemon.
     /// </summary>
     /// <param name="pokeId">The ID of the Pokemon to select.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -65,6 +78,15 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
         await ctx.Interaction.SendConfirmFollowupAsync(result.Message);
     }
 
+    /// <summary>
+    ///     Displays a paginated list of the user's Pokemon collection.
+    ///     Supports various sorting methods, filters, view modes, and search functionality.
+    /// </summary>
+    /// <param name="sortBy">The method to sort Pokemon by (iv, level, name, recent, type, favorite, party, champion).</param>
+    /// <param name="filter">Filter to apply to the Pokemon list (all, shiny, radiant, shadow, legendary, favorite, champion, party, market).</param>
+    /// <param name="viewMode">The display mode for the list (normal, compact, detailed).</param>
+    /// <param name="search">Optional search term to filter Pokemon by name, nickname, tags, or moves.</param>
+    /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("list", "Shows a detailed list of all your obtained pokemon")]
     public async Task ListPokemon(
         [Summary("sort", "Sort method")]
@@ -279,6 +301,14 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     }
 
 // Helper methods
+    /// <summary>
+    ///     Generates summary statistics for the user's Pokemon collection.
+    ///     Creates a formatted string with counts of different Pokemon types and variants.
+    /// </summary>
+    /// <param name="allPokemon">The complete list of the user's Pokemon.</param>
+    /// <param name="filtered">The filtered list of Pokemon based on current view options.</param>
+    /// <param name="filter">The current filter being applied.</param>
+    /// <returns>A formatted string containing collection statistics.</returns>
     private string GenerateCollectionStats(List<PokemonListEntry> allPokemon, List<PokemonListEntry> filtered,
         string filter)
     {
@@ -307,6 +337,14 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
         return stats.ToString();
     }
 
+    /// <summary>
+    ///     Generates a detailed text entry for a Pokemon in the list view.
+    ///     Includes comprehensive information formatted for the detailed view mode.
+    /// </summary>
+    /// <param name="pokemon">The Pokemon entry to format.</param>
+    /// <param name="inParty">Whether the Pokemon is in the user's party.</param>
+    /// <param name="isSelected">Whether the Pokemon is currently selected.</param>
+    /// <returns>A formatted string containing detailed Pokemon information.</returns>
     private string GenerateDetailedListEntry(PokemonListEntry pokemon, bool inParty, bool isSelected)
     {
         var entry = new StringBuilder();
@@ -368,6 +406,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Attempts to resurrect all dead Pokemon belonging to the user.
+    ///     Displays a paginated list of successfully resurrected Pokemon with their details.
     /// </summary>
     /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("resurrect", "Attempt to resurrect dead Pokemon")]
@@ -427,9 +466,11 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays detailed information about a Pokemon.
+    ///     Shows stats, types, moves, and other relevant information about the specified Pokemon.
+    ///     If no Pokemon is specified, shows information about the user's currently selected Pokemon.
     /// </summary>
-    /// <param name="poke">The name or ID of the Pokemon to get information about.</param>
-    /// <param name="variant">The variant type of the Pokemon.</param>
+    /// <param name="poke">The name or ID of the Pokemon to get information about, or null for the selected Pokemon.</param>
+    /// <param name="variant">The variant type of the Pokemon (Shiny, Radiant, Shadow).</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("info", "Get information about a pokemon")]
     [RequireContext(ContextType.Guild)]
@@ -598,8 +639,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays the user's Pokedex progress.
+    ///     Shows which Pokemon the user has caught and which ones they still need to find.
+    ///     Different variants can be shown such as the national dex, unowned Pokemon, or specific variants like shiny or shadow.
     /// </summary>
-    /// <param name="variant">The variant type of Pokedex to display.</param>
+    /// <param name="variant">The variant type of Pokedex to display (national, unowned, shadow, shiny, radiant, skin).</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("pokedex", "View your Pokedex progress")]
     public async Task Pokedex(string variant = null)
@@ -634,6 +677,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays the national Pokedex with owned Pokemon status.
+    ///     Shows a paginated list of all Pokemon with indicators for which ones the user has caught.
     /// </summary>
     /// <returns>A Task representing the asynchronous operation.</returns>
     private async Task ShowNationalPokedex()
@@ -692,6 +736,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays the Pokedex for a specific variant (shiny, radiant, shadow, skin).
+    ///     Shows which Pokemon the user has caught in the specified variant form.
     /// </summary>
     /// <param name="variant">The variant type to display.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -758,6 +803,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Permanently releases a Pokemon.
+    ///     Removes the Pokemon from the user's collection after confirmation.
     /// </summary>
     /// <param name="pokemonNumber">The number of the Pokemon to release.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -801,6 +847,8 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Sacrifices a Pokemon to fill the user's soul-gauge.
+    ///     Higher IV Pokemon provide more soul-gauge points. Requires confirmation before proceeding.
+    ///     When the soul-gauge is full, users can use the /meditate command for rewards.
     /// </summary>
     /// <param name="pokemonNumber">The number of the Pokemon to sacrifice.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -884,9 +932,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Handles interactions with the Pokemon info buttons.
+    ///     Processes different actions like showing more information, going back to the main view, or closing the info panel.
     /// </summary>
-    /// <param name="action">The action to perform.</param>
-    /// <param name="param">The parameter for the action.</param>
+    /// <param name="action">The action to perform (more, back, close).</param>
+    /// <param name="param">The parameter for the action, typically a Pokemon ID.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
     [ComponentInteraction("pokeinfo:*,*", true)]
     public async Task HandleInfoButtons(string action, string param)
@@ -956,6 +1005,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays the unowned Pokemon in the Pokedex.
+    ///     Shows a paginated list of Pokemon that the user has not yet caught.
     /// </summary>
     /// <returns>A Task representing the asynchronous operation.</returns>
     private async Task ShowUnownedPokedex()
@@ -1005,6 +1055,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Gets the emoji for a Pokemon type.
+    ///     Returns a custom Discord emoji for the specified type.
     /// </summary>
     /// <param name="type">The type of the Pokemon.</param>
     /// <returns>The emoji representation of the type.</returns>
@@ -1021,6 +1072,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Gets the emoji for an egg group.
+    ///     Returns a custom Discord emoji for the specified egg group.
     /// </summary>
     /// <param name="eggGroup">The egg group name.</param>
     /// <returns>The emoji representation of the egg group.</returns>
@@ -1037,6 +1089,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Formats the title of a Pokemon with its variant indicators.
+    ///     Adds prefixes like ✨ for shiny, 🌟 for radiant, etc.
     /// </summary>
     /// <param name="name">The name of the Pokemon.</param>
     /// <param name="shiny">Whether the Pokemon is shiny.</param>
@@ -1053,6 +1106,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Displays detailed information about an owned Pokemon.
+    ///     Creates and sends an embed with comprehensive stats, moves, and other details about the Pokemon.
     /// </summary>
     /// <param name="pokemon">The Pokemon to display information about.</param>
     /// <param name="pokeCount">The total number of Pokemon the user has.</param>
@@ -1210,6 +1264,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Gets the emoji for a Pokemon based on its variant.
+    ///     Returns appropriate emoji for shiny, radiant, shadow, or other special forms.
     /// </summary>
     /// <param name="shiny">Whether the Pokemon is shiny.</param>
     /// <param name="radiant">Whether the Pokemon is radiant.</param>
@@ -1229,6 +1284,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Gets the emoji for a Pokemon's gender.
+    ///     Returns ♂️ for male, ♀️ for female, or empty string for genderless.
     /// </summary>
     /// <param name="gender">The gender of the Pokemon.</param>
     /// <returns>The emoji representation of the Pokemon's gender.</returns>

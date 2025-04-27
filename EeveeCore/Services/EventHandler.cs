@@ -369,11 +369,6 @@ public sealed class EventHandler : IDisposable
     public event AsyncEventHandler<SocketAuditLogEntry, SocketGuild>? AuditLogCreated;
 
     /// <summary>
-    ///     Occurs when the bot has connected and is ready to process events.
-    /// </summary>
-    public event AsyncEventHandler<DiscordShardedClient>? Ready;
-
-    /// <summary>
     ///     Occurs when a guild becomes available.
     /// </summary>
     public event AsyncEventHandler<SocketGuild>? GuildAvailable;

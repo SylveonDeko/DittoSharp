@@ -15,22 +15,91 @@ using Bot_User = EeveeCore.Database.Models.PostgreSQL.Bot.User;
 
 namespace EeveeCore.Modules.Spawn.Services;
 
+/// <summary>
+///     Provides functionality for spawning Pokemon in Discord channels.
+///     Handles the spawn mechanics, user catches, rewards, and guild configuration for the Pokemon spawn system.
+/// </summary>
+/// <param name="client">The Discord client used for interactions.</param>
+/// <param name="mongoDb">The MongoDB service for data storage.</param>
+/// <param name="handler">Event handler for Discord events.</param>
+/// <param name="pokemonService">Service for Pokemon-related functionality.</param>
+/// <param name="dbContextProvider">Provider for database contexts.</param>
+/// <param name="cache">Cache service for temporary data storage.</param>
 public class SpawnService : INService
 {
     // Constants from Python code
+    /// <summary>
+    ///     Base chance for a Pokemon to spawn when a message is sent.
+    /// </summary>
     private const double BASE_SPAWN_CHANCE = 0.03;
+
+    /// <summary>
+    ///     Base cooldown time in seconds between Pokemon spawns in a guild.
+    /// </summary>
     private const int BASE_COOLDOWN = 20;
+
+    /// <summary>
+    ///     List of guild IDs that are excluded from spawns.
+    /// </summary>
     private static readonly ulong[] EXCLUDED_GUILDS = [264445053596991498, 446425626988249089];
+
+    /// <summary>
+    ///     Set of channel IDs where vault events are currently active.
+    /// </summary>
     private readonly HashSet<ulong> _activeVaults = [];
+
+    /// <summary>
+    ///     Cache service for temporary data storage.
+    /// </summary>
     private readonly IDataCache _cache;
+
+    /// <summary>
+    ///     The Discord client for interaction with Discord.
+    /// </summary>
     private readonly DiscordShardedClient _client;
+
+    /// <summary>
+    ///     Provider for database contexts.
+    /// </summary>
     private readonly DbContextProvider _dbContextProvider;
+
+    /// <summary>
+    ///     MongoDB service for data storage.
+    /// </summary>
     private readonly IMongoService _mongoDb;
+
+    /// <summary>
+    ///     Service for Pokemon-related functionality.
+    /// </summary>
     private readonly PokemonService _pokemonService;
+
+    /// <summary>
+    ///     Random number generator for spawn mechanics.
+    /// </summary>
     private readonly Random _random;
+
+    /// <summary>
+    ///     Cache of spawn cooldowns for guilds.
+    ///     Maps guild IDs to the time of their last spawn.
+    /// </summary>
     private readonly ConcurrentDictionary<ulong, DateTime> _spawnCache = new(Environment.ProcessorCount, 1000);
+
+    /// <summary>
+    ///     Flag to enable spawns regardless of spawn chance.
+    ///     Used for testing or special events.
+    /// </summary>
     private bool _alwaysSpawn;
 
+    /// <summary>
+    ///     Initializes a new instance of the SpawnService class.
+    ///     Sets up event handlers and required services.
+    /// </summary>
+    /// <param name="client">The Discord client for interactions.</param>
+    /// <param name="mongoDb">MongoDB service for data access.</param>
+    /// <param name="handler">Event handler for Discord events.</param>
+    /// <param name="pokemonService">Pokemon service for Pokemon-related operations.</param>
+    /// <param name="dbContextProvider">Provider for database access.</param>
+    /// <param name="cache">Cache service for temporary data.</param>
     public SpawnService(
         DiscordShardedClient client,
         IMongoService mongoDb,
@@ -49,6 +118,12 @@ public class SpawnService : INService
         handler.MessageReceived += HandleMessageAsync;
     }
 
+    /// <summary>
+    ///     Handles incoming Discord messages to determine if a Pokemon should spawn.
+    ///     Checks against cooldowns, spawn chances, and guild configurations.
+    /// </summary>
+    /// <param name="message">The received message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleMessageAsync(SocketMessage message)
     {
         if (message.Author.IsBot || message.Channel is not SocketGuildChannel channel)
@@ -106,6 +181,11 @@ public class SpawnService : INService
         }
     }
 
+    /// <summary>
+    ///     Retrieves or creates a guild configuration.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <returns>The guild configuration document.</returns>
     private async Task<Guild> GetGuildConfig(ulong guildId)
     {
         var guildConfig = await _mongoDb.Guilds
@@ -124,6 +204,14 @@ public class SpawnService : INService
         return guildConfig;
     }
 
+    /// <summary>
+    ///     Gets spawn modifiers based on user and channel.
+    ///     Determines shiny chance and applies honey effects.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="channelId">The Discord ID of the channel.</param>
+    /// <param name="db">The database context for queries.</param>
+    /// <returns>A tuple containing shiny status and honey effect.</returns>
     private async Task<(bool IsShiny, Honey? Honey)> GetSpawnModifiers(ulong userId, ulong channelId, EeveeCoreContext db)
     {
         var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
@@ -140,6 +228,12 @@ public class SpawnService : INService
         return (isShiny, honey);
     }
 
+    /// <summary>
+    ///     Processes honey effects to determine spawn overrides.
+    ///     Different honey types can influence the type of Pokemon that spawns.
+    /// </summary>
+    /// <param name="honey">The honey object with type information.</param>
+    /// <returns>A tuple indicating ghost and ice type overrides.</returns>
     private (bool Ghost, bool Ice) ProcessHoneyEffect(Honey? honey)
     {
         if (honey == null) return (false, false);
@@ -152,6 +246,12 @@ public class SpawnService : INService
         };
     }
 
+    /// <summary>
+    ///     Calculates spawn chances for different Pokemon rarities.
+    ///     Honey effects can influence the chance of rare spawns.
+    /// </summary>
+    /// <param name="honey">The honey effect, if any.</param>
+    /// <returns>A tuple containing spawn chances for different Pokemon types.</returns>
     private (int Legend, int Ub, int Pseudo, int Starter) CalculateSpawnChances(Honey? honey)
     {
         var honeyValue = honey?.Type is "ghost" or "cheer" ? 0.0 : honey?.Type == null ? 0.0 : 50.0;
@@ -169,7 +269,15 @@ public class SpawnService : INService
         );
     }
 
-
+    /// <summary>
+    ///     Selects a Pokemon to spawn based on calculated spawn chances.
+    ///     Takes into account special overrides for ghost, ice, or specific guilds.
+    /// </summary>
+    /// <param name="chances">The spawn chances for different Pokemon rarities.</param>
+    /// <param name="ghost">Whether to override with a ghost-type Pokemon.</param>
+    /// <param name="ice">Whether to override with an ice-type Pokemon.</param>
+    /// <param name="guildId">The Discord ID of the guild where the spawn occurs.</param>
+    /// <returns>The name of the selected Pokemon.</returns>
     private async Task<string?> SelectPokemon((int Legend, int Ub, int Pseudo, int Starter) chances, bool ghost,
         bool ice, ulong guildId)
     {
@@ -190,6 +298,13 @@ public class SpawnService : INService
         return pokemon.ToLower();
     }
 
+    /// <summary>
+    ///     Handles the spawning of a vault event.
+    ///     Vaults are special events that contain rewards and use an encoded message.
+    /// </summary>
+    /// <param name="channel">The text channel where the vault spawns.</param>
+    /// <param name="pokemonName">The name of the Pokemon to encode in the vault message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleVaultSpawn(ITextChannel channel, string? pokemonName)
     {
         if (_activeVaults.Contains(channel.Id))
@@ -231,6 +346,13 @@ public class SpawnService : INService
         }
     }
 
+    /// <summary>
+    ///     Handles the reward process for a vault event.
+    ///     Determines the type of reward and processes it for the user.
+    /// </summary>
+    /// <param name="message">The message containing the user's response.</param>
+    /// <param name="channel">The channel where the vault event occurred.</param>
+    /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleVaultReward(IMessage message, ITextChannel channel)
     {
         await using var db = await _dbContextProvider.GetContextAsync();
@@ -260,6 +382,13 @@ public class SpawnService : INService
         }
     }
 
+    /// <summary>
+    ///     Encodes a phrase by shifting letters by a specified amount.
+    ///     Used for the vault event to create a puzzle for users to solve.
+    /// </summary>
+    /// <param name="phrase">The phrase to encode.</param>
+    /// <param name="shift">The amount to shift each letter.</param>
+    /// <returns>The encoded phrase.</returns>
     private string EncodePhrase(string? phrase, int shift)
     {
         var encoded = new StringBuilder();
@@ -303,6 +432,13 @@ public class SpawnService : INService
         return encoded.ToString();
     }
 
+    /// <summary>
+    ///     Handles the shadow reward type from a vault.
+    ///     Either increases the user's shadow hunt chain or rewards a shadow Pokemon.
+    /// </summary>
+    /// <param name="user">The user receiving the reward.</param>
+    /// <param name="db">The database context.</param>
+    /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleShadowReward(Bot_User user, EeveeCoreContext db)
     {
         if (string.IsNullOrEmpty(user.Hunt))
@@ -323,6 +459,13 @@ public class SpawnService : INService
         return $"Shadows pour from the vault and circle around you! Your chain has increased by {shadowChainUp}!";
     }
 
+    /// <summary>
+    ///     Handles the chest reward type from a vault.
+    ///     Adds a chest item to the user's inventory.
+    /// </summary>
+    /// <param name="user">The user receiving the reward.</param>
+    /// <param name="db">The database context.</param>
+    /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleChestReward(Bot_User user, EeveeCoreContext db)
     {
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ??
@@ -351,6 +494,13 @@ public class SpawnService : INService
         return $"> The vault contained a **{chestType}**!";
     }
 
+    /// <summary>
+    ///     Handles the gift reward type from a vault.
+    ///     Creates and returns a gift item.
+    /// </summary>
+    /// <param name="user">The user receiving the reward.</param>
+    /// <param name="db">The database context.</param>
+    /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleGiftReward(Bot_User user, EeveeCoreContext db)
     {
         // Implement gift creation logic
@@ -358,6 +508,13 @@ public class SpawnService : INService
             "Its a winter wrapped gift! Oh, it even has a EeveeCore on it... Imagine that!\n\nGifts can be kept and opened or gifted to others as a `Mystery Gift`\nSee `/explain event`";
     }
 
+    /// <summary>
+    ///     Handles the redeem reward type from a vault.
+    ///     Adds redeems to the user's account.
+    /// </summary>
+    /// <param name="user">The user receiving the reward.</param>
+    /// <param name="db">The database context.</param>
+    /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleRedeemReward(Bot_User user, EeveeCoreContext db)
     {
         var redeems = _random.Next(1, 3) + 1;
@@ -366,6 +523,11 @@ public class SpawnService : INService
         return $"The vault contained {redeems} Redeems! Yay!";
     }
 
+    /// <summary>
+    ///     Checks if the Christmas event is currently active.
+    ///     The event affects spawn rates and enables vault spawns.
+    /// </summary>
+    /// <returns>True if the Christmas event is active, false otherwise.</returns>
     private bool IsChristmasEvent()
     {
         var now = DateTime.UtcNow;
@@ -374,6 +536,13 @@ public class SpawnService : INService
         return now >= start && now <= end;
     }
 
+    /// <summary>
+    ///     Gets the appropriate channel for spawning a Pokemon.
+    ///     Handles redirect channels if configured in the guild settings.
+    /// </summary>
+    /// <param name="channel">The original channel where the spawn was triggered.</param>
+    /// <param name="config">The guild configuration.</param>
+    /// <returns>The text channel where the Pokemon should spawn.</returns>
     private async Task<ITextChannel?> GetSpawnChannel(SocketGuildChannel channel, Guild config)
     {
         if (config.Redirects?.Any() != true) return channel as ITextChannel;
@@ -389,6 +558,13 @@ public class SpawnService : INService
         return redirectChannel;
     }
 
+    /// <summary>
+    ///     Validates whether Pokemon can spawn in the specified channel.
+    ///     Checks enabled/disabled channel configurations in the guild settings.
+    /// </summary>
+    /// <param name="channel">The channel to check.</param>
+    /// <param name="config">The guild configuration.</param>
+    /// <returns>True if spawns are allowed in the channel, false otherwise.</returns>
     private static async Task<bool> ValidateChannel(SocketGuildChannel channel, Guild config)
     {
         if (!config.EnableSpawnsAll && !config.EnabledChannels.Contains(channel.Id))
@@ -397,16 +573,33 @@ public class SpawnService : INService
         return !config.DisabledSpawnChannels.Contains(channel.Id);
     }
 
+    /// <summary>
+    ///     Rounds a double value to the nearest integer.
+    /// </summary>
+    /// <param name="value">The value to round.</param>
+    /// <returns>The rounded integer value.</returns>
     private int Round(double value)
     {
         return (int)Math.Round(value);
     }
 
+    /// <summary>
+    ///     Gets a random item from a list.
+    /// </summary>
+    /// <param name="list">The list to select from.</param>
+    /// <returns>A randomly selected item from the list.</returns>
     private string? GetRandomFromList(IReadOnlyList<string?> list)
     {
         return list[_random.Next(list.Count)];
     }
 
+    /// <summary>
+    ///     Checks if a shadow Pokemon should be spawned for a user's hunt.
+    ///     Calculates the chance based on the user's current chain value.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="pokemon">The Pokemon the user is hunting.</param>
+    /// <returns>True if a shadow Pokemon should spawn, false otherwise.</returns>
     private async Task<bool> ShadowHuntCheck(ulong userId, string? pokemon)
     {
         await using var dbContext = await _dbContextProvider.GetContextAsync();
@@ -426,6 +619,15 @@ public class SpawnService : INService
         return makeShadow;
     }
 
+    /// <summary>
+    ///     Creates and sends a spawn message for a Pokemon.
+    ///     Handles different display modes and interaction methods based on guild configuration.
+    /// </summary>
+    /// <param name="channel">The channel to send the spawn message to.</param>
+    /// <param name="pokemonName">The name of the spawned Pokemon.</param>
+    /// <param name="isShiny">Whether the Pokemon is shiny.</param>
+    /// <param name="config">The guild configuration.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task CreateAndSendSpawnMessage(ITextChannel channel, string? pokemonName, bool isShiny, Guild config)
     {
         // Get form info from MongoDB for validation
@@ -482,6 +684,18 @@ public class SpawnService : INService
         }
     }
 
+    /// <summary>
+    ///     Handles message collection for Pokemon catching.
+    ///     Monitors chat for messages containing the Pokemon's name.
+    /// </summary>
+    /// <param name="channel">The channel to monitor.</param>
+    /// <param name="spawnMsg">The spawn message.</param>
+    /// <param name="pokemonName">The name of the spawned Pokemon.</param>
+    /// <param name="isShiny">Whether the Pokemon is shiny.</param>
+    /// <param name="config">The guild configuration.</param>
+    /// <param name="legChance">The legendary spawn chance value.</param>
+    /// <param name="ubChance">The Ultra Beast spawn chance value.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleMessageCollector(ITextChannel channel, IUserMessage spawnMsg, string? pokemonName,
         bool isShiny, Guild config, int legChance, int ubChance)
     {
@@ -574,6 +788,12 @@ public class SpawnService : INService
             }
     }
 
+    /// <summary>
+    ///     Gets the possible name variations for a Pokemon for catching purposes.
+    ///     Includes regional form variations and formatting alternatives.
+    /// </summary>
+    /// <param name="pokemonName">The name of the Pokemon.</param>
+    /// <returns>A list of valid name variations for catching the Pokemon.</returns>
     public List<string> GetCatchOptions(string? pokemonName)
     {
         var options = new List<string?> { pokemonName };
@@ -630,12 +850,23 @@ public class SpawnService : INService
         return options.Select(o => o.ToLower()).ToList();
     }
 
+    /// <summary>
+    ///     Toggles the always spawn flag.
+    ///     Used for testing or special events to force Pokemon spawns.
+    /// </summary>
+    /// <returns>The new state of the always spawn flag.</returns>
     public bool ToggleAlwaysSpawn()
     {
         _alwaysSpawn = !_alwaysSpawn;
         return _alwaysSpawn;
     }
 
+    /// <summary>
+    ///     Gets a random Pokemon of a specific type.
+    ///     Used for spawning Pokemon affected by honey or special events.
+    /// </summary>
+    /// <param name="typeId">The type ID to filter Pokemon by.</param>
+    /// <returns>The name of a randomly selected Pokemon of the specified type.</returns>
     private async Task<string?> GetRandomPokemonOfType(int typeId)
     {
         var pokemonOfType = await _mongoDb.PokemonTypes
@@ -656,6 +887,17 @@ public class SpawnService : INService
         return validForms[_random.Next(validForms.Count)];
     }
 
+    /// <summary>
+    ///     Handles the catching of a Pokemon by a user.
+    ///     Processes reward distribution and creates the Pokemon in the user's collection.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user catching the Pokemon.</param>
+    /// <param name="guildId">The Discord ID of the guild where the catch occurred.</param>
+    /// <param name="pokemonName">The name of the caught Pokemon.</param>
+    /// <param name="isShiny">Whether the Pokemon is shiny.</param>
+    /// <param name="legendChance">The legendary spawn chance value.</param>
+    /// <param name="ubChance">The Ultra Beast spawn chance value.</param>
+    /// <returns>A CatchResult with information about the catch outcome.</returns>
     public async Task<CatchResult> HandleCatch(
         ulong userId,
         ulong guildId,
@@ -740,6 +982,12 @@ public class SpawnService : INService
             (conf?.PinSpawns ?? false) && (legendChance < 2 || ubChance < 2));
     }
 
+    /// <summary>
+    ///     Handles berry drop rewards when catching a Pokemon.
+    ///     Determines if a berry should drop and which type.
+    /// </summary>
+    /// <param name="user">The user who caught the Pokemon.</param>
+    /// <returns>A tuple containing the message about the berry drop and the updated items dictionary.</returns>
     private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(Bot_User user)
     {
         var berryChance = _random.Next(1, 101);
@@ -778,6 +1026,12 @@ public class SpawnService : INService
         return ($"It also dropped a {berry}!", items);
     }
 
+    /// <summary>
+    ///     Gets debug information about spawns for a guild.
+    ///     Used for admin commands to troubleshoot spawn issues.
+    /// </summary>
+    /// <param name="guild">The guild to get spawn information for.</param>
+    /// <returns>A string containing spawn debug information.</returns>
     public async Task<string> GetSpawnDebugInfo(IGuild guild)
     {
         var debugMessages = new List<string>();
@@ -809,6 +1063,19 @@ public class SpawnService : INService
         return string.Join("\n", debugMessages);
     }
 
+    /// <summary>
+    ///     Creates a new Pokemon and adds it to a user's collection.
+    ///     Handles generation of IVs, nature, ability, and other attributes.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user who will own the Pokemon.</param>
+    /// <param name="pokemonName">The name of the Pokemon to create.</param>
+    /// <param name="shiny">Whether the Pokemon should be shiny.</param>
+    /// <param name="boosted">Whether the Pokemon's IVs should be boosted.</param>
+    /// <param name="radiant">Whether the Pokemon should be radiant.</param>
+    /// <param name="skin">The skin to apply to the Pokemon, if any.</param>
+    /// <param name="gender">The gender of the Pokemon, or null for random.</param>
+    /// <param name="level">The level of the Pokemon.</param>
+    /// <returns>The created Pokemon object.</returns>
     public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> CreatePokemon(
         ulong userId,
         string? pokemonName,
@@ -967,6 +1234,14 @@ public class SpawnService : INService
         return pokemon;
     }
 
+    /// <summary>
+    ///     Updates guild spawn settings.
+    ///     Changes configuration options like delete spawns, pin spawns, small images, modal view, or enable all.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <param name="setting">The setting to update.</param>
+    /// <param name="value">The new value for the setting.</param>
+    /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateGuildSetting(ulong guildId, string setting, string? value)
     {
         var update = setting.ToLower() switch
@@ -1011,6 +1286,14 @@ public class SpawnService : INService
             .Build();
     }
 
+    /// <summary>
+    ///     Updates channel spawn settings for a guild.
+    ///     Enables or disables spawns in specific channels.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <param name="channelId">The Discord ID of the channel to update.</param>
+    /// <param name="enable">Whether to enable or disable spawns in the channel.</param>
+    /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateChannelSetting(ulong guildId, ulong channelId, bool enable)
     {
         // First check if the document exists
@@ -1064,6 +1347,14 @@ public class SpawnService : INService
             .Build();
     }
 
+    /// <summary>
+    ///     Updates redirect channels for a guild.
+    ///     Adds or removes channels where Pokemon spawns are redirected to.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <param name="channelId">The Discord ID of the channel to update.</param>
+    /// <param name="add">Whether to add or remove the channel as a redirect.</param>
+    /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateRedirectChannel(ulong guildId, ulong channelId, bool add)
     {
         var update = add
@@ -1083,6 +1374,13 @@ public class SpawnService : INService
             .Build();
     }
 
+    /// <summary>
+    ///     Updates the spawn speed for a guild.
+    ///     Higher values increase spawn frequency.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <param name="speed">The new spawn speed (1-20).</param>
+    /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateSpawnSpeed(ulong guildId, int speed)
     {
         speed = Math.Max(1, Math.Min(20, speed));
@@ -1106,6 +1404,12 @@ public class SpawnService : INService
             .Build();
     }
 
+    /// <summary>
+    ///     Gets the current spawn settings for a guild.
+    ///     Displays all configured options and channel settings.
+    /// </summary>
+    /// <param name="guildId">The Discord ID of the guild.</param>
+    /// <returns>An embed containing the guild's spawn settings.</returns>
     public async Task<Embed> GetGuildSettings(ulong guildId)
     {
         var guild = await _mongoDb.Guilds
@@ -1154,6 +1458,15 @@ public class SpawnService : INService
         return embed.Build();
     }
 
+    /// <summary>
+    ///     Represents the result of a Pokemon catch attempt.
+    ///     Contains information about success, messages, and configured behaviors.
+    /// </summary>
+    /// <param name="Success">Whether the catch was successful.</param>
+    /// <param name="Message">A message describing the result, if applicable.</param>
+    /// <param name="ResponseEmbed">The embed to display in response to the catch.</param>
+    /// <param name="ShouldDeleteSpawn">Whether the spawn message should be deleted.</param>
+    /// <param name="ShouldPinSpawn">Whether the spawn message should be pinned.</param>
     public record CatchResult(
         bool Success,
         string Message,

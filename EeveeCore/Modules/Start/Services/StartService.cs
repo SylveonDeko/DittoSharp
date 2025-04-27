@@ -5,11 +5,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EeveeCore.Modules.Start.Services;
 
+/// <summary>
+///     Provides functionality for user registration and starter Pokémon creation.
+///     Handles the initial setup process for new users.
+/// </summary>
+/// <param name="db">The database context for data access.</param>
+/// <param name="client">The Discord client for messaging.</param>
+/// <param name="svc">The spawn service for creating Pokémon.</param>
 public class StartService(EeveeCoreContext db, DiscordShardedClient client, SpawnService svc) : INService
 {
     /// <summary>
     ///     Handles creating a new user account
     /// </summary>
+    /// <param name="userId">The Discord ID of the user to register.</param>
+    /// <returns>A tuple containing a success indicator and a message.</returns>
     public async Task<(bool Success, string Message)> RegisterNewUser(ulong userId)
     {
         // Check if user already exists
@@ -54,8 +63,11 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
     }
 
     /// <summary>
-    ///     Creates a starter Pokemon for a user
+    ///     Creates a starter Pokémon for a user
     /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="starterName">The name of the selected starter Pokémon.</param>
+    /// <returns>A tuple containing a success indicator and a message.</returns>
     public async Task<(bool Success, string Message)> CreateStarterPokemon(ulong userId, string? starterName)
     {
         try
@@ -77,6 +89,7 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
     /// <summary>
     ///     Gets grass starter options
     /// </summary>
+    /// <returns>A list of select menu options for grass-type starters.</returns>
     public List<SelectMenuOptionBuilder> GetGrassStarterOptions()
     {
         return
@@ -109,6 +122,7 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
     /// <summary>
     ///     Gets water starter options
     /// </summary>
+    /// <returns>A list of select menu options for water-type starters.</returns>
     public List<SelectMenuOptionBuilder> GetWaterStarterOptions()
     {
         return
@@ -142,6 +156,7 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
     /// <summary>
     ///     Gets fire starter options
     /// </summary>
+    /// <returns>A list of select menu options for fire-type starters.</returns>
     public List<SelectMenuOptionBuilder> GetFireStarterOptions()
     {
         return

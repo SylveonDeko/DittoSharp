@@ -4,8 +4,17 @@ using EeveeCore.Modules.Start.Services;
 
 namespace EeveeCore.Modules.Start;
 
+/// <summary>
+///     Provides the initial slash command for starting a user's journey in EeveeCore.
+///     Entry point for new users to begin their Pokémon adventure.
+/// </summary>
 public class StartModule : EeveeCoreSlashModuleBase<StartService>
 {
+    /// <summary>
+    ///     Starts the user's journey in EeveeCore.
+    ///     Displays button options for selecting a starter Pokémon type (Grass, Water, or Fire).
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("start", "Start your journey in EeveeCore!")]
     public async Task StartEeveeCore()
     {

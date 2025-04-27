@@ -3,117 +3,353 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace EeveeCore.Database.Models.PostgreSQL.Bot;
 
+/// <summary>
+/// Represents an inactive user in the EeveeCore Pokémon bot system.
+/// This class stores comprehensive user data for users who are no longer active,
+/// including inventory, Pokémon, progress, and various game-related statistics.
+/// </summary>
 [Table("users_inactive")]
 public class InactiveUser
 {
-    [Column("u_id")] public ulong? UserId { get; set; }
+    /// <summary>
+    /// Gets or sets the Discord user ID of the inactive user.
+    /// </summary>
+    [Column("u_id")]
+    public ulong? UserId { get; set; }
 
-    [Column("redeems")] public int? Redeems { get; set; }
+    /// <summary>
+    /// Gets or sets the number of redeems the user has.
+    /// Redeems can be used to obtain specific Pokémon.
+    /// </summary>
+    [Column("redeems")]
+    public int? Redeems { get; set; }
 
-    [Column("evpoints")] public int? EvPoints { get; set; }
+    /// <summary>
+    /// Gets or sets the number of Evolution Points (EVP) the user has.
+    /// Evolution Points can be used to evolve Pokémon that require special conditions.
+    /// </summary>
+    [Column("evpoints")]
+    public int? EvPoints { get; set; }
 
-    [Column("tnick")] public string? TrainerNickname { get; set; }
+    /// <summary>
+    /// Gets or sets the user's preferred trainer nickname in the game.
+    /// </summary>
+    [Column("tnick")]
+    public string? TrainerNickname { get; set; }
 
-    [Column("upvotepoints")] public int? UpvotePoints { get; set; }
+    /// <summary>
+    /// Gets or sets the number of upvote points the user has earned.
+    /// These points are typically earned through supporting the bot on listing sites.
+    /// </summary>
+    [Column("upvotepoints")]
+    public int? UpvotePoints { get; set; }
 
-    [Column("mewcoins")] public ulong? MewCoins { get; set; }
+    /// <summary>
+    /// Gets or sets the number of MewCoins (in-game currency) the user possesses.
+    /// MewCoins are used for various in-game purchases and transactions.
+    /// </summary>
+    [Column("mewcoins")]
+    public ulong? MewCoins { get; set; }
 
-    [Column("user_order")] public string? UserOrder { get; set; }
+    /// <summary>
+    /// Gets or sets the user's preferred order for displaying Pokémon.
+    /// </summary>
+    [Column("user_order")]
+    public string? UserOrder { get; set; }
 
+    /// <summary>
+    /// Gets or sets the array of Pokémon IDs that the user owns.
+    /// Each ID corresponds to a specific Pokémon in the user's collection.
+    /// </summary>
     [Column("pokes", TypeName = "bigint[]")]
     public long[]? Pokemon { get; set; }
 
+    /// <summary>
+    /// Gets or sets the user's inventory as a JSON string.
+    /// Contains various items the user has collected throughout gameplay.
+    /// </summary>
     [Column("inventory", TypeName = "jsonb")]
     public string? Inventory { get; set; }
 
-    [Column("items", TypeName = "jsonb")] public string? Items { get; set; }
+    /// <summary>
+    /// Gets or sets the user's items as a JSON string.
+    /// This may represent specialized or equipped items separate from the general inventory.
+    /// </summary>
+    [Column("items", TypeName = "jsonb")]
+    public string? Items { get; set; }
 
-    [Column("daycare")] public int? Daycare { get; set; }
+    /// <summary>
+    /// Gets or sets the number of Pokémon currently in the user's daycare.
+    /// </summary>
+    [Column("daycare")]
+    public int? Daycare { get; set; }
 
-    [Column("daycarelimit")] public int? DaycareLimit { get; set; }
+    /// <summary>
+    /// Gets or sets the maximum number of Pokémon the user can place in daycare.
+    /// </summary>
+    [Column("daycarelimit")]
+    public int? DaycareLimit { get; set; }
 
-    [Column("energy")] public int? Energy { get; set; }
+    /// <summary>
+    /// Gets or sets the user's current energy level.
+    /// Energy is consumed when performing various actions in the game.
+    /// </summary>
+    [Column("energy")]
+    public int? Energy { get; set; }
 
-    [Column("held_item")] public string? HeldItem { get; set; }
+    /// <summary>
+    /// Gets or sets the held item for the user's currently selected Pokémon.
+    /// </summary>
+    [Column("held_item")]
+    public string? HeldItem { get; set; }
 
-    [Column("fishing_exp")] public ulong? FishingExp { get; set; }
+    /// <summary>
+    /// Gets or sets the user's fishing experience points.
+    /// Fishing is an activity that can yield Pokémon and items.
+    /// </summary>
+    [Column("fishing_exp")]
+    public ulong? FishingExp { get; set; }
 
-    [Column("fishing_level")] public int? FishingLevel { get; set; }
+    /// <summary>
+    /// Gets or sets the user's fishing skill level.
+    /// Higher levels may provide better rewards or increased success rates.
+    /// </summary>
+    [Column("fishing_level")]
+    public int? FishingLevel { get; set; }
 
-    [Column("energy_hour")] public int? EnergyHour { get; set; }
+    /// <summary>
+    /// Gets or sets the energy points restored per hour.
+    /// </summary>
+    [Column("energy_hour")]
+    public int? EnergyHour { get; set; }
 
-    [Column("fishing_level_cap")] public ulong? FishingLevelCap { get; set; }
+    /// <summary>
+    /// Gets or sets the maximum level cap for fishing.
+    /// </summary>
+    [Column("fishing_level_cap")]
+    public ulong? FishingLevelCap { get; set; }
 
+    /// <summary>
+    /// Gets or sets the array of Pokémon IDs in the user's active party.
+    /// The party typically consists of Pokémon used for battles and other activities.
+    /// </summary>
     [Column("party", TypeName = "bigint[]")]
     public long[]? Party { get; set; }
 
-    [Column("luck")] public int? Luck { get; set; }
+    /// <summary>
+    /// Gets or sets the user's luck value.
+    /// Luck may influence various random elements in the game such as encounter rates or successful captures.
+    /// </summary>
+    [Column("luck")]
+    public int? Luck { get; set; }
 
+    /// <summary>
+    /// Gets or sets the user's relationships with NPCs in the game as a JSON string.
+    /// These relationships may influence interactions, quests, or rewards.
+    /// </summary>
     [Column("npc_relationships", TypeName = "jsonb")]
     public string? NpcRelationships { get; set; }
 
-    [Column("selected")] public int? Selected { get; set; }
+    /// <summary>
+    /// Gets or sets the index of the currently selected Pokémon in the user's collection.
+    /// </summary>
+    [Column("selected")]
+    public int? Selected { get; set; }
 
-    [Column("visible")] public bool? Visible { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user's profile is visible to others.
+    /// </summary>
+    [Column("visible")]
+    public bool? Visible { get; set; }
 
-    [Column("silenced")] public bool? Silenced { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is silenced.
+    /// Silenced users may have limited communication abilities.
+    /// </summary>
+    [Column("silenced")]
+    public bool? Silenced { get; set; }
 
-    [Column("tradelock")] public bool? TradeLock { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is prevented from trading.
+    /// </summary>
+    [Column("tradelock")]
+    public bool? TradeLock { get; set; }
 
-    [Column("voted")] public bool? Voted { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user has voted for the bot recently.
+    /// </summary>
+    [Column("voted")]
+    public bool? Voted { get; set; }
 
-    [Key] [Column("id")] public int? Id { get; set; }
+    /// <summary>
+    /// Gets or sets the unique identifier for this user record in the database.
+    /// </summary>
+    [Key]
+    [Column("id")]
+    public int? Id { get; set; }
 
-    [Column("restored")] public bool? Restored { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user's data has been restored from a backup.
+    /// </summary>
+    [Column("restored")]
+    public bool? Restored { get; set; }
 
-    [Column("bike")] public bool? Bike { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user owns a bike.
+    /// Bikes may provide advantages such as faster movement or access to specific areas.
+    /// </summary>
+    [Column("bike")]
+    public bool? Bike { get; set; }
 
-    [Column("botbanned")] public bool? BotBanned { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is banned from using the bot.
+    /// </summary>
+    [Column("botbanned")]
+    public bool? BotBanned { get; set; }
 
-    [Column("marketlimit")] public int? MarketLimit { get; set; }
+    /// <summary>
+    /// Gets or sets the maximum number of Pokémon the user can have on the market at once.
+    /// </summary>
+    [Column("marketlimit")]
+    public int? MarketLimit { get; set; }
 
-    [Column("staff")] public string? Staff { get; set; }
+    /// <summary>
+    /// Gets or sets the staff role or permissions of the user, if any.
+    /// </summary>
+    [Column("staff")]
+    public string? Staff { get; set; }
 
-    [Column("gym_leader")] public bool? GymLeader { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is a Gym Leader in the game.
+    /// </summary>
+    [Column("gym_leader")]
+    public bool? GymLeader { get; set; }
 
-    [Column("oxiconverted")] public bool? OxiConverted { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user's data has been converted from a previous system.
+    /// </summary>
+    [Column("oxiconverted")]
+    public bool? OxiConverted { get; set; }
 
-    [Column("event")] public int? Event { get; set; }
+    /// <summary>
+    /// Gets or sets the user's participation status in the current event.
+    /// </summary>
+    [Column("event")]
+    public int? Event { get; set; }
 
-    [Column("last_vote")] public int? LastVote { get; set; }
+    /// <summary>
+    /// Gets or sets the timestamp of the user's last vote for the bot.
+    /// </summary>
+    [Column("last_vote")]
+    public int? LastVote { get; set; }
 
-    [Column("vote_streak")] public int? VoteStreak { get; set; }
+    /// <summary>
+    /// Gets or sets the user's current vote streak.
+    /// Consecutive votes may provide increasing rewards.
+    /// </summary>
+    [Column("vote_streak")]
+    public int? VoteStreak { get; set; }
 
-    [Column("skins", TypeName = "jsonb")] public string? Skins { get; set; }
+    /// <summary>
+    /// Gets or sets the user's collection of Pokémon skins as a JSON string.
+    /// </summary>
+    [Column("skins", TypeName = "jsonb")]
+    public string? Skins { get; set; }
 
+    /// <summary>
+    /// Gets or sets the user's holiday or event-specific inventory as a JSON string.
+    /// </summary>
     [Column("holidayinv", TypeName = "jsonb")]
     public string? HolidayInventory { get; set; }
 
-    [Column("raffle")] public int? Raffle { get; set; }
+    /// <summary>
+    /// Gets or sets the number of raffle tickets the user has.
+    /// </summary>
+    [Column("raffle")]
+    public int? Raffle { get; set; }
 
-    [Column("region")] public string? Region { get; set; }
+    /// <summary>
+    /// Gets or sets the user's current game region.
+    /// Different regions may contain different Pokémon and features.
+    /// </summary>
+    [Column("region")]
+    public string? Region { get; set; }
 
-    [Column("hunt")] public string? Hunt { get; set; }
+    /// <summary>
+    /// Gets or sets the Pokémon the user is currently hunting.
+    /// Hunting may provide increased chances of encountering a specific Pokémon.
+    /// </summary>
+    [Column("hunt")]
+    public string? Hunt { get; set; }
 
-    [Column("chain")] public int? Chain { get; set; }
+    /// <summary>
+    /// Gets or sets the user's current encounter chain length.
+    /// Longer chains may increase the chances of finding rare or shiny Pokémon.
+    /// </summary>
+    [Column("chain")]
+    public int? Chain { get; set; }
 
-    [Column("patreon_override")] public string? PatreonOverride { get; set; }
+    /// <summary>
+    /// Gets or sets a manual override for the user's Patreon status or tier.
+    /// </summary>
+    [Column("patreon_override")]
+    public string? PatreonOverride { get; set; }
 
-    [Column("note")] public string? Note { get; set; }
+    /// <summary>
+    /// Gets or sets an administrative note about the user.
+    /// </summary>
+    [Column("note")]
+    public string? Note { get; set; }
 
-    [Column("skin_tokens")] public int? SkinTokens { get; set; }
+    /// <summary>
+    /// Gets or sets the number of skin tokens the user has.
+    /// Skin tokens can be used to purchase Pokémon skins.
+    /// </summary>
+    [Column("skin_tokens")]
+    public int? SkinTokens { get; set; }
 
-    [Column("comp")] public bool? Comp { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is participating in competitions.
+    /// </summary>
+    [Column("comp")]
+    public bool? Comp { get; set; }
 
-    [Column("show_donations")] public bool? ShowDonations { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether to display the user's donations publicly.
+    /// </summary>
+    [Column("show_donations")]
+    public bool? ShowDonations { get; set; }
 
-    [Column("mystery_token")] public int? MysteryToken { get; set; }
+    /// <summary>
+    /// Gets or sets the number of mystery tokens the user has.
+    /// Mystery tokens may be used for special rewards or features.
+    /// </summary>
+    [Column("mystery_token")]
+    public int? MysteryToken { get; set; }
 
-    [Column("event_skin_tokens")] public int? EventSkinTokens { get; set; }
+    /// <summary>
+    /// Gets or sets the number of event-specific skin tokens the user has.
+    /// These tokens may be limited to event-specific skins.
+    /// </summary>
+    [Column("event_skin_tokens")]
+    public int? EventSkinTokens { get; set; }
 
-    [Column("os_rep")] public int? OsRep { get; set; }
+    /// <summary>
+    /// Gets or sets the user's reputation in the OS (Operating System) community.
+    /// </summary>
+    [Column("os_rep")]
+    public int? OsRep { get; set; }
 
-    [Column("wombo_ticket")] public int? WomboTicket { get; set; }
+    /// <summary>
+    /// Gets or sets the number of Wombo tickets the user has.
+    /// These may be used for special features or rewards.
+    /// </summary>
+    [Column("wombo_ticket")]
+    public int? WomboTicket { get; set; }
 
-    [Column("active")] public bool? Active { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is currently active in the system.
+    /// </summary>
+    [Column("active")]
+    public bool? Active { get; set; }
 }

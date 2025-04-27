@@ -1,7 +1,15 @@
 namespace EeveeCore.Modules.Spawn.Constants;
 
+/// <summary>
+///     Contains categorized lists of Pokemon names for spawn mechanics.
+///     Provides static collections for different Pokemon categories used in the spawn system.
+/// </summary>
 public static class PokemonList
 {
+    /// <summary>
+    ///     List of legendary Pokemon names.
+    ///     Used for determining rare spawns in the game.
+    /// </summary>
     public static List<string?> LegendList =
     [
         "Enamorus",
@@ -130,6 +138,10 @@ public static class PokemonList
         "Ogerpon"
     ];
 
+    /// <summary>
+    ///     List of starter Pokemon names.
+    ///     Includes starter Pokemon from all regions and their evolutions.
+    /// </summary>
     public static List<string?> starterList =
     [
         "Grookey",
@@ -219,6 +231,10 @@ public static class PokemonList
         "Quaquaval"
     ];
 
+    /// <summary>
+    ///     List of pseudo-legendary Pokemon names.
+    ///     Includes Pokemon with high base stat totals that are not classified as legendary.
+    /// </summary>
     public static List<string?> pseudoList =
     [
         "Deino",
@@ -260,6 +276,10 @@ public static class PokemonList
         "Baxcalibur"
     ];
 
+    /// <summary>
+    ///     List of standard Pokemon names.
+    ///     Used for common spawns in the game.
+    /// </summary>
     public static List<string?> pList =
     [
         "Skwovet",
@@ -1168,6 +1188,10 @@ public static class PokemonList
         "Dipplin"
     ];
 
+    /// <summary>
+    ///     List of Ultra Beast Pokemon names.
+    ///     A special category of legendary-like Pokemon from Ultra Space.
+    /// </summary>
     public static List<string?> ubList =
     [
         "Nihilego",
