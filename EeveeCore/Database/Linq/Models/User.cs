@@ -114,7 +114,7 @@ public class User
     /// The party consists of up to 6 Pokémon used for battles and other activities.
     /// </summary>
     [Column("party", TypeName = "biglong[]")]
-    public long[]? Party { get; set; } = [0, 0, 0, 0, 0, 0];
+    public int[]? Party { get; set; } = [0, 0, 0, 0, 0, 0];
 
     /// <summary>
     /// Gets or sets the number of Pokémon currently in the user's daycare.
