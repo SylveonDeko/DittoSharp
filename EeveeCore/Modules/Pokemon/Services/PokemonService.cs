@@ -880,8 +880,8 @@ public class PokemonService(
 
             var userPokemonIds = new HashSet<int>(userData.Pokemon);
             var partyLookup = userData.Party != null
-                ? new HashSet<long>(userData.Party.Where(id => id != 0))
-                : new HashSet<long>();
+                ? new HashSet<int>(userData.Party.Where(id => id != 0))
+                : new HashSet<int>();
              var indexLookup = userData.Pokemon
                 .Select((id, index) => new { Id = id, Number = index + 1 })
                 .ToDictionary(item => item.Id, item => item.Number);
