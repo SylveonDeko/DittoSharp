@@ -4,17 +4,17 @@ using MongoDB.Bson.Serialization;
 namespace EeveeCore.Common.Mongo;
 
 /// <summary>
-/// Custom MongoDB BSON serializer for nullable integers that handles various input types.
+///     Custom MongoDB BSON serializer for nullable integers that handles various input types.
 /// </summary>
 public class NullableIntSerializer : IBsonSerializer<int?>
 {
     /// <summary>
-    /// Gets the type of value that this serializer supports.
+    ///     Gets the type of value that this serializer supports.
     /// </summary>
     public Type ValueType => typeof(int?);
 
     /// <summary>
-    /// Deserializes a BSON value to a nullable integer.
+    ///     Deserializes a BSON value to a nullable integer.
     /// </summary>
     /// <param name="context">The deserialization context.</param>
     /// <param name="args">The deserialization arguments.</param>
@@ -43,7 +43,7 @@ public class NullableIntSerializer : IBsonSerializer<int?>
     }
 
     /// <summary>
-    /// Serializes a nullable integer to BSON.
+    ///     Serializes a nullable integer to BSON.
     /// </summary>
     /// <param name="context">The serialization context.</param>
     /// <param name="args">The serialization arguments.</param>
@@ -57,7 +57,7 @@ public class NullableIntSerializer : IBsonSerializer<int?>
     }
 
     /// <summary>
-    /// Deserializes a BSON value to an object.
+    ///     Deserializes a BSON value to an object.
     /// </summary>
     /// <param name="context">The deserialization context.</param>
     /// <param name="args">The deserialization arguments.</param>
@@ -68,7 +68,7 @@ public class NullableIntSerializer : IBsonSerializer<int?>
     }
 
     /// <summary>
-    /// Serializes an object to BSON.
+    ///     Serializes an object to BSON.
     /// </summary>
     /// <param name="context">The serialization context.</param>
     /// <param name="args">The serialization arguments.</param>

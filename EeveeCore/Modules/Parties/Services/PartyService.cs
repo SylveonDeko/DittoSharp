@@ -1,4 +1,5 @@
 using System.Text;
+using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,9 +10,9 @@ namespace EeveeCore.Modules.Parties.Services;
 ///     Handles operations for creating, viewing, and modifying parties,
 ///     with support for saving multiple party configurations.
 /// </summary>
-/// <param name="db">The database context for accessing party and user data.</param>
+/// <param name="dbContext">The database context for accessing party and user data.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : INService
+public class PartyService(DbContextProvider dbContext, DiscordShardedClient client) : INService
 {
     /// <summary>
     ///     Dictionary storing paged results for users viewing party data.
@@ -85,6 +86,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         Task<(string Description, ulong[] Party, ulong[] PartyPokeIds, int[] PokemonIndices, string[] PokemonNames)>
         GetPartySetupData(ulong userId, string partyName)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Initialize arrays for pokemon data
         var pokemonNames = new string?[6] { "None", "None", "None", "None", "None", "None" };
         var pokemonIndices = new int[6] { 0, 0, 0, 0, 0, 0 };
@@ -130,30 +133,29 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
             party.Slot6 ?? 0
         };
 
-        // Get the user's Pokemon collection to find indices
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
+        // Process each Pokemon in the party
+        for (var i = 0; i < 6; i++)
+        {
+            if (partyPokemonIds[i] <= 0)
+                continue;
 
-        if (user?.Pokemon != null)
-            for (var i = 0; i < 6; i++)
+            // Get the Pokemon's name
+            var pokemon = await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == partyPokemonIds[i]);
+
+            if (pokemon != null)
             {
-                if (partyPokemonIds[i] <= 0)
-                    continue;
+                pokemonNames[i] = pokemon.PokemonName;
+                partyPokeIds[i] = pokemon.Id;
 
-                // Get the Pokemon's name and position in the user's collection
-                var pokemon = await db.UserPokemon
-                    .FirstOrDefaultAsync(p => p.Id == partyPokemonIds[i]);
+                // Find the Pokemon's index in the user's collection using the ownership table
+                var ownership = await db.UserPokemonOwnerships
+                    .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemon.Id);
 
-                if (pokemon != null)
-                {
-                    pokemonNames[i] = pokemon.PokemonName;
-                    partyPokeIds[i] = pokemon.Id;
-
-                    // Find the Pokemon's index in the user's collection
-                    var index = Array.IndexOf(user.Pokemon, pokemon.Id);
-                    if (index != -1) pokemonIndices[i] = index + 1; // Add 1 for user-friendly indexing
-                }
+                if (ownership != null)
+                    pokemonIndices[i] = ownership.Position + 1; // Add 1 for user-friendly indexing
             }
+        }
 
         // Build the table for display
         var table = new List<List<string?>>
@@ -185,6 +187,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<EmbedBuilder> GetPartyViewEmbed(ulong userId, string partyName = null)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         var embed = new EmbedBuilder()
             .WithTitle($"Party Info: {partyName}")
             .WithColor(new Color(0xEE, 0xE6, 0x47));
@@ -211,7 +215,13 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
                     if (pokemon != null)
                     {
                         pokemonName = pokemon.PokemonName;
-                        pokemonIndex = Array.IndexOf(user.Pokemon, pokemonId) + 1;
+
+                        // Find the Pokemon's index by querying the ownership table
+                        var ownership = await db.UserPokemonOwnerships
+                            .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
+
+                        if (ownership != null)
+                            pokemonIndex = ownership.Position + 1; // Convert to 1-based indexing
                     }
                 }
 
@@ -239,9 +249,6 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
                 party.Slot6
             };
 
-            var user = await db.Users
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-
             for (var i = 0; i < partySlots.Length; i++)
             {
                 var pokemonId = partySlots[i];
@@ -253,10 +260,16 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
                     var pokemon = await db.UserPokemon
                         .FirstOrDefaultAsync(p => p.Id == pokemonId.Value);
 
-                    if (pokemon != null && user?.Pokemon != null)
+                    if (pokemon != null)
                     {
                         pokemonName = pokemon.PokemonName;
-                        pokemonIndex = Array.IndexOf(user.Pokemon, pokemonId.Value) + 1;
+
+                        // Find the Pokemon's index by querying the ownership table
+                        var ownership = await db.UserPokemonOwnerships
+                            .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId.Value);
+
+                        if (ownership != null)
+                            pokemonIndex = ownership.Position + 1; // Convert to 1-based indexing
                     }
                 }
 
@@ -289,6 +302,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         // Adjust slot for zero-based indexing
         var slotIndex = slot - 1;
 
+        await using var db = await dbContext.GetContextAsync();
+
         // Check if user exists
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == userId);
@@ -299,10 +314,17 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         ulong pokemonId;
         if (pokeIndex > 0)
         {
-            // Use the specified Pokemon index
-            if (pokeIndex > user.Pokemon.Length)
+            // Use the specified Pokemon index - convert from 1-based to 0-based
+            var position = pokeIndex - 1;
+
+            // Find the Pokemon using the ownership table
+            var ownership = await db.UserPokemonOwnerships
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
+
+            if (ownership == null)
                 return (false, "Invalid Pokemon ID. You don't have that many Pokemon.");
-            pokemonId = user.Pokemon[pokeIndex - 1];
+
+            pokemonId = ownership.PokemonId;
         }
         else
         {
@@ -349,6 +371,9 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
         // Adjust slot for zero-based indexing
         var slotIndex = slot - 1;
 
+        await using var db = await dbContext.GetContextAsync();
+
+
         // Check if user exists and has started
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == userId);
@@ -384,6 +409,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<(bool Success, string Message)> RegisterParty(ulong userId, string partyName)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Check if user exists
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == userId);
@@ -437,6 +464,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<bool> DoesPartyExist(ulong userId, string partyName)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         return await db.Parties
             .AnyAsync(p => p.UserId == userId && p.Name == partyName);
     }
@@ -453,6 +482,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<(bool Success, string Message)> DeregisterParty(ulong userId, string partyName)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Find the party
         var party = await db.Parties
             .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == partyName);
@@ -478,6 +509,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<(bool Success, string Message)> LoadParty(ulong userId, string partyName)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Find the party
         var party = await db.Parties
             .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == partyName);
@@ -517,6 +550,8 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     /// </returns>
     public async Task<List<string>> GetUserParties(ulong userId)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         var parties = await db.Parties
             .Where(p => p.UserId == userId)
             .Select(p => p.Name)
@@ -542,17 +577,25 @@ public class PartyService(EeveeCoreContext db, DiscordShardedClient client) : IN
     {
         try
         {
-            // Check if the Pokemon exists
+            await using var db = await dbContext.GetContextAsync();
+
+            // Check if the user exists
             var user = await db.Users
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
-            if (user == null || user.Pokemon == null)
+            if (user == null)
                 return (false, "You have not started!\nStart with `/start` first!");
 
-            if (pokeIndex <= 0 || pokeIndex > user.Pokemon.Length)
+            // Find the Pokemon using the ownership table instead of array indexing
+            var position = pokeIndex - 1; // Convert from 1-based to 0-based
+
+            var ownership = await db.UserPokemonOwnerships
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
+
+            if (ownership == null)
                 return (false, "Invalid ID Provided\nPlease try again.");
 
-            var pokemonId = user.Pokemon[pokeIndex - 1];
+            var pokemonId = ownership.PokemonId;
 
             // Check if the Pokemon exists in the user's collection
             var pokemon = await db.UserPokemon

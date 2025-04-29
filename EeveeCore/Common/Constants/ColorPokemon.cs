@@ -1,12 +1,12 @@
 namespace EeveeCore.Common.Constants;
 
 /// <summary>
-/// Provides collections of Pokemon categorized by their primary color.
+///     Provides collections of Pokemon categorized by their primary color.
 /// </summary>
 public static class ColorPokemon
 {
     /// <summary>
-    /// Gets a collection of Pokemon names that have green as their primary color.
+    ///     Gets a collection of Pokemon names that have green as their primary color.
     /// </summary>
     public static readonly HashSet<string> GreenPokemon =
     [

@@ -1,3 +1,4 @@
+using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,9 +9,9 @@ namespace EeveeCore.Modules.Parties.Services;
 ///     Handles operations for adding, removing, and monitoring eggs in different hatchery groups
 ///     with varying incubation rates and slot limits based on user's Patreon tier.
 /// </summary>
-/// <param name="db">The database context for accessing egg and user data.</param>
+/// <param name="dbContext">The database context for accessing egg and user data.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) : INService
+public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient client) : INService
 {
     private const string PremiumX2Icon = "<:premiumX2:1064764945578852382>";
     private const string PremiumX3Icon = "<:premiumX3:1064764942848376893>";
@@ -122,7 +123,7 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
                 break;
         }
 
-        embed.AddField("Max Egg Slots", maxMsg, false);
+        embed.AddField("Max Egg Slots", maxMsg);
 
         // Add footer based on group
         switch (group)
@@ -161,6 +162,7 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     {
         try
         {
+            await using var db = await dbContext.GetContextAsync();
             // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
 
@@ -176,20 +178,18 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
                     return (false, "You must be a Crystal Patreon to add eggs to slots 8-10.");
             }
 
-            // Get the user and check if they exist
-            var user = await db.Users
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+            // Convert from 1-based to 0-based indexing
+            var position = eggIndex - 1;
 
-            if (user == null || user.Pokemon == null || user.Pokemon.Length == 0)
-                return (false, "You have not started or don't have any Pokémon.");
+            // Get the egg from the ownership table by position
+            var ownership = await db.UserPokemonOwnerships
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
 
-            // Check if the provided index is valid
-            if (eggIndex <= 0 || eggIndex > user.Pokemon.Length) return (false, "Invalid egg index.");
+            if (ownership == null)
+                return (false, "Invalid egg index.");
 
-            // Get the egg ID from the user's collection
-            var eggId = user.Pokemon[eggIndex - 1];
-
-            // Check if the Pokémon is actually an egg
+            // Get the egg Pokémon
+            var eggId = ownership.PokemonId;
             var egg = await db.UserPokemon
                 .FirstOrDefaultAsync(p => p.Id == eggId && p.PokemonName == "Egg");
 
@@ -281,6 +281,8 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     {
         try
         {
+            await using var db = await dbContext.GetContextAsync();
+
             // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
 
@@ -399,6 +401,8 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     {
         try
         {
+            await using var db = await dbContext.GetContextAsync();
+
             // Find which slots these eggs are in
             var hatcheries = await db.EggHatcheries
                 .Where(h => h.UserId == userId)
@@ -717,6 +721,8 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
             List<(int SlotNumber, string EggName, int? PokemonNumber, int StepCounter)>
             )> GetHatcheryData(ulong userId, short group, PatreonTier patreonTier)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Get max slots based on Patreon tier
         var maxSlots = patreonTier switch
         {
@@ -741,12 +747,6 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
             await db.SaveChangesAsync();
         }
 
-        // Get user's Pokemon collection for finding indices
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
-
-        if (user?.Pokemon == null) return (0, maxSlots, new List<(int, string, int?, int)>());
-
         // Get all slots data
         var slotData = new List<(int SlotNumber, string EggName, int? PokemonNumber, int StepCounter)>();
         var availableSlots = 0;
@@ -761,7 +761,12 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
 
                 if (pokemon != null)
                 {
-                    var pokemonIndex = Array.IndexOf(user.Pokemon, eggId.Value) + 1;
+                    // Find the Pokemon's index by querying the ownership table
+                    var ownership = await db.UserPokemonOwnerships
+                        .Where(o => o.UserId == userId && o.PokemonId == eggId.Value)
+                        .FirstOrDefaultAsync();
+
+                    var pokemonIndex = ownership != null ? ownership.Position + 1 : -1; // Convert to 1-based if found
                     slotData.Add((slotNumber, pokemon.Name, pokemonIndex, pokemon.Counter ?? 0));
                 }
                 else
@@ -809,6 +814,8 @@ public class HatcheryService(EeveeCoreContext db, DiscordShardedClient client) :
     /// </returns>
     private async Task<PatreonTier> GetPatreonTier(ulong userId)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         var user = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => new { u.Patreon, u.PatreonOverride })

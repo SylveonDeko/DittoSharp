@@ -2,6 +2,11 @@ namespace EeveeCore.Modules.Duels.Impl.Move;
 
 public partial class Move
 {
+    private static readonly int[] sourceArray2 = [340, 351];
+    private static readonly int[] sourceArray1 = [112, 117, 356, 362, 384, 454, 488, 499];
+    private static readonly string[] sourceArray0 = ["h-rain", "h-sun", "h-wind"];
+    private static readonly int[] sourceArray = [116, 137, 138, 165];
+
     /// <summary>
     ///     Checks if the move hits a semi-invulnerable pokemon.
     /// </summary>
@@ -117,11 +122,6 @@ public partial class Move
 
         return (true, msg);
     }
-
-    private static readonly int[] sourceArray2 = [340, 351];
-    private static readonly int[] sourceArray1 = [112, 117, 356, 362, 384, 454, 488, 499];
-    private static readonly string[] sourceArray0 = ["h-rain", "h-sun", "h-wind"];
-    private static readonly int[] sourceArray = [116, 137, 138, 165];
 
     /// <summary>
     ///     Checks if this move hits based on accuracy.
@@ -561,7 +561,7 @@ public partial class Move
         }
 
         if (sourceArray.Contains(Effect) &&
-sourceArray0.Contains(battle.Weather.Get()))
+            sourceArray0.Contains(battle.Weather.Get()))
             return false;
 
         if ((new[] { 8, 420, 444 }.Contains(Effect) && new[] { Ability.DAMP }.Contains(attacker.Ability())) ||

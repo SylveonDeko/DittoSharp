@@ -21,12 +21,66 @@ namespace EeveeCore.Modules.Extras;
 /// </summary>
 public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 {
-    private readonly IMongoService _mongoService;
-    private readonly DbContextProvider _dbContextProvider;
-    private readonly GuildSettingsService _guildSettingsService;
-    private readonly PokemonService _pokemonService;
-    private readonly Random _random = new();
-    private bool _hidden;
+    /// <summary>
+    ///     Region enumeration for the region command.
+    /// </summary>
+    public enum Regions
+    {
+        /// <summary>
+        ///     Original Kanto region.
+        /// </summary>
+        Original = 1,
+
+        /// <summary>
+        ///     Alola region.
+        /// </summary>
+        Alola = 2,
+
+        /// <summary>
+        ///     Galar region.
+        /// </summary>
+        Galar = 3,
+
+        /// <summary>
+        ///     Hisui region.
+        /// </summary>
+        Hisui = 4,
+
+        /// <summary>
+        ///     Paldea region.
+        /// </summary>
+        Paldea = 5
+    }
+
+    /// <summary>
+    ///     Enum representing the different fishing rod types.
+    /// </summary>
+    public enum Rods
+    {
+        /// <summary>Old fishing rod.</summary>
+        Old = 1,
+
+        /// <summary>New fishing rod.</summary>
+        New = 2,
+
+        /// <summary>Good fishing rod.</summary>
+        Good = 3,
+
+        /// <summary>Super fishing rod.</summary>
+        Super = 4,
+
+        /// <summary>Ultra fishing rod.</summary>
+        Ultra = 5,
+
+        /// <summary>Supreme fishing rod.</summary>
+        Supreme = 6,
+
+        /// <summary>Epic fishing rod.</summary>
+        Epic = 7,
+
+        /// <summary>Master fishing rod.</summary>
+        Master = 8
+    }
 
     private static readonly HashSet<ulong> Bitches = [];
     private static readonly HashSet<ulong> MegaBitches = [334155028170407949];
@@ -76,6 +130,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
     // List of all Pokémon
     private static readonly List<string> TotalList = [];
+    private readonly DbContextProvider _dbContextProvider;
+    private readonly GuildSettingsService _guildSettingsService;
+    private readonly IMongoService _mongoService;
+    private readonly PokemonService _pokemonService;
+    private readonly Random _random = new();
+    private bool _hidden;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ExtrasModule" /> class.
@@ -112,7 +172,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    /// Handles the interaction when the "Chest" button is clicked on the balance display.
+    ///     Handles the interaction when the "Chest" button is clicked on the balance display.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("chest_button", true)]
@@ -123,7 +183,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    /// Handles the interaction when the "Misc" button is clicked on the balance display.
+    ///     Handles the interaction when the "Misc" button is clicked on the balance display.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("misc_button", true)]
@@ -134,7 +194,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    /// Handles the interaction when the "Radiant Tokens" button is clicked on the balance display.
+    ///     Handles the interaction when the "Radiant Tokens" button is clicked on the balance display.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     [ComponentInteraction("tokens_button", true)]
@@ -142,6 +202,698 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     {
         await DeferAsync();
         await BalanceTokens(ctx.User);
+    }
+
+    /// <summary>
+    ///     Sets the user's active region, which affects regional Pokémon forms.
+    /// </summary>
+    /// <param name="location">The region to set.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("region", "Set your region, affects your pokemon's regional evolutions")]
+    public async Task Region(Regions location)
+    {
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        await db.Users.Where(u => u.UserId == ctx.User.Id)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.Region, location.ToString().ToLower()));
+
+        await db.SaveChangesAsync();
+
+        await RespondAsync($"Your region has been set to **{location.ToString().Capitalize()}**.", ephemeral: true);
+    }
+
+    /// <summary>
+    ///     Sets the trainer nickname for the user.
+    /// </summary>
+    /// <param name="name">The nickname to set.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("trainernick", "Sets your trainer nickname for use in global leaderboards and other users")]
+    public async Task TrainerNick(string name)
+    {
+        if (name.Contains("@here") || name.Contains("@everyone") || name.Contains("http"))
+        {
+            await RespondAsync("Nope.");
+            return;
+        }
+
+        if (name.Length > 18)
+        {
+            await RespondAsync("Trainer nick too long!");
+            return;
+        }
+
+        if (Regex.IsMatch(name, @"^[ -~]*$") == false)
+        {
+            await RespondAsync("Unicode characters cannot be used in your trainer nick.");
+            return;
+        }
+
+        if (name.Contains("|"))
+        {
+            await RespondAsync("`|` cannot be used in your trainer nick.");
+            return;
+        }
+
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var userNick = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => u.TrainerNickname)
+            .FirstOrDefaultAsyncEF();
+
+        if (userNick != null)
+        {
+            await RespondAsync("You have already set your trainer nick.");
+            return;
+        }
+
+        var existingUser = await db.Users
+            .Where(u => u.TrainerNickname == name)
+            .Select(u => u.UserId)
+            .FirstOrDefaultAsyncEF();
+
+        if (existingUser != 0)
+        {
+            await RespondAsync("That nick is already taken. Try another one.");
+            return;
+        }
+
+        await db.Users.Where(u => u.UserId == ctx.User.Id)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.TrainerNickname, name));
+
+        await db.SaveChangesAsync();
+
+        await RespondAsync("Successfully Changed Trainer Nick");
+    }
+
+    /// <summary>
+    ///     Sets the Pokémon the user is hunting for shadow encounters.
+    /// </summary>
+    /// <param name="pokemon">The Pokémon to hunt.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("hunt", "Set a Pokemon to hunt for shadow encounters")]
+    public async Task Hunt(string pokemon)
+    {
+        pokemon = pokemon.Capitalize();
+
+        if (!TotalList.Contains(pokemon))
+        {
+            await RespondAsync("You have chosen an invalid Pokemon.");
+            return;
+        }
+
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var userData = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => new { u.Hunt, u.Chain })
+            .FirstOrDefaultAsyncEF();
+
+        if (userData == null)
+        {
+            await RespondAsync("You have not started!\nStart with `/start` first.");
+            return;
+        }
+
+        var hunt = userData.Hunt;
+        var chain = userData.Chain;
+
+        if (hunt == pokemon)
+        {
+            await RespondAsync("You are already hunting that pokemon!");
+            return;
+        }
+
+        var addChain = 0;
+
+        if (chain > 0 && !string.IsNullOrEmpty(hunt))
+        {
+            // This would normally use ConfirmView which we don't have available
+            var confirmed = await PromptUserConfirmAsync(
+                $"Are you sure you want to abandon your hunt for **{hunt}**?\nYou will lose your streak of **{chain}**.",
+                ctx.User.Id
+            );
+
+            if (!confirmed) return;
+        }
+        else if (chain > 0 && string.IsNullOrEmpty(hunt))
+        {
+            addChain = 500;
+            await RespondAsync("Binding loose chain to new Pokemon.");
+        }
+
+        await db.Users.Where(u => u.UserId == ctx.User.Id)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.Hunt, pokemon)
+                .SetProperty(x => x.Chain, addChain));
+
+        await db.SaveChangesAsync();
+
+        var embed = new EmbedBuilder()
+            .WithTitle("Shadow Hunt")
+            .WithDescription($"Successfully changed shadow hunt selection to **{pokemon}**.")
+            .WithColor(new Color(0xFFB6C1));
+
+        // This would normally call a method to get the Pokemon image
+        // embed.WithImageUrl(await GetPokemonImage(pokemon, skin: "shadow"));
+
+        await RespondAsync(embed: embed.Build());
+
+        // Log the hunt change
+        var logChannel = (IMessageChannel)await ctx.Client.GetChannelAsync(1005559143886766121);
+        await logChannel.SendMessageAsync($"`{ctx.User.Id} - {hunt} @ {chain}x -> {pokemon}`");
+    }
+
+    /// <summary>
+    ///     Equips a fishing rod from the user's bag.
+    /// </summary>
+    /// <param name="fishingRod">The type of fishing rod to equip.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("equip", "Equip a fishing pole from your bag")]
+    public async Task EquipFishingRod(Rods fishingRod)
+    {
+        var normalizedItem = fishingRod.ToString().ToLower() + "-rod";
+        string[] rods =
+            ["old-rod", "new-rod", "good-rod", "super-rod", "ultra-rod", "supreme-rod", "master-rod", "epic-rod"];
+
+        if (!rods.Contains(normalizedItem))
+        {
+            await RespondAsync("Not a valid Fishing rod, please try again.", ephemeral: true);
+            return;
+        }
+
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == ctx.User.Id);
+        if (user == null)
+        {
+            await RespondAsync("You have not Started!\nStart with `/start` first!", ephemeral: true);
+            return;
+        }
+
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
+                        new Dictionary<string, int>();
+
+        if (!inventory.TryGetValue(normalizedItem, out var count) || count < 1)
+        {
+            await RespondAsync($"You don't have {fishingRod.ToString()} rod in your inventory.", ephemeral: true);
+            return;
+        }
+
+        var fishLevel = user.FishingLevel ?? 0;
+
+        if (normalizedItem == "supreme-rod" && fishLevel < 105)
+        {
+            await RespondAsync("You need to be fishing level 105 to use this item!");
+            return;
+        }
+
+        if (normalizedItem == "epic-rod" && fishLevel < 150)
+        {
+            await RespondAsync("You need to be fishing level 150 to use this item!");
+            return;
+        }
+
+        if (normalizedItem == "master-rod" && fishLevel < 200)
+        {
+            await RespondAsync("You need to be fishing level 200 to use this item!");
+            return;
+        }
+
+        await db.Users.Where(u => u.UserId == ctx.User.Id)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.HeldItem, normalizedItem));
+
+        await db.SaveChangesAsync();
+
+        await RespondAsync($"You have successfully equipped {fishingRod.ToString()} rod.", ephemeral: true);
+    }
+
+    /// <summary>
+    ///     Shows the user's balance and related information.
+    /// </summary>
+    /// <param name="user">The user to show the balance for, or the command user if null.</param>
+    /// <param name="hidden">Whether to show the balance as an ephemeral message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("bal", "Lists credits, redeems, EV points, upvote points, and selected fishing rod")]
+    public async Task Balance(IUser user = null, bool hidden = false)
+    {
+        user ??= ctx.User;
+        _hidden = hidden;
+
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        if (details == null)
+        {
+            await RespondAsync($"{user.Username} has not started!");
+            return;
+        }
+
+        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        {
+            await RespondAsync(
+                $"You are not permitted to see the Trainer card of {user.Username}",
+                ephemeral: hidden
+            );
+            return;
+        }
+
+        var voteStreak = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - details.LastVote > 36 * 60 * 60
+            ? 0
+            : details.VoteStreak;
+
+        var trainerNick = details.TrainerNickname ?? user.Username;
+        var region = details.Region;
+        var heldItem = details.HeldItem;
+        var staffRank = details.Staff;
+
+        StringBuilder desc = new();
+        desc.AppendLine($"{trainerNick}'s\n__**Balances**__");
+        desc.AppendLine($"**Credits**: {details.MewCoins}");
+        desc.AppendLine($"**Redeems**: {details.Redeems}");
+        desc.AppendLine($"**Mystery Tokens**: {details.MysteryToken}");
+        desc.AppendLine($"**[Dittopia](https://discord.gg/eeveecore) Rep.**: {details.OsRep}\n");
+        desc.AppendLine($"**EV Points**: {details.EvPoints}");
+        desc.AppendLine($"**Upvote Points**: {details.UpvotePoints}");
+        desc.AppendLine($"**Vote Streak**: `{voteStreak}`");
+        desc.AppendLine($"**Holding**: {heldItem.Capitalize().Replace("-", " ")}");
+        desc.AppendLine($"**Region**: {region.Capitalize()}");
+
+        if (details.Voucher > 0) desc.AppendLine($"\n\n**Unused Vouchers**: {details.Voucher}");
+
+        var embed = new EmbedBuilder()
+            .WithColor(new Color(0xFFB6C1))
+            .WithDescription(desc.ToString());
+
+        if (staffRank.ToLower() == "gym")
+        {
+            embed.WithAuthor(
+                "Official Gym Leader",
+                "https://cdn.discordapp.com/attachments/1004310910313181325/1038076633803931729/ezgif-4-9aa2641b3d.gif"
+            );
+
+            embed.AddField(
+                "Bot Role",
+                "**Dittopia Gym Leader**"
+            );
+        }
+        else if (staffRank.ToLower() != "user")
+        {
+            embed.WithFooter(
+                $"DittoBOT {staffRank}",
+                "https://images.mewdeko.tech/images/di.webp"
+            );
+
+            embed.WithAuthor(
+                "Official Staff Member",
+                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
+            );
+
+            embed.AddField(
+                "Bot Staff Rank",
+                staffRank
+            );
+        }
+        else
+        {
+            embed.WithAuthor("Trainer Information");
+        }
+
+        // Create component buttons for the embedded response
+        var components = new ComponentBuilder()
+            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
+            .Build();
+
+        await RespondAsync(embed: embed.Build(), components: components, ephemeral: hidden);
+    }
+
+    /// <summary>
+    ///     Displays information about chests in the user's inventory.
+    /// </summary>
+    /// <param name="user">The user whose chest information to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <remarks>
+    ///     This method is called when the user clicks the "Chests" button on the balance display.
+    ///     It replaces the original message with a new embed showing chest counts.
+    /// </remarks>
+    public async Task BalanceChests(IUser user)
+    {
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        if (details == null)
+        {
+            await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
+            return;
+        }
+
+        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        {
+            await RespondAsync(
+                $"You are not permitted to see the Trainer card of {user.Username}",
+                ephemeral: _hidden
+            );
+            return;
+        }
+
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(details.Inventory ?? "{}") ??
+                        new Dictionary<string, int>();
+
+        var common = inventory.GetValueOrDefault("common chest", 0);
+        var rare = inventory.GetValueOrDefault("rare chest", 0);
+        var mythic = inventory.GetValueOrDefault("mythic chest", 0);
+        var legend = inventory.GetValueOrDefault("legend chest", 0);
+
+        var staffRank = details.Staff;
+        var trainerNick = details.TrainerNickname ?? user.Username;
+
+        StringBuilder desc = new();
+        desc.AppendLine("### You have:");
+        desc.AppendLine($"\n- <:legend:1212910198335737876>`Legend`:\n    - **{legend}**");
+        desc.AppendLine($"\n- <:mythic:1212910137858330674>`Mythic`:\n    - **{mythic}**");
+        desc.AppendLine($"\n- <:rare:1212910022137348106>`Rare`:\n    - **{rare}**");
+        desc.AppendLine($"\n- <:common:1212910253524389898>`Common`:\n    - **{common}**");
+
+        var embed = new EmbedBuilder()
+            .WithColor(new Color(0xFFB6C1))
+            .WithDescription(desc.ToString());
+
+        if (staffRank.ToLower() != "user")
+        {
+            embed.WithFooter(
+                $"DittoBOT {staffRank}",
+                "https://images.mewdeko.tech/images/di.webp"
+            );
+
+            embed.WithAuthor(
+                $"{trainerNick}'s Chests",
+                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
+            );
+        }
+        else
+        {
+            embed.WithAuthor($"{trainerNick}'s Chests");
+        }
+
+        // Recreate the component buttons to keep them available
+        var components = new ComponentBuilder()
+            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
+            .Build();
+
+        await ModifyOriginalResponseAsync(msg =>
+        {
+            msg.Embed = embed.Build();
+            msg.Components = components;
+        });
+    }
+
+    /// <summary>
+    ///     Displays information about radiant tokens in the user's inventory.
+    /// </summary>
+    /// <param name="user">The user whose token information to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <remarks>
+    ///     This method is called when the user clicks the "Radiant Tokens" button on the balance display.
+    ///     It replaces the original message with a new embed showing token counts.
+    /// </remarks>
+    public async Task BalanceTokens(IUser user)
+    {
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        if (details == null)
+        {
+            await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
+            return;
+        }
+
+        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        {
+            await RespondAsync(
+                $"You are not permitted to see the token counts of {user.Username}",
+                ephemeral: _hidden
+            );
+            return;
+        }
+
+        var tokenData = details.Tokens;
+
+        if (string.IsNullOrEmpty(tokenData))
+        {
+            await RespondAsync($"{user.Username} has no tokens.", ephemeral: _hidden);
+            return;
+        }
+
+        var tokens = JsonSerializer.Deserialize<Dictionary<string, int>>(tokenData ?? "{}") ??
+                     new Dictionary<string, int>();
+
+        StringBuilder desc = new();
+        desc.AppendLine("### You have:");
+
+        var hasTokens = false;
+        foreach (var (typeName, count) in tokens)
+            if (count > 0)
+            {
+                desc.AppendLine($"- {typeName}: **{count}**");
+                hasTokens = true;
+            }
+
+        if (!hasTokens) desc = new StringBuilder($"{user.Username} has no tokens.");
+
+        var embed = new EmbedBuilder()
+            .WithColor(new Color(0xFFB6C1))
+            .WithDescription(desc.ToString());
+
+        var trainerNick = details.TrainerNickname ?? user.Username;
+        var staffRank = details.Staff;
+
+        if (staffRank.ToLower() != "user")
+        {
+            embed.WithFooter(
+                $"DittoBOT {staffRank}",
+                "https://images.mewdeko.tech/images/di.webp"
+            );
+
+            embed.WithAuthor(
+                $"{trainerNick}'s Tokens",
+                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
+            );
+        }
+        else
+        {
+            embed.WithAuthor($"{trainerNick}'s Tokens");
+        }
+
+        // Recreate the component buttons to keep them available
+        var components = new ComponentBuilder()
+            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
+            .Build();
+
+        await ModifyOriginalResponseAsync(msg =>
+        {
+            msg.Embed = embed.Build();
+            msg.Components = components;
+        });
+    }
+
+    /// <summary>
+    ///     Displays miscellaneous information about a user's account and inventory.
+    /// </summary>
+    /// <param name="user">The user whose miscellaneous information to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <remarks>
+    ///     This method is called when the user clicks the "Misc" button on the balance display.
+    ///     It creates a follow-up message with detailed information about various aspects
+    ///     of the user's account including market slots, daycare, Pokemon owned,
+    ///     shadow hunt, and fishing stats.
+    /// </remarks>
+    public async Task BalanceMisc(IUser user)
+    {
+        StringBuilder desc = new();
+
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
+        if (details == null)
+        {
+            await FollowupAsync($"{user.Username} has not started!", ephemeral: _hidden);
+            return;
+        }
+
+        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        {
+            await FollowupAsync(
+                $"You are not permitted to see the Trainer card of {user.Username}",
+                ephemeral: _hidden
+            );
+            return;
+        }
+
+        var marketUsed = await db.Market
+            .CountAsync(m => m.OwnerId == user.Id && m.BuyerId == null);
+
+        // Count eggs using the ownership table and Pokemon table
+        var daycared = await db.UserPokemonOwnerships
+            .Join(db.UserPokemon,
+                o => o.PokemonId,
+                p => p.Id,
+                (o, p) => new { Ownership = o, Pokemon = p })
+            .CountAsync(j => j.Ownership.UserId == user.Id && j.Pokemon.PokemonName == "Egg");
+
+        // Get total Pokemon count from the ownership table
+        var pokemonCount = await db.UserPokemonOwnerships
+            .CountAsync(o => o.UserId == user.Id);
+
+        var bike = details.Bike ?? false;
+        var trainerNick = details.TrainerNickname ?? user.Username;
+        var daycareLimit = details.DaycareLimit ?? 1;
+        var heldItem = details.HeldItem;
+        var marketLimit = details.MarketLimit;
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(details.Inventory ?? "{}") ??
+                        new Dictionary<string, int>();
+        var staffRank = details.Staff;
+        var hunt = details.Hunt;
+        var huntProgress = details.Chain;
+        var fishingLevel = details.FishingLevel ?? 1;
+        var fishingExp = details.FishingExp ?? 0;
+        var fishingLevelCap = details.FishingLevelCap ?? 50;
+
+        // Generate visual health bars
+        var energy = Service.DoHealth(10, details.Energy ?? 10);
+        var fishingExpBar = Service.DoHealth((int)fishingLevelCap, (int)fishingExp);
+
+        var marketLimitBonus = 0;
+
+        var marketText = $"{marketUsed}/{marketLimit}";
+        if (marketLimitBonus > 0) marketText += $" (+ {marketLimitBonus}!)";
+
+        desc.AppendLine($"\n**Market Slots**: `{marketText}`");
+        desc.AppendLine($"| **Daycare**: `{daycared}/{daycareLimit}`");
+        desc.AppendLine($"\n**Pokemon Owned**: `{pokemonCount:,}`");
+
+        if (!string.IsNullOrEmpty(hunt))
+            desc.AppendLine($"\n**Shadow Hunt**: `{hunt} ({huntProgress}x)`");
+        else
+            desc.AppendLine("\n**Shadow Hunt**: Select with `/hunt`!");
+
+        desc.AppendLine($"\n**Bicycle**: {bike}");
+        desc.AppendLine("\n**General Inventory**\n");
+
+        // Filter out chest items from display
+        inventory.Remove("coin-case");
+
+        foreach (var (item, count) in inventory)
+        {
+            if (item.Contains("common chest") ||
+                item.Contains("rare chest") ||
+                item.Contains("mythic chest") ||
+                item.Contains("legend chest") ||
+                item.Contains("spooky chest") ||
+                item.Contains("fleshy chest") ||
+                item.Contains("ghost detector") ||
+                item.Contains("horrific chest") ||
+                item.Contains("heart chest"))
+                continue;
+
+            if (item.Contains("breeding"))
+                desc.AppendLine(
+                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateBreedingMultiplier(count)})`");
+            else if (item.Contains("iv"))
+                desc.AppendLine(
+                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateIvMultiplier(count)})`");
+            else
+                desc.AppendLine($"{item.Replace("-", " ").Capitalize()} `{count}`x");
+        }
+
+        var embed = new EmbedBuilder()
+            .WithColor(new Color(0xFFB6C1))
+            .WithDescription(desc.ToString());
+
+        embed.AddField("Energy", energy);
+        embed.AddField(
+            "Fishing Stats",
+            $"Fishing Level - {fishingLevel}\nFishing Exp - {fishingExp}/{fishingLevelCap}\n{fishingExpBar}"
+        );
+
+        if (staffRank.ToLower() != "user")
+        {
+            embed.WithFooter(
+                $"DittoBOT {staffRank}",
+                "https://images.mewdeko.tech/images/di.webp"
+            );
+
+            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
+        }
+        else
+        {
+            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
+        }
+
+        // Recreate the component buttons
+        var components = new ComponentBuilder()
+            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
+            .Build();
+
+        await FollowupAsync(embed: embed.Build(), components: components, ephemeral: _hidden);
+    }
+
+    /// <summary>
+    ///     Shows the items in the user's bag.
+    /// </summary>
+    /// <param name="hidden">Whether to show the bag as an ephemeral message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("bag", "Lists your items.")]
+    public async Task Bag(bool hidden = true)
+    {
+        await using var db = await _dbContextProvider.GetContextAsync();
+
+        var items = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => u.Items)
+            .FirstOrDefaultAsyncEF();
+
+        if (items == null)
+        {
+            await RespondAsync("You have not Started!\nStart with `/start` first!", ephemeral: true);
+            return;
+        }
+
+        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(items ?? "{}") ??
+                        new Dictionary<string, int>();
+
+        StringBuilder desc = new();
+        foreach (var item in inventory.Keys.OrderBy(k => k))
+            if (inventory[item] > 0)
+                desc.AppendLine($"{item.Replace("-", " ").Capitalize()} : {inventory[item]}x");
+
+        if (desc.Length == 0)
+        {
+            var emptyEmbed = new EmbedBuilder()
+                .WithTitle("Your Current Bag")
+                .WithColor(new Color(0x5D3FD3))
+                .WithDescription("Nothin here..");
+
+            await RespondAsync(embed: emptyEmbed.Build(), ephemeral: hidden);
+            return;
+        }
+
+        var embed = new EmbedBuilder()
+            .WithTitle("Your Current Bag")
+            .WithColor(new Color(0x5D3FD3))
+            .WithDescription(desc.ToString());
+
+        await RespondAsync(embed: embed.Build(), ephemeral: hidden);
     }
 
     /// <summary>
@@ -262,8 +1014,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [Group("set", "Used to set Pokemon properties")]
     public class SetCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        private readonly DbContextProvider _dbContextProvider;
-
         // List of natures
         private static readonly List<string> NatureList =
         [
@@ -273,6 +1023,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             "Modest", "Mild", "Quiet", "Bashful", "Rash",
             "Calm", "Gentle", "Sassy", "Careful", "Quirky"
         ];
+
+        private readonly DbContextProvider _dbContextProvider;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SetCommands" /> class.
@@ -452,206 +1204,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    ///     Region enumeration for the region command.
-    /// </summary>
-    public enum Regions
-    {
-        /// <summary>
-        ///     Original Kanto region.
-        /// </summary>
-        Original = 1,
-
-        /// <summary>
-        ///     Alola region.
-        /// </summary>
-        Alola = 2,
-
-        /// <summary>
-        ///     Galar region.
-        /// </summary>
-        Galar = 3,
-
-        /// <summary>
-        ///     Hisui region.
-        /// </summary>
-        Hisui = 4,
-
-        /// <summary>
-        ///     Paldea region.
-        /// </summary>
-        Paldea = 5
-    }
-
-    /// <summary>
-    ///     Sets the user's active region, which affects regional Pokémon forms.
-    /// </summary>
-    /// <param name="location">The region to set.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("region", "Set your region, affects your pokemon's regional evolutions")]
-    public async Task Region(Regions location)
-    {
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Region, location.ToString().ToLower()));
-
-        await db.SaveChangesAsync();
-
-        await RespondAsync($"Your region has been set to **{location.ToString().Capitalize()}**.", ephemeral: true);
-    }
-
-    /// <summary>
-    ///     Sets the trainer nickname for the user.
-    /// </summary>
-    /// <param name="name">The nickname to set.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("trainernick", "Sets your trainer nickname for use in global leaderboards and other users")]
-    public async Task TrainerNick(string name)
-    {
-        if (name.Contains("@here") || name.Contains("@everyone") || name.Contains("http"))
-        {
-            await RespondAsync("Nope.");
-            return;
-        }
-
-        if (name.Length > 18)
-        {
-            await RespondAsync("Trainer nick too long!");
-            return;
-        }
-
-        if (Regex.IsMatch(name, @"^[ -~]*$") == false)
-        {
-            await RespondAsync("Unicode characters cannot be used in your trainer nick.");
-            return;
-        }
-
-        if (name.Contains("|"))
-        {
-            await RespondAsync("`|` cannot be used in your trainer nick.");
-            return;
-        }
-
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var userNick = await db.Users
-            .Where(u => u.UserId == ctx.User.Id)
-            .Select(u => u.TrainerNickname)
-            .FirstOrDefaultAsyncEF();
-
-        if (userNick != null)
-        {
-            await RespondAsync("You have already set your trainer nick.");
-            return;
-        }
-
-        var existingUser = await db.Users
-            .Where(u => u.TrainerNickname == name)
-            .Select(u => u.UserId)
-            .FirstOrDefaultAsyncEF();
-
-        if (existingUser != 0)
-        {
-            await RespondAsync("That nick is already taken. Try another one.");
-            return;
-        }
-
-        await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.TrainerNickname, name));
-
-        await db.SaveChangesAsync();
-
-        await RespondAsync("Successfully Changed Trainer Nick");
-    }
-
-    /// <summary>
-    ///     Sets the Pokémon the user is hunting for shadow encounters.
-    /// </summary>
-    /// <param name="pokemon">The Pokémon to hunt.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("hunt", "Set a Pokemon to hunt for shadow encounters")]
-    public async Task Hunt(string pokemon)
-    {
-        pokemon = pokemon.Capitalize();
-
-        if (!TotalList.Contains(pokemon))
-        {
-            await RespondAsync("You have chosen an invalid Pokemon.");
-            return;
-        }
-
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var userData = await db.Users
-            .Where(u => u.UserId == ctx.User.Id)
-            .Select(u => new { u.Hunt, u.Chain })
-            .FirstOrDefaultAsyncEF();
-
-        if (userData == null)
-        {
-            await RespondAsync("You have not started!\nStart with `/start` first.");
-            return;
-        }
-
-        var hunt = userData.Hunt;
-        var chain = userData.Chain;
-
-        if (hunt == pokemon)
-        {
-            await RespondAsync("You are already hunting that pokemon!");
-            return;
-        }
-
-        var addChain = 0;
-
-        if (chain > 0 && !string.IsNullOrEmpty(hunt))
-        {
-            // This would normally use ConfirmView which we don't have available
-            var confirmed = await PromptUserConfirmAsync(
-                $"Are you sure you want to abandon your hunt for **{hunt}**?\nYou will lose your streak of **{chain}**.",
-                ctx.User.Id
-            );
-
-            if (!confirmed) return;
-        }
-        else if (chain > 0 && string.IsNullOrEmpty(hunt))
-        {
-            addChain = 500;
-            await RespondAsync("Binding loose chain to new Pokemon.");
-        }
-
-        await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Hunt, pokemon)
-                .SetProperty(x => x.Chain, addChain));
-
-        await db.SaveChangesAsync();
-
-        var embed = new EmbedBuilder()
-            .WithTitle("Shadow Hunt")
-            .WithDescription($"Successfully changed shadow hunt selection to **{pokemon}**.")
-            .WithColor(new Color(0xFFB6C1));
-
-        // This would normally call a method to get the Pokemon image
-        // embed.WithImageUrl(await GetPokemonImage(pokemon, skin: "shadow"));
-
-        await RespondAsync(embed: embed.Build());
-
-        // Log the hunt change
-        var logChannel = (IMessageChannel)await ctx.Client.GetChannelAsync(1005559143886766121);
-        await logChannel.SendMessageAsync($"`{ctx.User.Id} - {hunt} @ {chain}x -> {pokemon}`");
-    }
-
-    /// <summary>
     ///     Group of commands for looking up Pokémon data.
     /// </summary>
     [Group("lookup", "Commands for looking up pokemon data")]
     public class LookupCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        private readonly IMongoService _mongoService;
         private readonly Dictionary<string, uint> _elements;
+        private readonly IMongoService _mongoService;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="LookupCommands" /> class.
@@ -926,604 +1485,11 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    ///     Enum representing the different fishing rod types.
-    /// </summary>
-    public enum Rods
-    {
-        /// <summary>Old fishing rod.</summary>
-        Old = 1,
-
-        /// <summary>New fishing rod.</summary>
-        New = 2,
-
-        /// <summary>Good fishing rod.</summary>
-        Good = 3,
-
-        /// <summary>Super fishing rod.</summary>
-        Super = 4,
-
-        /// <summary>Ultra fishing rod.</summary>
-        Ultra = 5,
-
-        /// <summary>Supreme fishing rod.</summary>
-        Supreme = 6,
-
-        /// <summary>Epic fishing rod.</summary>
-        Epic = 7,
-
-        /// <summary>Master fishing rod.</summary>
-        Master = 8
-    }
-
-    /// <summary>
-    ///     Equips a fishing rod from the user's bag.
-    /// </summary>
-    /// <param name="fishingRod">The type of fishing rod to equip.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("equip", "Equip a fishing pole from your bag")]
-    public async Task EquipFishingRod(Rods fishingRod)
-    {
-        var normalizedItem = fishingRod.ToString().ToLower() + "-rod";
-        string[] rods =
-            ["old-rod", "new-rod", "good-rod", "super-rod", "ultra-rod", "supreme-rod", "master-rod", "epic-rod"];
-
-        if (!rods.Contains(normalizedItem))
-        {
-            await RespondAsync("Not a valid Fishing rod, please try again.", ephemeral: true);
-            return;
-        }
-
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == ctx.User.Id);
-        if (user == null)
-        {
-            await RespondAsync("You have not Started!\nStart with `/start` first!", ephemeral: true);
-            return;
-        }
-
-        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
-                        new Dictionary<string, int>();
-
-        if (!inventory.TryGetValue(normalizedItem, out var count) || count < 1)
-        {
-            await RespondAsync($"You don't have {fishingRod.ToString()} rod in your inventory.", ephemeral: true);
-            return;
-        }
-
-        var fishLevel = user.FishingLevel ?? 0;
-
-        if (normalizedItem == "supreme-rod" && fishLevel < 105)
-        {
-            await RespondAsync("You need to be fishing level 105 to use this item!");
-            return;
-        }
-
-        if (normalizedItem == "epic-rod" && fishLevel < 150)
-        {
-            await RespondAsync("You need to be fishing level 150 to use this item!");
-            return;
-        }
-
-        if (normalizedItem == "master-rod" && fishLevel < 200)
-        {
-            await RespondAsync("You need to be fishing level 200 to use this item!");
-            return;
-        }
-
-        await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.HeldItem, normalizedItem));
-
-        await db.SaveChangesAsync();
-
-        await RespondAsync($"You have successfully equipped {fishingRod.ToString()} rod.", ephemeral: true);
-    }
-
-    /// <summary>
-    ///     Shows the user's balance and related information.
-    /// </summary>
-    /// <param name="user">The user to show the balance for, or the command user if null.</param>
-    /// <param name="hidden">Whether to show the balance as an ephemeral message.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("bal", "Lists credits, redeems, EV points, upvote points, and selected fishing rod")]
-    public async Task Balance(IUser user = null, bool hidden = false)
-    {
-        user ??= ctx.User;
-        _hidden = hidden;
-
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
-        if (details == null)
-        {
-            await RespondAsync($"{user.Username} has not started!");
-            return;
-        }
-
-        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
-        {
-            await RespondAsync(
-                $"You are not permitted to see the Trainer card of {user.Username}",
-                ephemeral: hidden
-            );
-            return;
-        }
-
-        var voteStreak = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - details.LastVote > 36 * 60 * 60
-            ? 0
-            : details.VoteStreak;
-
-        var trainerNick = details.TrainerNickname ?? user.Username;
-        var region = details.Region;
-        var heldItem = details.HeldItem;
-        var staffRank = details.Staff;
-
-        StringBuilder desc = new();
-        desc.AppendLine($"{trainerNick}'s\n__**Balances**__");
-        desc.AppendLine($"**Credits**: {details.MewCoins}");
-        desc.AppendLine($"**Redeems**: {details.Redeems}");
-        desc.AppendLine($"**Mystery Tokens**: {details.MysteryToken}");
-        desc.AppendLine($"**[Dittopia](https://discord.gg/eeveecore) Rep.**: {details.OsRep}\n");
-        desc.AppendLine($"**EV Points**: {details.EvPoints}");
-        desc.AppendLine($"**Upvote Points**: {details.UpvotePoints}");
-        desc.AppendLine($"**Vote Streak**: `{voteStreak}`");
-        desc.AppendLine($"**Holding**: {heldItem.Capitalize().Replace("-", " ")}");
-        desc.AppendLine($"**Region**: {region.Capitalize()}");
-
-        if (details.Voucher > 0) desc.AppendLine($"\n\n**Unused Vouchers**: {details.Voucher}");
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        if (staffRank.ToLower() == "gym")
-        {
-            embed.WithAuthor(
-                "Official Gym Leader",
-                "https://cdn.discordapp.com/attachments/1004310910313181325/1038076633803931729/ezgif-4-9aa2641b3d.gif"
-            );
-
-            embed.AddField(
-                "Bot Role",
-                "**Dittopia Gym Leader**"
-            );
-        }
-        else if (staffRank.ToLower() != "user")
-        {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
-            );
-
-            embed.WithAuthor(
-                "Official Staff Member",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-
-            embed.AddField(
-                "Bot Staff Rank",
-                staffRank
-            );
-        }
-        else
-        {
-            embed.WithAuthor("Trainer Information");
-        }
-
-        // Create component buttons for the embedded response
-        var components = new ComponentBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
-
-        await RespondAsync(embed: embed.Build(), components: components, ephemeral: hidden);
-    }
-
-     /// <summary>
-    /// Displays information about chests in the user's inventory.
-    /// </summary>
-    /// <param name="user">The user whose chest information to display.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <remarks>
-    /// This method is called when the user clicks the "Chests" button on the balance display.
-    /// It replaces the original message with a new embed showing chest counts.
-    /// </remarks>
-    public async Task BalanceChests(IUser user)
-    {
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
-        if (details == null)
-        {
-            await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
-            return;
-        }
-
-        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
-        {
-            await RespondAsync(
-                $"You are not permitted to see the Trainer card of {user.Username}",
-                ephemeral: _hidden
-            );
-            return;
-        }
-
-        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(details.Inventory ?? "{}") ??
-                        new Dictionary<string, int>();
-
-        var common = inventory.GetValueOrDefault("common chest", 0);
-        var rare = inventory.GetValueOrDefault("rare chest", 0);
-        var mythic = inventory.GetValueOrDefault("mythic chest", 0);
-        var legend = inventory.GetValueOrDefault("legend chest", 0);
-
-        var staffRank = details.Staff;
-        var trainerNick = details.TrainerNickname ?? user.Username;
-
-        StringBuilder desc = new();
-        desc.AppendLine("### You have:");
-        desc.AppendLine($"\n- <:legend:1212910198335737876>`Legend`:\n    - **{legend}**");
-        desc.AppendLine($"\n- <:mythic:1212910137858330674>`Mythic`:\n    - **{mythic}**");
-        desc.AppendLine($"\n- <:rare:1212910022137348106>`Rare`:\n    - **{rare}**");
-        desc.AppendLine($"\n- <:common:1212910253524389898>`Common`:\n    - **{common}**");
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        if (staffRank.ToLower() != "user")
-        {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
-            );
-
-            embed.WithAuthor(
-                $"{trainerNick}'s Chests",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-        }
-        else
-        {
-            embed.WithAuthor($"{trainerNick}'s Chests");
-        }
-
-        // Recreate the component buttons to keep them available
-        var components = new ComponentBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
-
-        await ModifyOriginalResponseAsync(msg =>
-        {
-            msg.Embed = embed.Build();
-            msg.Components = components;
-        });
-    }
-
-    /// <summary>
-    /// Displays information about radiant tokens in the user's inventory.
-    /// </summary>
-    /// <param name="user">The user whose token information to display.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <remarks>
-    /// This method is called when the user clicks the "Radiant Tokens" button on the balance display.
-    /// It replaces the original message with a new embed showing token counts.
-    /// </remarks>
-    public async Task BalanceTokens(IUser user)
-    {
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
-        if (details == null)
-        {
-            await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
-            return;
-        }
-
-        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
-        {
-            await RespondAsync(
-                $"You are not permitted to see the token counts of {user.Username}",
-                ephemeral: _hidden
-            );
-            return;
-        }
-
-        var tokenData = details.Tokens;
-
-        if (string.IsNullOrEmpty(tokenData))
-        {
-            await RespondAsync($"{user.Username} has no tokens.", ephemeral: _hidden);
-            return;
-        }
-
-        var tokens = JsonSerializer.Deserialize<Dictionary<string, int>>(tokenData ?? "{}") ??
-                    new Dictionary<string, int>();
-
-        StringBuilder desc = new();
-        desc.AppendLine("### You have:");
-
-        var hasTokens = false;
-        foreach (var (typeName, count) in tokens)
-        {
-            if (count > 0)
-            {
-                desc.AppendLine($"- {typeName}: **{count}**");
-                hasTokens = true;
-            }
-        }
-
-        if (!hasTokens)
-        {
-            desc = new StringBuilder($"{user.Username} has no tokens.");
-        }
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        var trainerNick = details.TrainerNickname ?? user.Username;
-        var staffRank = details.Staff;
-
-        if (staffRank.ToLower() != "user")
-        {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
-            );
-
-            embed.WithAuthor(
-                $"{trainerNick}'s Tokens",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-        }
-        else
-        {
-            embed.WithAuthor($"{trainerNick}'s Tokens");
-        }
-
-        // Recreate the component buttons to keep them available
-        var components = new ComponentBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
-
-        await ModifyOriginalResponseAsync(msg =>
-        {
-            msg.Embed = embed.Build();
-            msg.Components = components;
-        });
-    }
-
-    /// <summary>
-    /// Displays miscellaneous information about a user's account and inventory.
-    /// </summary>
-    /// <param name="user">The user whose miscellaneous information to display.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <remarks>
-    /// This method is called when the user clicks the "Misc" button on the balance display.
-    /// It creates a follow-up message with detailed information about various aspects
-    /// of the user's account including market slots, daycare, Pokemon owned,
-    /// shadow hunt, and fishing stats.
-    /// </remarks>
-    public async Task BalanceMisc(IUser user)
-    {
-        StringBuilder desc = new();
-
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
-        if (details == null)
-        {
-            await FollowupAsync($"{user.Username} has not started!", ephemeral: _hidden);
-            return;
-        }
-
-        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
-        {
-            await FollowupAsync(
-                $"You are not permitted to see the Trainer card of {user.Username}",
-                ephemeral: _hidden
-            );
-            return;
-        }
-
-        var marketUsed = await db.Market
-            .CountAsyncEF(m => m.OwnerId == user.Id && m.BuyerId == null);
-
-        var daycared = await db.UserPokemon
-            .CountAsyncEF(p => details.Pokemon.Contains(p.Id) && p.PokemonName == "Egg");
-
-        var bike = details.Bike ?? false;
-        var trainerNick = details.TrainerNickname ?? user.Username;
-        var daycareLimit = details.DaycareLimit ?? 1;
-        var heldItem = details.HeldItem;
-        var marketLimit = details.MarketLimit;
-        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(details.Inventory ?? "{}") ??
-                        new Dictionary<string, int>();
-        var pokemonCount = details.Pokemon?.Length ?? 0;
-        var staffRank = details.Staff;
-        var hunt = details.Hunt;
-        var huntProgress = details.Chain;
-        var fishingLevel = details.FishingLevel ?? 1;
-        var fishingExp = details.FishingExp ?? 0;
-        var fishingLevelCap = details.FishingLevelCap ?? 50;
-
-        // Generate visual health bars
-        var energy = Service.DoHealth(10, details.Energy ?? 10);
-        var fishingExpBar = Service.DoHealth((int)fishingLevelCap, (int)fishingExp);
-
-        var marketLimitBonus = 0;
-
-        var marketText = $"{marketUsed}/{marketLimit}";
-        if (marketLimitBonus > 0)
-        {
-            marketText += $" (+ {marketLimitBonus}!)";
-        }
-
-        desc.AppendLine($"\n**Market Slots**: `{marketText}`");
-        desc.AppendLine($"| **Daycare**: `{daycared}/{daycareLimit}`");
-        desc.AppendLine($"\n**Pokemon Owned**: `{pokemonCount:,}`");
-
-        if (!string.IsNullOrEmpty(hunt))
-        {
-            desc.AppendLine($"\n**Shadow Hunt**: `{hunt} ({huntProgress}x)`");
-        }
-        else
-        {
-            desc.AppendLine("\n**Shadow Hunt**: Select with `/hunt`!");
-        }
-
-        desc.AppendLine($"\n**Bicycle**: {bike}");
-        desc.AppendLine("\n**General Inventory**\n");
-
-        // Filter out chest items from display
-        inventory.Remove("coin-case");
-
-        foreach (var (item, count) in inventory)
-        {
-            if (item.Contains("common chest") ||
-                item.Contains("rare chest") ||
-                item.Contains("mythic chest") ||
-                item.Contains("legend chest") ||
-                item.Contains("spooky chest") ||
-                item.Contains("fleshy chest") ||
-                item.Contains("ghost detector") ||
-                item.Contains("horrific chest") ||
-                item.Contains("heart chest"))
-            {
-                continue;
-            }
-
-            if (item.Contains("breeding"))
-            {
-                desc.AppendLine(
-                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateBreedingMultiplier(count)})`");
-            }
-            else if (item.Contains("iv"))
-            {
-                desc.AppendLine(
-                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateIvMultiplier(count)})`");
-            }
-            else
-            {
-                desc.AppendLine($"{item.Replace("-", " ").Capitalize()} `{count}`x");
-            }
-        }
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        embed.AddField("Energy", energy, false);
-        embed.AddField(
-            "Fishing Stats",
-            $"Fishing Level - {fishingLevel}\nFishing Exp - {fishingExp}/{fishingLevelCap}\n{fishingExpBar}",
-            false
-        );
-
-        if (staffRank.ToLower() != "user")
-        {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
-            );
-
-            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
-        }
-        else
-        {
-            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
-        }
-
-        // Recreate the component buttons
-        var components = new ComponentBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
-
-        await FollowupAsync(embed: embed.Build(), components: components, ephemeral: _hidden);
-    }
-
-    /// <summary>
-    ///     Shows the items in the user's bag.
-    /// </summary>
-    /// <param name="hidden">Whether to show the bag as an ephemeral message.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [SlashCommand("bag", "Lists your items.")]
-    public async Task Bag(bool hidden = true)
-    {
-        await using var db = await _dbContextProvider.GetContextAsync();
-
-        var items = await db.Users
-            .Where(u => u.UserId == ctx.User.Id)
-            .Select(u => u.Items)
-            .FirstOrDefaultAsyncEF();
-
-        if (items == null)
-        {
-            await RespondAsync("You have not Started!\nStart with `/start` first!", ephemeral: true);
-            return;
-        }
-
-        var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(items ?? "{}") ??
-                        new Dictionary<string, int>();
-
-        StringBuilder desc = new();
-        foreach (var item in inventory.Keys.OrderBy(k => k))
-            if (inventory[item] > 0)
-                desc.AppendLine($"{item.Replace("-", " ").Capitalize()} : {inventory[item]}x");
-
-        if (desc.Length == 0)
-        {
-            var emptyEmbed = new EmbedBuilder()
-                .WithTitle("Your Current Bag")
-                .WithColor(new Color(0x5D3FD3))
-                .WithDescription("Nothin here..");
-
-            await RespondAsync(embed: emptyEmbed.Build(), ephemeral: hidden);
-            return;
-        }
-
-        var embed = new EmbedBuilder()
-            .WithTitle("Your Current Bag")
-            .WithColor(new Color(0x5D3FD3))
-            .WithDescription(desc.ToString());
-
-        await RespondAsync(embed: embed.Build(), ephemeral: hidden);
-    }
-
-    /// <summary>
     ///     Pokémon command group for interacting with Pokémon.
     /// </summary>
     [Group("poke", "Commands for interacting with your pokemon!")]
     public class PokemonCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        private readonly IMongoService _mongoService;
-        private readonly DbContextProvider _dbContextProvider;
-        private readonly PokemonService _pokemonService;
-
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="PokemonCommands" /> class.
-        /// </summary>
-        /// <param name="mongoService">The MongoDB service for database operations.</param>
-        /// <param name="dbContextProvider">The database context provider.</param>
-        /// <param name="pokemonService">The Pokémon service for evolution and other related operations.</param>
-        public PokemonCommands(
-            IMongoService mongoService,
-            DbContextProvider dbContextProvider,
-            PokemonService pokemonService)
-        {
-            _mongoService = mongoService;
-            _dbContextProvider = dbContextProvider;
-            _pokemonService = pokemonService;
-        }
-
         /// <summary>
         ///     Slot choices for learning moves.
         /// </summary>
@@ -1540,6 +1506,26 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             /// <summary>Move slot 4.</summary>
             Four = 4
+        }
+
+        private readonly DbContextProvider _dbContextProvider;
+        private readonly IMongoService _mongoService;
+        private readonly PokemonService _pokemonService;
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="PokemonCommands" /> class.
+        /// </summary>
+        /// <param name="mongoService">The MongoDB service for database operations.</param>
+        /// <param name="dbContextProvider">The database context provider.</param>
+        /// <param name="pokemonService">The Pokémon service for evolution and other related operations.</param>
+        public PokemonCommands(
+            IMongoService mongoService,
+            DbContextProvider dbContextProvider,
+            PokemonService pokemonService)
+        {
+            _mongoService = mongoService;
+            _dbContextProvider = dbContextProvider;
+            _pokemonService = pokemonService;
         }
 
         /// <summary>

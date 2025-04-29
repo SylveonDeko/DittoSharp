@@ -1,4 +1,3 @@
-using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
@@ -221,7 +220,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="y">The Y position to draw the sprite.</param>
     /// <param name="width">The width to scale the sprite to.</param>
     /// <param name="height">The height to scale the sprite to.</param>
-    private static void DrawPokemonWithShadow(SKCanvas canvas, SKBitmap sprite, float x, float y, float width, float height)
+    private static void DrawPokemonWithShadow(SKCanvas canvas, SKBitmap sprite, float x, float y, float width,
+        float height)
     {
         // Draw shadow
         using var shadowPaint = new SKPaint
@@ -927,7 +927,6 @@ public class DuelRenderer(IMongoService mongoService) : INService
 
         // Create a placeholder
         return CreatePlaceholderBitmap();
-
     }
 
     /// <summary>

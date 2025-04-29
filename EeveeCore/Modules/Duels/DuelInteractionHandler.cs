@@ -1,7 +1,7 @@
 using Discord.Interactions;
-using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Database.DbContextStuff;
+using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Modules.Duels.Impl.Helpers;
 using EeveeCore.Modules.Duels.Impl.Move;
@@ -17,11 +17,13 @@ namespace EeveeCore.Modules.Duels;
 ///     Processes user input via buttons and commands during battles,
 ///     manages battle state, and coordinates battle flow.
 /// </summary>
-/// /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
+/// ///
+/// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
 /// <param name="battleRenderer">The renderer for creating battle images.</param>
 /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class DuelInteractionHandler(IMongoService mongoService,
+public class DuelInteractionHandler(
+    IMongoService mongoService,
     DuelRenderer battleRenderer,
     DbContextProvider dbContext,
     DiscordShardedClient client) : EeveeCoreSlashModuleBase<DuelService>
@@ -38,6 +40,7 @@ public class DuelInteractionHandler(IMongoService mongoService,
         "https://skylarr1227.github.io/images/duel3.gif",
         "https://skylarr1227.github.io/images/duel4.gif"
     ];
+
     /// <summary>
     ///     Runs a battle in a background task, handling the battle flow,
     ///     error conditions, and post-battle rewards.
@@ -900,7 +903,8 @@ public class DuelInteractionHandler(IMongoService mongoService,
 
         if (opponentSelected == 0)
         {
-            await ctx.Interaction.SendEphemeralErrorAsync("You have not selected a Pokemon! Select one with `/select <id>` first!");
+            await ctx.Interaction.SendEphemeralErrorAsync(
+                "You have not selected a Pokemon! Select one with `/select <id>` first!");
             return;
         }
 
@@ -957,7 +961,8 @@ public class DuelInteractionHandler(IMongoService mongoService,
 
         if (challengerPokemon.Count == 0)
         {
-            await ctx.Interaction.SendEphemeralErrorAsync($"{challenger.Username} doesn't have any Pokemon in their party!");
+            await ctx.Interaction.SendEphemeralErrorAsync(
+                $"{challenger.Username} doesn't have any Pokemon in their party!");
             return;
         }
 

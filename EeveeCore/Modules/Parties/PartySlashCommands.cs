@@ -10,7 +10,7 @@ namespace EeveeCore.Modules.Parties;
 ///     Allows users to create, view, modify, and manage multiple party configurations.
 /// </summary>
 [Group("party", "Commands for loading, registering, and deleting parties")]
-public class PartyModule() : EeveeCoreSlashModuleBase<PartyService>
+public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
 {
     /// <summary>
     ///     Displays an interactive menu for configuring a party.
@@ -239,7 +239,7 @@ public class PartyModule() : EeveeCoreSlashModuleBase<PartyService>
 
 /// <summary>
 ///     Handles component interactions for the party system.
-///     Processes button clicks, modals, and other interactive elements 
+///     Processes button clicks, modals, and other interactive elements
 ///     related to party management.
 /// </summary>
 /// <param name="Service">The service that handles party data operations.</param>
@@ -363,7 +363,7 @@ public class PartyInteractionModule(PartyService Service) : EeveeCoreSlashModule
 ///     Provides autocomplete functionality for party names.
 ///     Suggests existing party names matching the user's input.
 /// </summary>
-/// <param name="db">The database context for querying party data.</param>
+/// <param name="dbContext">The database context for querying party data.</param>
 public class PartyNameAutocompleteHandler(EeveeCoreContext db) : AutocompleteHandler
 {
     /// <summary>

@@ -7,12 +7,45 @@ using Microsoft.EntityFrameworkCore;
 namespace EeveeCore.Database;
 
 /// <summary>
-/// Represents the main database context for the EeveeCore Pokémon bot system.
-/// This class provides access to all database entities through DbSet properties,
-/// organized into logical categories for Pokémon, Bot, Art, and Game models.
+///     Represents the main database context for the EeveeCore Pokémon bot system.
+///     This class provides access to all database entities through DbSet properties,
+///     organized into logical categories for Pokémon, Bot, Art, and Game models.
 /// </summary>
 public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbContext(options)
 {
+    /// <summary>
+    ///     Configures the entity relationships and constraints.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder used to construct the model.</param>
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<UserPokemonOwnership>()
+            .HasIndex(u => new { u.UserId, u.Position })
+            .IsUnique();
+
+        modelBuilder.Entity<UserPokemonOwnership>()
+            .HasIndex(u => u.UserId);
+
+        modelBuilder.Entity<UserPokemonOwnership>()
+            .HasIndex(u => u.PokemonId);
+
+        modelBuilder.Entity<UserPokemonOwnership>()
+            .Property(o => o.Id)
+            .ValueGeneratedOnAdd();
+
+        modelBuilder.Entity<UserPokemonOwnership>()
+            .HasOne(upo => upo.User)
+            .WithMany()
+            .HasForeignKey(upo => upo.UserId)
+            .HasPrincipalKey(u => u.UserId);
+
+        modelBuilder.Entity<InvalidPokemonReference>()
+            .HasNoKey()
+            .HasIndex(i => i.UserId);
+    }
+
     #region Pokemon Models
 
     /// <summary>
@@ -79,6 +112,16 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     ///     Represents total Pokémon counts and statistics
     /// </summary>
     public DbSet<PokemonTotal> PokemonTotals { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the user-Pokémon ownership relationships.
+    /// </summary>
+    public DbSet<UserPokemonOwnership> UserPokemonOwnerships { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the invalid Pokémon references that were detected during migration.
+    /// </summary>
+    public DbSet<InvalidPokemonReference> InvalidPokemonReferences { get; set; }
 
     #endregion
 
@@ -242,7 +285,6 @@ public class EeveeCoreContext(DbContextOptions<EeveeCoreContext> options) : DbCo
     ///     Represents trade logs
     /// </summary>
     public DbSet<TradeLog> TradeLogs { get; set; }
-
 
     #endregion
 }

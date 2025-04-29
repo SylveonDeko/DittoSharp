@@ -5,21 +5,21 @@ using Serilog.Events;
 namespace EeveeCore.Common;
 
 /// <summary>
-/// Provides utility methods for configuring and initializing logging infrastructure.
+///     Provides utility methods for configuring and initializing logging infrastructure.
 /// </summary>
 public static class LogSetup
 {
     /// <summary>
-    /// Creates and configures a Serilog logger with standard settings.
+    ///     Creates and configures a Serilog logger with standard settings.
     /// </summary>
     /// <param name="name">The base name used for log files.</param>
     /// <returns>A configured Serilog Logger instance.</returns>
     /// <remarks>
-    /// The logger is configured to:
-    /// - Write information level logs to the console
-    /// - Write information level logs to daily rolling files
-    /// - Override minimum log levels for specific namespaces
-    /// - Retain logs for 7 days with a maximum file size of 50MB
+    ///     The logger is configured to:
+    ///     - Write information level logs to the console
+    ///     - Write information level logs to daily rolling files
+    ///     - Override minimum log levels for specific namespaces
+    ///     - Retain logs for 7 days with a maximum file size of 50MB
     /// </remarks>
     public static Logger SetupLogger(string name)
     {

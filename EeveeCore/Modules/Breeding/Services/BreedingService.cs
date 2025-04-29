@@ -16,21 +16,13 @@ namespace EeveeCore.Modules.Breeding.Services;
 /// </summary>
 public class BreedingService : INService
 {
-    private readonly IMongoService _mongoService;
-    private readonly DbContextProvider _dbContextProvider;
-    private readonly RedisCache _redisCache;
-    private readonly Random _random = new();
-
-    // Dictionary to track auto-breeding attempts
-    private readonly Dictionary<(ulong UserId, int MaleId), int> _breedRetries = new();
-
     // Dictionary to track users with auto-breeding enabled
     private readonly Dictionary<ulong, int?> _autoRedo = new();
 
-    /// <summary>
-    ///     List of egg groups that are considered undiscovered and cannot breed
-    /// </summary>
-    private readonly List<int> _undiscoveredEggGroups = [15];
+    // Dictionary to track auto-breeding attempts
+    private readonly Dictionary<(ulong UserId, int MaleId), int> _breedRetries = new();
+    private readonly DbContextProvider _dbContextProvider;
+    private readonly IMongoService _mongoService;
 
     /// <summary>
     ///     List of nature options for Pokémon
@@ -43,6 +35,14 @@ public class BreedingService : INService
         "Modest", "Mild", "Quiet", "Bashful", "Rash",
         "Calm", "Gentle", "Sassy", "Careful", "Quirky"
     ];
+
+    private readonly Random _random = new();
+    private readonly RedisCache _redisCache;
+
+    /// <summary>
+    ///     List of egg groups that are considered undiscovered and cannot breed
+    /// </summary>
+    private readonly List<int> _undiscoveredEggGroups = [15];
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="BreedingService" /> class.
@@ -171,11 +171,8 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetContextAsync();
 
-        // Create a new array of 10 nulls
-        var newFemales = new int?[10];
-
-        // Copy the values from femaleIds, up to 10 elements
-        for (var i = 0; i < Math.Min(femaleIds.Count, 10); i++) newFemales[i] = femaleIds[i];
+        // Convert the list to an array of the correct type
+        var newFemales = femaleIds.Select(id => (int?)id).ToArray();
 
         await db.Users
             .Where(u => u.UserId == userId)
@@ -262,153 +259,6 @@ public class BreedingService : INService
     }
 
     /// <summary>
-    ///     Represents a Pokémon for breeding purposes.
-    /// </summary>
-    public class BreedingPokemon
-    {
-        /// <summary>
-        ///     Gets or sets the Pokémon's name.
-        /// </summary>
-        public string Name { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's gender.
-        /// </summary>
-        public string Gender { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's HP IV.
-        /// </summary>
-        public int Hp { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's Attack IV.
-        /// </summary>
-        public int Attack { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's Defense IV.
-        /// </summary>
-        public int Defense { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's Special Attack IV.
-        /// </summary>
-        public int SpAtk { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's Special Defense IV.
-        /// </summary>
-        public int SpDef { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's Speed IV.
-        /// </summary>
-        public int Speed { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's level.
-        /// </summary>
-        public int Level { get; set; }
-
-        /// <summary>
-        ///     Gets or sets whether the Pokémon is shiny.
-        /// </summary>
-        public bool Shiny { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's held item.
-        /// </summary>
-        public string HeldItem { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's happiness value.
-        /// </summary>
-        public int Happiness { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's ability ID.
-        /// </summary>
-        public int AbilityId { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's available ability IDs.
-        /// </summary>
-        public List<int> AbilityIds { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's egg groups.
-        /// </summary>
-        public List<int> EggGroups { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's nature.
-        /// </summary>
-        public string Nature { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the Pokémon's capture rate.
-        /// </summary>
-        public int CaptureRate { get; set; }
-
-        /// <summary>
-        ///     Calculates the total IV percentage of this Pokémon.
-        /// </summary>
-        /// <returns>The IV percentage as a decimal between 0 and 100.</returns>
-        public double CalculateIvPercentage()
-        {
-            double totalIvs = Hp + Attack + Defense + SpAtk + SpDef + Speed;
-            return Math.Round(totalIvs / 186.0 * 100, 2);
-        }
-    }
-
-    /// <summary>
-    ///     Result of a breeding operation.
-    /// </summary>
-    public class BreedingResult
-    {
-        /// <summary>
-        ///     Gets or sets whether the breeding attempt was successful.
-        /// </summary>
-        public bool Success { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the error message if the breeding attempt failed.
-        /// </summary>
-        public string ErrorMessage { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the child Pokémon if the breeding attempt was successful.
-        /// </summary>
-        public BreedingPokemon Child { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the hatch counter for the egg if the breeding attempt was successful.
-        /// </summary>
-        public int Counter { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the chance of success for the breeding attempt.
-        /// </summary>
-        public double Chance { get; set; }
-
-        /// <summary>
-        ///     Gets or sets whether the child Pokémon is shiny.
-        /// </summary>
-        public bool IsShiny { get; set; }
-
-        /// <summary>
-        ///     Gets or sets whether the child Pokémon is shadow.
-        /// </summary>
-        public bool IsShadow { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the stats that were inherited from the parents.
-        /// </summary>
-        public List<string> InheritedStats { get; set; }
-    }
-
-    /// <summary>
     ///     Attempts to breed two Pokémon.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
@@ -420,13 +270,13 @@ public class BreedingService : INService
         await using var db = await _dbContextProvider.GetContextAsync();
 
         // Check cooldown
-        var breedResetResult = await _redisCache.Redis.GetDatabase().ExecuteAsync("HMGET", "breedcooldowns", userId.ToString());
+        var breedResetResult =
+            await _redisCache.Redis.GetDatabase().ExecuteAsync("HMGET", "breedcooldowns", userId.ToString());
         double cooldownTime = 0;
 
-        if (breedResetResult != null && breedResetResult.Length > 0 && breedResetResult[0] != null && !string.IsNullOrEmpty(breedResetResult[0].ToString()))
-        {
+        if (breedResetResult != null && breedResetResult.Length > 0 && breedResetResult[0] != null &&
+            !string.IsNullOrEmpty(breedResetResult[0].ToString()))
             cooldownTime = double.Parse(breedResetResult[0].ToString());
-        }
 
         if (cooldownTime > DateTimeOffset.UtcNow.ToUnixTimeSeconds() && userId != 280835732728184843)
         {
@@ -456,8 +306,8 @@ public class BreedingService : INService
             };
         }
 
-        // Fetch the user's Pokémon
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        // Fetch the user
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         if (user == null)
         {
             await ResetCooldownAsync(userId);
@@ -469,11 +319,10 @@ public class BreedingService : INService
         }
 
         // Check if the user has enough daycare slots
-        var pokemonIds = user.Pokemon;
-        var daycaredCount = await db.UserPokemon
-            .CountAsyncEF(p => pokemonIds.Contains(p.Id) && p.PokemonName == "Egg");
+        var pokemonCount = await db.UserPokemon
+            .CountAsync(p => p.Owner == userId && p.PokemonName == "Egg");
 
-        if (daycaredCount > user.DaycareLimit && user.UserId != 280835732728184843)
+        if (pokemonCount > user.DaycareLimit && user.UserId != 280835732728184843)
         {
             await ResetCooldownAsync(userId);
             return new BreedingResult
@@ -483,12 +332,32 @@ public class BreedingService : INService
             };
         }
 
+        // Get the male and female Pokémon by position
+        var malePosition = maleId - 1;
+        var femalePosition = femaleId - 1;
+
+        var maleOwnership = await db.UserPokemonOwnerships
+            .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == malePosition);
+
+        var femaleOwnership = await db.UserPokemonOwnerships
+            .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == femalePosition);
+
+        if (maleOwnership == null || femaleOwnership == null)
+        {
+            await ResetCooldownAsync(userId);
+            return new BreedingResult
+            {
+                Success = false,
+                ErrorMessage = maleOwnership == null ? "Male pokemon not found!" : "Female pokemon not found!"
+            };
+        }
+
         // Get the Pokémon details
         var fatherDetails = await db.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == pokemonIds[maleId - 1]);
+            .FirstOrDefaultAsync(p => p.Id == maleOwnership.PokemonId);
 
         var motherDetails = await db.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == pokemonIds[femaleId - 1]);
+            .FirstOrDefaultAsync(p => p.Id == femaleOwnership.PokemonId);
 
         if (fatherDetails == null || motherDetails == null)
         {
@@ -548,18 +417,31 @@ public class BreedingService : INService
         // Ditto is always the father since mother passes the pokename
         if (motherDetails.PokemonName == "Ditto") (motherDetails, fatherDetails) = (fatherDetails, motherDetails);
 
-        // Check if mother is on cooldown
-        var motherOnCooldown = await db.Mothers
-            .AnyAsyncEF(c => c.PokemonId == motherDetails.Id);
+        var motherRecord = await db.Mothers
+            .FirstOrDefaultAsync(c => c.PokemonId == motherDetails.Id);
 
-        if (motherOnCooldown)
+        if (motherRecord != null)
         {
-            await ResetCooldownAsync(userId);
-            return new BreedingResult
+            // Check if the cooldown period has elapsed
+            var cooldownHours = 2; // 2-hour cooldown
+            var cooldownEnds = motherRecord.EntryTime?.AddHours(cooldownHours) ?? DateTime.UtcNow;
+
+            if (DateTime.UtcNow < cooldownEnds)
             {
-                Success = false,
-                ErrorMessage = $"Your {motherDetails.PokemonName} is currently on cooldown... See `/f p args:cooldown`."
-            };
+                // Still on cooldown
+                var timeRemaining = cooldownEnds - DateTime.UtcNow;
+                await ResetCooldownAsync(userId);
+                return new BreedingResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Your {motherDetails.PokemonName} is on cooldown for another {timeRemaining.Hours}h {timeRemaining.Minutes}m."
+                };
+            }
+            else
+            {
+                // Cooldown expired, remove the entry
+                db.Mothers.Remove(motherRecord);
+            }
         }
 
         // Get parent Pokémon data for breeding
@@ -687,7 +569,8 @@ public class BreedingService : INService
         await db.Mothers.AddAsync(new Mother
         {
             PokemonId = motherDetails.Id,
-            OwnerId = userId
+            OwnerId = userId,
+            EntryTime = DateTime.UtcNow
         });
 
         // Update achievements
@@ -1061,66 +944,82 @@ public class BreedingService : INService
         try
         {
             await using var db = await _dbContextProvider.GetContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync();
 
-            // Create new egg Pokémon
-            var egg = new Database.Models.PostgreSQL.Pokemon.Pokemon
+            try
             {
-                PokemonName = "Egg",
-                HpIv = child.Hp,
-                AttackIv = child.Attack,
-                DefenseIv = child.Defense,
-                SpecialAttackIv = child.SpAtk,
-                SpecialDefenseIv = child.SpDef,
-                SpeedIv = child.Speed,
-                HpEv = 0,
-                AttackEv = 0,
-                DefenseEv = 0,
-                SpecialAttackEv = 0,
-                SpecialDefenseEv = 0,
-                SpeedEv = 0,
-                Level = 5,
-                Moves = ["tackle", "tackle", "tackle", "tackle"],
-                HeldItem = "None",
-                Experience = 1,
-                Nature = child.Nature,
-                ExperienceCap = 35,
-                Nickname = "None",
-                Price = 0,
-                MarketEnlist = false,
-                Happiness = 0,
-                Favorite = false,
-                AbilityIndex = child.AbilityId,
-                Counter = counter,
-                Name = child.Name,
-                Gender = child.Gender,
-                CaughtBy = userId,
-                Shiny = child.Shiny,
-                Skin = isShadow ? "shadow" : null,
-                Breedable = true
-            };
+                // Create new egg Pokémon
+                var egg = new Database.Models.PostgreSQL.Pokemon.Pokemon
+                {
+                    PokemonName = "Egg",
+                    HpIv = child.Hp,
+                    AttackIv = child.Attack,
+                    DefenseIv = child.Defense,
+                    SpecialAttackIv = child.SpAtk,
+                    SpecialDefenseIv = child.SpDef,
+                    SpeedIv = child.Speed,
+                    HpEv = 0,
+                    AttackEv = 0,
+                    DefenseEv = 0,
+                    SpecialAttackEv = 0,
+                    SpecialDefenseEv = 0,
+                    SpeedEv = 0,
+                    Level = 5,
+                    Moves = ["tackle", "tackle", "tackle", "tackle"],
+                    HeldItem = "None",
+                    Experience = 1,
+                    Nature = child.Nature,
+                    ExperienceCap = 35,
+                    Nickname = "None",
+                    Price = 0,
+                    MarketEnlist = false,
+                    Happiness = 0,
+                    Favorite = false,
+                    AbilityIndex = child.AbilityId,
+                    Counter = counter,
+                    Name = child.Name,
+                    Gender = child.Gender,
+                    CaughtBy = userId,
+                    Shiny = child.Shiny,
+                    Skin = isShadow ? "shadow" : null,
+                    Breedable = true,
+                    Owner = userId,
+                    Timestamp = DateTime.UtcNow
+                };
 
-            await db.UserPokemon.AddAsync(egg);
-            await db.SaveChangesAsync();
-
-            // Find the user
-            var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-
-            if (user != null)
-            {
-                user.Pokemon ??= [];
-
-                user.Pokemon = user.Pokemon.Append(egg.Id).ToArray();
-
+                // Save the egg to get its ID
+                await db.UserPokemon.AddAsync(egg);
                 await db.SaveChangesAsync();
+
+                // Find the highest position for this user's Pokémon
+                var highestPosition = await db.UserPokemonOwnerships
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.Position)
+                    .Select(o => (int?)o.Position)
+                    .FirstOrDefaultAsync() ?? -1;
+
+                // Add a new ownership entry with the next position
+                var ownership = new UserPokemonOwnership
+                {
+                    UserId = userId,
+                    PokemonId = egg.Id,
+                    Position = highestPosition + 1
+                };
+
+                await db.UserPokemonOwnerships.AddAsync(ownership);
+                await db.SaveChangesAsync();
+
+                await transaction.CommitAsync();
             }
-            else
+            catch (Exception)
             {
-                Log.Error($"Error: User with ID {userId} not found when trying to add Pokemon {egg.Id}.");
+                await transaction.RollbackAsync();
+                throw;
             }
         }
         catch (Exception e)
         {
-            Log.Error(e.ToString());
+            Log.Error(e, "Error inserting egg for user {UserId}", userId);
         }
     }
 
@@ -1347,68 +1246,227 @@ public class BreedingService : INService
     /// <returns>True if the Pokémon is female or a Ditto, false otherwise.</returns>
     public async Task<bool> ValidateFemaleIdAsync(ulong userId, int pokemonId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        try
+        {
+            await using var db = await _dbContextProvider.GetContextAsync();
 
-        // Fetch the user's Pokémon list
-        var user = await db.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => u.Pokemon)
-            .FirstOrDefaultAsyncEF();
+            // Convert from 1-based UI indexing to 0-based database indexing
+            var position = pokemonId - 1;
 
-        if (user == null || pokemonId > user.Length) return false;
+            // Get the ownership record to find the actual Pokemon ID
+            var ownership = await db.UserPokemonOwnerships
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
 
-        // Get the actual Pokémon ID from the user's array
-        var actualPokemonId = user[pokemonId - 1];
+            if (ownership == null) return false;
 
-        // Check if the Pokémon exists and is female or Ditto
-        var pokemon = await db.UserPokemon
-            .Where(p => p.Id == actualPokemonId)
-            .Select(p => new { p.Gender, p.PokemonName })
-            .FirstOrDefaultAsyncEF();
+            // Get the actual Pokémon from the database
+            var pokemon = await db.UserPokemon
+                .Where(p => p.Id == ownership.PokemonId)
+                .Select(p => new { p.Gender, p.PokemonName })
+                .FirstOrDefaultAsync();
 
-        if (pokemon == null) return false;
+            if (pokemon == null) return false;
 
-        // Valid if the Pokémon is female or a Ditto
-        return pokemon.Gender == "-f" || pokemon.PokemonName.ToLower() == "ditto";
+            // Valid if the Pokémon is female or a Ditto
+            return pokemon.Gender == "-f" || pokemon.PokemonName.ToLower() == "ditto";
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     /// <summary>
     ///     Gets the names of a breeding pair's parents.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
-    /// <param name="maleId">The ID of the male Pokémon.</param>
-    /// <param name="femaleId">The ID of the female Pokémon.</param>
+    /// <param name="malePosition">The ID of the male Pokémon.</param>
+    /// <param name="femalePosition">The ID of the female Pokémon.</param>
     /// <returns>A tuple containing the father's and mother's names.</returns>
-    public async Task<(string FatherName, string MotherName)> GetParentNamesAsync(ulong userId, int maleId,
-        int femaleId)
+    public async Task<(string FatherName, string MotherName)> GetParentNamesAsync(ulong userId, int malePosition,
+        int femalePosition)
     {
         await using var db = await _dbContextProvider.GetContextAsync();
 
-        // Get the user's Pokémon IDs
-        var pokemonIds = await db.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => u.Pokemon)
-            .FirstOrDefaultAsyncEF();
 
-        if (pokemonIds == null || pokemonIds.Length < Math.Max(maleId, femaleId)) return ("Unknown", "Unknown");
+        var maleOwnership = await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.Position == malePosition)
+            .FirstOrDefaultAsync();
+
+        var femaleOwnership = await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.Position == femalePosition)
+            .FirstOrDefaultAsync();
+
+        if (maleOwnership == null || femaleOwnership == null)
+            return ("Unknown", "Unknown");
 
         // Get the father and mother details
         var fatherDetails = await db.UserPokemon
-            .Where(p => p.Id == pokemonIds[maleId - 1])
+            .Where(p => p.Id == maleOwnership.PokemonId)
             .Select(p => new { p.PokemonName, p.Gender })
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         var motherDetails = await db.UserPokemon
-            .Where(p => p.Id == pokemonIds[femaleId - 1])
+            .Where(p => p.Id == femaleOwnership.PokemonId)
             .Select(p => new { p.PokemonName, p.Gender })
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
-        if (fatherDetails == null || motherDetails == null) return ("Unknown", "Unknown");
+        if (fatherDetails == null || motherDetails == null)
+            return ("Unknown", "Unknown");
 
         // Swap father and mother if the "mother" is a Ditto
         // Since Ditto is always treated as the father in breeding
-        if (motherDetails.PokemonName == "Ditto") return (motherDetails.PokemonName, fatherDetails.PokemonName);
+        if (motherDetails.PokemonName == "Ditto")
+            return (motherDetails.PokemonName, fatherDetails.PokemonName);
 
         return (fatherDetails.PokemonName, motherDetails.PokemonName);
+    }
+
+    /// <summary>
+    ///     Represents a Pokémon for breeding purposes.
+    /// </summary>
+    public class BreedingPokemon
+    {
+        /// <summary>
+        ///     Gets or sets the Pokémon's name.
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's gender.
+        /// </summary>
+        public string Gender { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's HP IV.
+        /// </summary>
+        public int Hp { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's Attack IV.
+        /// </summary>
+        public int Attack { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's Defense IV.
+        /// </summary>
+        public int Defense { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's Special Attack IV.
+        /// </summary>
+        public int SpAtk { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's Special Defense IV.
+        /// </summary>
+        public int SpDef { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's Speed IV.
+        /// </summary>
+        public int Speed { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's level.
+        /// </summary>
+        public int Level { get; set; }
+
+        /// <summary>
+        ///     Gets or sets whether the Pokémon is shiny.
+        /// </summary>
+        public bool Shiny { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's held item.
+        /// </summary>
+        public string HeldItem { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's happiness value.
+        /// </summary>
+        public int Happiness { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's ability ID.
+        /// </summary>
+        public int AbilityId { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's available ability IDs.
+        /// </summary>
+        public List<int> AbilityIds { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's egg groups.
+        /// </summary>
+        public List<int> EggGroups { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's nature.
+        /// </summary>
+        public string Nature { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the Pokémon's capture rate.
+        /// </summary>
+        public int CaptureRate { get; set; }
+
+        /// <summary>
+        ///     Calculates the total IV percentage of this Pokémon.
+        /// </summary>
+        /// <returns>The IV percentage as a decimal between 0 and 100.</returns>
+        public double CalculateIvPercentage()
+        {
+            double totalIvs = Hp + Attack + Defense + SpAtk + SpDef + Speed;
+            return Math.Round(totalIvs / 186.0 * 100, 2);
+        }
+    }
+
+    /// <summary>
+    ///     Result of a breeding operation.
+    /// </summary>
+    public class BreedingResult
+    {
+        /// <summary>
+        ///     Gets or sets whether the breeding attempt was successful.
+        /// </summary>
+        public bool Success { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the error message if the breeding attempt failed.
+        /// </summary>
+        public string ErrorMessage { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the child Pokémon if the breeding attempt was successful.
+        /// </summary>
+        public BreedingPokemon Child { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the hatch counter for the egg if the breeding attempt was successful.
+        /// </summary>
+        public int Counter { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the chance of success for the breeding attempt.
+        /// </summary>
+        public double Chance { get; set; }
+
+        /// <summary>
+        ///     Gets or sets whether the child Pokémon is shiny.
+        /// </summary>
+        public bool IsShiny { get; set; }
+
+        /// <summary>
+        ///     Gets or sets whether the child Pokémon is shadow.
+        /// </summary>
+        public bool IsShadow { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the stats that were inherited from the parents.
+        /// </summary>
+        public List<string> InheritedStats { get; set; }
     }
 }

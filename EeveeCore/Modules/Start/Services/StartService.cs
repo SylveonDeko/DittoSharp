@@ -1,3 +1,4 @@
+using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.PostgreSQL.Bot;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Modules.Spawn.Services;
@@ -9,10 +10,10 @@ namespace EeveeCore.Modules.Start.Services;
 ///     Provides functionality for user registration and starter Pokémon creation.
 ///     Handles the initial setup process for new users.
 /// </summary>
-/// <param name="db">The database context for data access.</param>
+/// <param name="dbContext">The database context for data access.</param>
 /// <param name="client">The Discord client for messaging.</param>
 /// <param name="svc">The spawn service for creating Pokémon.</param>
-public class StartService(EeveeCoreContext db, DiscordShardedClient client, SpawnService svc) : INService
+public class StartService(DbContextProvider dbContext, DiscordShardedClient client, SpawnService svc) : INService
 {
     /// <summary>
     ///     Handles creating a new user account
@@ -21,6 +22,8 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
     /// <returns>A tuple containing a success indicator and a message.</returns>
     public async Task<(bool Success, string Message)> RegisterNewUser(ulong userId)
     {
+        await using var db = await dbContext.GetContextAsync();
+
         // Check if user already exists
         var exists = await db.Users.AnyAsync(u => u.UserId == userId);
         if (exists) return (false, "You have already registered");
@@ -35,7 +38,6 @@ public class StartService(EeveeCoreContext db, DiscordShardedClient client, Spaw
             UpvotePoints = 0,
             MewCoins = 0,
             UserOrder = "kek",
-            Pokemon = [],
             Visible = true,
             Inventory = "{\"nature-capsules\" : 5, \"honey\" : 1, \"battle-multiplier\": 1, \"shiny-multiplier\": 0 }",
             Comp = true,

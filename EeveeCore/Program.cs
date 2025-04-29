@@ -12,7 +12,7 @@ using RunMode = Discord.Commands.RunMode;
 
 namespace EeveeCore;
 
-using EventHandler = Services.EventHandler;
+using EventHandler = EventHandler;
 
 /// <summary>
 ///     The main entry point class for the Mewdeko application.

@@ -1,12 +1,12 @@
 namespace EeveeCore.Common.Constants;
 
 /// <summary>
-/// Provides collections of special Pokémon categories including pseudo-legendary and starter Pokémon.
+///     Provides collections of special Pokémon categories including pseudo-legendary and starter Pokémon.
 /// </summary>
 public static class PseudoAndStarters
 {
     /// <summary>
-    /// Gets a list of pseudo-legendary Pokémon names and their pre-evolutions.
+    ///     Gets a list of pseudo-legendary Pokémon names and their pre-evolutions.
     /// </summary>
     public static readonly string[] PseudoList =
     [
@@ -19,7 +19,7 @@ public static class PseudoAndStarters
     ];
 
     /// <summary>
-    /// Gets a list of starter Pokémon names and their evolutions from all regions.
+    ///     Gets a list of starter Pokémon names and their evolutions from all regions.
     /// </summary>
     public static readonly string[] StarterList =
     [

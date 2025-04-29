@@ -6,7 +6,8 @@ public partial class Move
     ///     Applies post-damage effects.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string ApplyPostEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance, int numHits)
+    private string ApplyPostEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance,
+        int numHits)
     {
         var msg = "";
 
@@ -267,7 +268,8 @@ public partial class Move
     ///     Applies flinch effects.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string ApplyFlinchEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance, int numHits)
+    private string ApplyFlinchEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance,
+        int numHits)
     {
         var msg = "";
 

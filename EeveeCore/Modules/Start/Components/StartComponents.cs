@@ -108,8 +108,9 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
         // Send additional info
         var infoEmbed = new EmbedBuilder()
             .WithTitle("Thank you for registering!")
-            .WithDescription("Don't hesitate to [Join the Official Server](https://discord.gg/eeveecore) for upcoming Events/Tournaments\n" +
-                             "We love suggestions as well! Also, If you haven't, add EeveeCore to your server or recommend EeveeCore to your friends server and spread the fun!!")
+            .WithDescription(
+                "Don't hesitate to [Join the Official Server](https://discord.gg/eeveecore) for upcoming Events/Tournaments\n" +
+                "We love suggestions as well! Also, If you haven't, add EeveeCore to your server or recommend EeveeCore to your friends server and spread the fun!!")
             .WithColor(new Color(0xFFB6C1))
             .AddField("How to get Redeems and Credits",
                 "Get 1 Redeem and 15,000 Credits for 5 Upvote Points!\nMake sure you check out fishing for a new user bonus! Fish up mystery boxes to get battle multiplier!")
@@ -119,8 +120,7 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
         await ctx.Interaction.FollowupAsync(embed: infoEmbed.Build(), ephemeral: true);
 
         if (await ctx.Client.GetChannelAsync(1353493473172521020) is ITextChannel loggingChannel)
-        {
-            await loggingChannel.SendMessageAsync($"{ctx.User.Username} (`{ctx.User.Id}`) has started **EeveeCore** using `/start` (**{selectedStarter}**)");
-        }
+            await loggingChannel.SendMessageAsync(
+                $"{ctx.User.Username} (`{ctx.User.Id}`) has started **EeveeCore** using `/start` (**{selectedStarter}**)");
     }
 }

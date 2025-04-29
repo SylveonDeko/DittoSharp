@@ -4,35 +4,35 @@ using Microsoft.EntityFrameworkCore;
 namespace EeveeCore.Database.Models.PostgreSQL.Bot;
 
 /// <summary>
-/// Represents a donation record to the EeveeCore Pokémon bot.
-/// Tracks donor information, amounts, and transaction details.
-/// This class uses a keyless entity configuration.
+///     Represents a donation record to the EeveeCore Pokémon bot.
+///     Tracks donor information, amounts, and transaction details.
+///     This class uses a keyless entity configuration.
 /// </summary>
 [Table("EeveeCore_donations")]
 [Keyless]
 public class EeveeCoreDonation
 {
     /// <summary>
-    /// Gets or sets the Discord user ID of the donor.
+    ///     Gets or sets the Discord user ID of the donor.
     /// </summary>
     [Column("u_id")]
     public ulong? UserId { get; set; }
 
     /// <summary>
-    /// Gets or sets the donation amount.
+    ///     Gets or sets the donation amount.
     /// </summary>
     [Column("amount")]
     public int? Amount { get; set; }
 
     /// <summary>
-    /// Gets or sets the transaction ID of the donation.
-    /// Used to prevent duplicate donation processing.
+    ///     Gets or sets the transaction ID of the donation.
+    ///     Used to prevent duplicate donation processing.
     /// </summary>
     [Column("txn_id")]
     public string? TransactionId { get; set; }
 
     /// <summary>
-    /// Gets or sets the date when the donation was made.
+    ///     Gets or sets the date when the donation was made.
     /// </summary>
     [Column("date_donated")]
     public DateOnly? DateDonated { get; set; }

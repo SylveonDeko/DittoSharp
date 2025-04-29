@@ -1,17 +1,17 @@
 namespace EeveeCore.Common.Constants;
 
 /// <summary>
-/// Provides a collection of messages used for notifying users when a Pokémon spawns.
+///     Provides a collection of messages used for notifying users when a Pokémon spawns.
 /// </summary>
 public static class SpawnMessages
 {
     /// <summary>
-    /// Gets a read-only list of varied spawn notification messages used to announce
-    /// the appearance of wild Pokémon to users.
+    ///     Gets a read-only list of varied spawn notification messages used to announce
+    ///     the appearance of wild Pokémon to users.
     /// </summary>
     /// <remarks>
-    /// Includes standard alerts, humorous messages, spooky messages, tech-themed messages,
-    /// simple notifications, and quirky messages to provide variety in spawn announcements.
+    ///     Includes standard alerts, humorous messages, spooky messages, tech-themed messages,
+    ///     simple notifications, and quirky messages to provide variety in spawn announcements.
     /// </remarks>
     public static readonly IReadOnlyList<string> Messages = new List<string>
     {

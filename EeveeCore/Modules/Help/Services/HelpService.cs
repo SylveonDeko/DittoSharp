@@ -56,11 +56,9 @@ public class HelpService : INService
         {
             var selMenu = new SelectMenuBuilder().WithCustomId($"helpselect:{j}");
             foreach (var i in modules.Skip(j * 25).Take(25))
-            {
                 selMenu.Options.Add(new SelectMenuOptionBuilder()
                     .WithLabel(i.Name).WithDescription(GetModuleDescription(i.Name, guild))
                     .WithValue(i.Name.ToLower()));
-            }
 
             compBuilder.WithSelectMenu(selMenu); // add the select menu to the component builder
         }
@@ -90,19 +88,14 @@ public class HelpService : INService
             .Where(x => !x.IsSubModule).Distinct();
         var count = 0;
         if (description)
-        {
             foreach (var mod in modules)
-            {
                 embed.AddField(mod.Name,
                     $">>> {GetModuleDescription(mod.Name, guild)}", true);
-            }
-        }
         else
-        {
             foreach (var i in modules.Batch(modules.Count() / 2))
             {
                 var categoryStrings = i.Select(x =>
-                 Format.Bold(x.Name)
+                    Format.Bold(x.Name)
                 );
 
                 embed.AddField(
@@ -112,33 +105,33 @@ public class HelpService : INService
                 );
                 count++;
             }
-        }
 
         return embed;
     }
 
 
-    private string? GetModuleDescription(string module, IGuild? guild) => module.ToLower() switch
+    private string? GetModuleDescription(string module, IGuild? guild)
     {
-        _ => null
-    };
+        return module.ToLower() switch
+        {
+            _ => null
+        };
+    }
 
     private async Task HandlePing(SocketMessage msg)
     {
         if (msg.Content == $"<@{client.CurrentUser.Id}>" || msg.Content == $"<@!{client.CurrentUser.Id}>")
-        {
             if (msg.Channel is ITextChannel chan)
             {
                 var eb = new EmbedBuilder();
                 eb.WithOkColor();
                 eb.WithDescription(
-                    $"Hi there!");
+                    "Hi there!");
                 eb.WithThumbnailUrl("https://cdn.discordapp.com/emojis/914307922287276052.gif");
                 eb.WithFooter(new EmbedFooterBuilder().WithText(client.CurrentUser.Username)
                     .WithIconUrl(client.CurrentUser.GetAvatarUrl()));
                 await chan.SendMessageAsync(embed: eb.Build()).ConfigureAwait(false);
             }
-        }
     }
 
     private async Task HandleJoin(IGuild guild)
@@ -170,9 +163,9 @@ public class HelpService : INService
     /// <param name="guild">The guild where this was executed</param>
     /// <param name="user">The user who executed the command</param>
     /// <returns>A tuple containing a <see cref="ComponentBuilder" /> and <see cref="EmbedBuilder" /></returns>
-    public async Task<EmbedBuilder> GetCommandHelp(CommandInfo<SlashCommandParameterInfo> com, IGuild? guild, IGuildUser user)
+    public async Task<EmbedBuilder> GetCommandHelp(CommandInfo<SlashCommandParameterInfo> com, IGuild? guild,
+        IGuildUser user)
     {
-
         var prefix = await guildSettings.GetPrefix(guild);
         var potentialCommand = interactionService.SlashCommands.FirstOrDefault(x =>
             string.Equals(x.Name, com.Name, StringComparison.CurrentCultureIgnoreCase));
@@ -203,23 +196,27 @@ public class HelpService : INService
                         ? "`None`"
                         : $"</{potentialCommand.Module.SlashGroupName} {potentialCommand.Name}:{guildCommand.Id}>");
         }
+
         em
             .WithFooter(
                 $"Module: {com.Module.GetTopLevelModule().Name} || Submodule: {com.Module.Name.Replace("Commands", "")} || Method Name: {com.MethodName}")
             .WithColor(EeveeCore.OkColor);
 
-        return (em);
+        return em;
     }
 
 
-    private static string[] GetCommandRequirements(CommandInfo<SlashCommandParameterInfo> cmd, GuildPermission? overrides = null)
+    private static string[] GetCommandRequirements(CommandInfo<SlashCommandParameterInfo> cmd,
+        GuildPermission? overrides = null)
     {
         var toReturn = new List<string>();
 
         if (cmd.Preconditions.Any(x => x is RequireAdminAttribute))
             toReturn.Add("Bot Owner Only");
 
-        var userPerm = (RequireUserPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca => ca is RequireUserPermissionAttribute);
+        var userPerm =
+            (RequireUserPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca =>
+                ca is RequireUserPermissionAttribute);
 
         var userPermString = string.Empty;
         if (userPerm is not null)
@@ -253,7 +250,8 @@ public class HelpService : INService
         if (cmd.Preconditions.Any(x => x is RequireAdminAttribute))
             toReturn.Add("Bot Owner Only");
 
-        var botPerm = (RequireBotPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca => ca is RequireBotPermissionAttribute)!;
+        var botPerm =
+            (RequireBotPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca => ca is RequireBotPermissionAttribute)!;
 
         var botPermString = string.Empty;
         if (botPerm is not null)
@@ -306,5 +304,4 @@ public class HelpService : INService
     {
         return (perm + " Server Permission").Replace("Guild", "Server", StringComparison.InvariantCulture);
     }
-
 }

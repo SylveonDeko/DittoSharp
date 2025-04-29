@@ -5,14 +5,14 @@ using MongoDB.Driver;
 namespace EeveeCore.Modules.Extras.Services;
 
 /// <summary>
-/// Service implementation for the Extras module
+///     Service implementation for the Extras module
 /// </summary>
 public class ExtrasService : INService
 {
     private readonly IMongoService _mongoService;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExtrasService"/> class.
+    ///     Initializes a new instance of the <see cref="ExtrasService" /> class.
     /// </summary>
     /// <param name="mongoService">The MongoDB service for database operations.</param>
     public ExtrasService(
@@ -22,7 +22,7 @@ public class ExtrasService : INService
     }
 
     /// <summary>
-    /// Gets the complete list of moves available to a specific Pokémon.
+    ///     Gets the complete list of moves available to a specific Pokémon.
     /// </summary>
     /// <param name="pokemonName">The name of the Pokémon to get moves for.</param>
     /// <returns>A list of move names the Pokémon can learn, or null if the Pokémon doesn't exist.</returns>
@@ -31,7 +31,7 @@ public class ExtrasService : INService
         if (pokemonName == "smeargle")
         {
             // Moves which are not coded in the bot
-            var uncoded = new int[]
+            var uncoded = new[]
             {
                 266, 270, 476, 495, 502, 511, 597, 602, 603, 607, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632,
                 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653,
@@ -55,7 +55,7 @@ public class ExtrasService : INService
     }
 
     /// <summary>
-    /// Determines whether a Pokémon is in a formed state.
+    ///     Determines whether a Pokémon is in a formed state.
     /// </summary>
     /// <param name="pokemonName">The name of the Pokémon to check.</param>
     /// <returns>True if the Pokémon is in a formed state, false otherwise.</returns>
@@ -64,20 +64,20 @@ public class ExtrasService : INService
         if (string.IsNullOrEmpty(pokemonName))
             return false;
 
-        return pokemonName.EndsWith("-mega") || 
-               pokemonName.EndsWith("-x") || 
+        return pokemonName.EndsWith("-mega") ||
+               pokemonName.EndsWith("-x") ||
                pokemonName.EndsWith("-y") ||
-               pokemonName.EndsWith("-origin") || 
-               pokemonName.EndsWith("-10") || 
+               pokemonName.EndsWith("-origin") ||
+               pokemonName.EndsWith("-10") ||
                pokemonName.EndsWith("-complete") ||
-               pokemonName.EndsWith("-ultra") || 
+               pokemonName.EndsWith("-ultra") ||
                pokemonName.EndsWith("-crowned") ||
                pokemonName.EndsWith("-eternamax") ||
                pokemonName.EndsWith("-blade");
     }
 
     /// <summary>
-    /// Creates a visual health bar representation for Discord messages.
+    ///     Creates a visual health bar representation for Discord messages.
     /// </summary>
     /// <param name="maxHealth">The maximum health value.</param>
     /// <param name="health">The current health value.</param>
@@ -99,13 +99,13 @@ public class ExtrasService : INService
         var result = "";
         var emojis = new Dictionary<bool, Dictionary<string, string>>
         {
-            [true] = new Dictionary<string, string>
+            [true] = new()
             {
                 ["left"] = "<:bar_e1:1059717853714055268>",
                 ["center"] = "<:bar_e2:1059717860651434024>",
                 ["right"] = "<:bar_e3:1059717856595558402>"
             },
-            [false] = new Dictionary<string, string>
+            [false] = new()
             {
                 ["left"] = "<:bar1:1059670478123442197>",
                 ["center"] = "<:bar2:1059670474046574692>",
@@ -128,18 +128,18 @@ public class ExtrasService : INService
     }
 
     /// <summary>
-    /// Calculates breeding success multiplier based on level.
+    ///     Calculates breeding success multiplier based on level.
     /// </summary>
     /// <param name="level">The level to calculate the multiplier for.</param>
     /// <returns>A formatted string representing the breeding multiplier.</returns>
     public string CalculateBreedingMultiplier(int level)
     {
         var difference = 0.02;
-        return $"{Math.Round(1 + (level * difference), 2)}x";
+        return $"{Math.Round(1 + level * difference, 2)}x";
     }
 
     /// <summary>
-    /// Calculates IV multiplier based on level.
+    ///     Calculates IV multiplier based on level.
     /// </summary>
     /// <param name="level">The level to calculate the multiplier for.</param>
     /// <returns>A formatted string representing the IV multiplier.</returns>
@@ -150,7 +150,7 @@ public class ExtrasService : INService
     }
 
     /// <summary>
-    /// Checks if a mission with the specified key is active.
+    ///     Checks if a mission with the specified key is active.
     /// </summary>
     /// <param name="key">The mission key to check.</param>
     /// <returns>True if there are active missions with the key, false otherwise.</returns>
@@ -159,7 +159,7 @@ public class ExtrasService : INService
         var activeMissions = await _mongoService.Missions
             .Find(m => m.Active == true && m.Key == key)
             .ToListAsync();
-        
+
         return activeMissions.Any();
     }
 }

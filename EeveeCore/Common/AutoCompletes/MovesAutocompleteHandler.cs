@@ -7,19 +7,18 @@ using MongoDB.Driver;
 namespace EeveeCore.Common.AutoCompletes;
 
 /// <summary>
-/// Provides autocomplete functionality for Pokémon moves.
-/// Suggests moves that the selected Pokémon can learn.
+///     Provides autocomplete functionality for Pokémon moves.
+///     Suggests moves that the selected Pokémon can learn.
 /// </summary>
 public class MovesAutoCompleteHandler : AutocompleteHandler
 {
+    // Cache for Pokémon moves to reduce database queries
+    private static readonly ConcurrentDictionary<string, List<string>> MoveCache = new();
     private readonly DbContextProvider _dbContextProvider;
     private readonly IMongoService _mongoService;
 
-    // Cache for Pokémon moves to reduce database queries
-    private static readonly ConcurrentDictionary<string, List<string>> MoveCache = new();
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="MovesAutocompleteHandler"/> class.
+    ///     Initializes a new instance of the <see cref="MovesAutocompleteHandler" /> class.
     /// </summary>
     /// <param name="dbContextProvider">The database context provider.</param>
     /// <param name="mongoService">The MongoDB service for accessing collection data.</param>
@@ -30,15 +29,15 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
     }
 
     /// <summary>
-    /// Generates autocomplete suggestions for Pokémon moves based on the selected Pokémon.
+    ///     Generates autocomplete suggestions for Pokémon moves based on the selected Pokémon.
     /// </summary>
     /// <param name="context">The interaction context.</param>
     /// <param name="autocompleteInteraction">The autocomplete interaction data.</param>
     /// <param name="parameter">The parameter being autocompleted.</param>
     /// <param name="services">The service provider for dependency injection.</param>
     /// <returns>
-    /// A task representing the asynchronous operation that returns an
-    /// AutocompletionResult containing matching move names.
+    ///     A task representing the asynchronous operation that returns an
+    ///     AutocompletionResult containing matching move names.
     /// </returns>
     public override async Task<AutocompletionResult> GenerateSuggestionsAsync(
         IInteractionContext context,
@@ -62,9 +61,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
                 .FirstOrDefaultAsyncEF();
 
             if (string.IsNullOrEmpty(selectedPokemon))
-            {
                 return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
-            }
 
             // Check cache or get moves from database
             if (!MoveCache.TryGetValue(selectedPokemon, out var moves))
@@ -91,7 +88,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
     }
 
     /// <summary>
-    /// Gets the list of moves that a Pokémon can learn.
+    ///     Gets the list of moves that a Pokémon can learn.
     /// </summary>
     /// <param name="pokemonName">The name of the Pokémon.</param>
     /// <returns>A list of move names the Pokémon can learn.</returns>
@@ -101,7 +98,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
         if (pokemonName == "smeargle")
         {
             // Moves which are not coded in the bot
-            var uncoded_ids = new int[]
+            var uncoded_ids = new[]
             {
                 266, 270, 476, 495, 502, 511, 597, 602, 603, 607, 622, 623, 624, 625, 626, 627, 628, 629,
                 630, 631, 632, 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647,
@@ -123,10 +120,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
             .Find(pm => pm.Pokemon == pokemonName)
             .FirstOrDefaultAsync();
 
-        if (pokemonMoves == null || pokemonMoves.Moves == null)
-        {
-            return new List<string>();
-        }
+        if (pokemonMoves == null || pokemonMoves.Moves == null) return new List<string>();
 
         return pokemonMoves.Moves.Distinct().OrderBy(m => m).ToList();
     }

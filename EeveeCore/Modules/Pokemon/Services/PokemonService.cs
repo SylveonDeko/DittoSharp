@@ -1,13 +1,14 @@
 using System.Reflection;
 using EeveeCore.Common.Logic;
 using EeveeCore.Database.DbContextStuff;
+using EeveeCore.Database.Linq.Models;
 using EeveeCore.Database.Models.Mongo.Pokemon;
-using EeveeCore.Database.Models.PostgreSQL.Bot;
 using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Modules.Spawn.Constants;
 using EeveeCore.Services.Impl;
 using Humanizer;
 using LinqToDB;
+using LinqToDB.Data;
 using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
@@ -286,52 +287,6 @@ public class PokemonService(
     }
 
     /// <summary>
-    ///     Parses a Pokemon form name to ensure it has the correct format.
-    /// </summary>
-    /// <param name="form">The form name to parse.</param>
-    /// <returns>The correctly formatted form name.</returns>
-    public async Task<string> ParseForm(string form)
-    {
-        form = form.ToLower();
-        var formParts = form.Split("-");
-
-        // Handle specific case for 'tauros'
-        if (formParts[0] == "tauros" && formParts.Length > 2)
-            return formParts[1] + "-" + formParts[^1];
-
-        // Check if the form starts with any special prefix
-        var specialPrefixes = new[] { "tapu", "ho", "mr", "nidoran" };
-        if (specialPrefixes.Any(prefix => form.StartsWith(prefix + "-")))
-            return form;
-
-        // Direct match check
-        var identifierMatch = await mongo.Forms
-            .Find(f => f.Identifier == form)
-            .FirstOrDefaultAsync();
-        if (identifierMatch != null)
-            return form;
-
-        // Check for specific formed identifiers
-        if (formParts.Length > 1 && IsFormed(form))
-        {
-            var formMatch = await mongo.Forms
-                .Find(f => f.FormIdentifier == formParts[formParts.Length - 1])
-                .FirstOrDefaultAsync();
-            if (formMatch != null)
-                return form;
-        }
-
-        // General rearrangement for other cases
-        if (formParts.Length == 2 || (formParts.Length == 3 && formParts[0] != "tauros"))
-        {
-            (formParts[0], formParts[1]) = (formParts[1], formParts[0]);
-            return string.Join("-", formParts);
-        }
-
-        return form;
-    }
-
-    /// <summary>
     ///     Selects a Pokemon from the user's collection.
     /// </summary>
     /// <param name="userId">The ID of the user.</param>
@@ -350,11 +305,17 @@ public class PokemonService(
         if (pokeNumber <= 0)
             return (false, "Invalid pokemon number.");
 
-        if (pokeNumber > user.Pokemon.Length)
+        // Find the Pokemon in the join table using position
+        var position = pokeNumber - 1;
+        var ownership = await dbContext.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.Position == position)
+            .FirstOrDefaultAsyncEF();
+
+        if (ownership == null)
             return (false, "You don't have that many Pokemon.");
 
         var pokemon = await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == user.Pokemon[pokeNumber - 1]);
+            .FirstOrDefaultAsyncEF(p => p.Id == ownership.PokemonId);
 
         if (pokemon == null)
             return (false, "That pokemon does not exist!");
@@ -403,16 +364,18 @@ public class PokemonService(
     {
         await using var dbContext = await dbProvider.GetContextAsync();
 
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        // Find the ownership record with the highest position (newest Pokemon)
+        var newestOwnership = await dbContext.UserPokemonOwnerships
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.Position)
+            .FirstOrDefaultAsyncEF();
 
-        if (user?.Pokemon == null || user.Pokemon.Length == 0)
+        if (newestOwnership == null)
             return null;
 
-        var newestPokeId = user.Pokemon[^1];
-
+        // Get the Pokemon using the ID from the ownership record
         return await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == newestPokeId);
+            .FirstOrDefaultAsyncEF(p => p.Id == newestOwnership.PokemonId);
     }
 
     /// <summary>
@@ -432,17 +395,24 @@ public class PokemonService(
     /// <param name="userId">The ID of the user.</param>
     /// <param name="number">The number of the Pokemon.</param>
     /// <returns>The Pokemon with the specified number, or null if not found.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> GetPokemonByNumber(ulong userId, int number)
+    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetPokemonByNumber(ulong userId, int number)
     {
         await using var dbContext = await dbProvider.GetContextAsync();
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
-        if (user?.Pokemon == null || number <= 0 || number > user.Pokemon.Length)
+        // Convert from 1-based user interface numbering to 0-based database position
+        var position = number - 1;
+
+        // Find the Pokemon ID in the ownership table using position
+        var ownership = await dbContext.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.Position == position)
+            .FirstOrDefaultAsyncEF();
+
+        if (ownership == null)
             return null;
 
-        return await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == user.Pokemon[number - 1]);
+        // Get the actual Pokemon from the Pokemon table
+        return (await dbContext.UserPokemon
+            .FirstOrDefaultAsyncEF(p => p.Id == ownership.PokemonId))!;
     }
 
     /// <summary>
@@ -455,38 +425,61 @@ public class PokemonService(
     public async Task RemoveUserPokemon(ulong userId, ulong pokemonId, bool releasePokemon = false)
     {
         await using var dbContext = await dbProvider.GetContextAsync();
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
-        if (user == null)
-            throw new Exception("User not found");
+        // Begin transaction to ensure consistency
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        var pokemon = await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+        try
+        {
+            var pokemon = await dbContext.UserPokemon
+                .FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
 
-        if (pokemon == null)
-            throw new Exception("Pokemon not found");
+            if (pokemon == null)
+                throw new Exception("Pokemon not found");
 
-        if (pokemon.Favorite)
-            throw new Exception("Cannot remove favorited Pokemon");
+            if (pokemon.Favorite)
+                throw new Exception("Cannot remove favorited Pokemon");
 
-        // Remove from user's pokemon list
-        var pokemonList = user.Pokemon.ToList();
-        pokemonList.Remove(pokemonId);
-        user.Pokemon = pokemonList.ToArray();
+            // Find the ownership record
+            var ownership = await dbContext.UserPokemonOwnerships
+                .FirstOrDefaultAsyncEF(o => o.UserId == userId && o.PokemonId == pokemonId);
 
-        // If this was the selected pokemon, unselect it
-        if (user.Selected == pokemonId)
-            user.Selected = 0;
+            if (ownership == null)
+                throw new Exception("Pokemon not found in user's collection");
 
-        if (releasePokemon)
-            // Actually delete the pokemon for release
-            dbContext.UserPokemon.Remove(pokemon);
-        else
-            // For sacrifice, just unlink it
-            pokemon.Owner = 0;
+            // Store the position for reordering
+            var position = ownership.Position;
 
-        await dbContext.SaveChangesAsync();
+            // Remove the ownership record
+            dbContext.UserPokemonOwnerships.Remove(ownership);
+
+            // Update all higher positions to maintain order
+            await dbContext.UserPokemonOwnerships
+                .Where(o => o.UserId == userId && o.Position > position)
+                .ForEachAsyncEF(o => o.Position--);
+
+            // Check if this was the selected Pokemon
+            var user = await dbContext.Users
+                .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+
+            if (user != null && user.Selected == pokemonId)
+                user.Selected = 0;
+
+            if (releasePokemon)
+                // Actually delete the Pokemon for release
+                dbContext.UserPokemon.Remove(pokemon);
+            else
+                // For sacrifice, just unlink it
+                pokemon.Owner = 0;
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -565,29 +558,6 @@ public class PokemonService(
             Log.Error(e, "Error getting Pokemon forms for {Val}", val);
             return "None";
         }
-    }
-
-    /// <summary>
-    ///     Gets Pokemon with special characteristics from a user's collection.
-    /// </summary>
-    /// <param name="userId">The ID of the user.</param>
-    /// <param name="variant">The variant type to filter by.</param>
-    /// <returns>A list of Pokemon matching the filter criteria.</returns>
-    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetSpecialPokemon(ulong userId, string variant)
-    {
-        await using var dbContext = await dbProvider.GetContextAsync();
-        var userPokemon = await GetUserPokemons(userId);
-
-        return variant switch
-        {
-            "shiny" => userPokemon.Where(p => p.Shiny == true).ToList(),
-            "radiant" => userPokemon.Where(p => p.Radiant == true).ToList(),
-            "shadow" => userPokemon.Where(p => p.Skin == "shadow").ToList(),
-            "skin" => userPokemon.Where(p => !string.IsNullOrEmpty(p.Skin)).ToList(),
-            "legendary" => userPokemon.Where(p => PokemonList.LegendList.Contains(p.PokemonName)).ToList(),
-            "starter" => userPokemon.Where(p => PokemonList.starterList.Contains(p.PokemonName)).ToList(),
-            _ => userPokemon
-        };
     }
 
     /// <summary>
@@ -679,7 +649,7 @@ public class PokemonService(
     /// <param name="pokemon">The Pokemon to calculate stats for.</param>
     /// <param name="baseStats">The base stats of the Pokemon.</param>
     /// <returns>A CalculatedStats object containing the calculated stats.</returns>
-    public Task<CalculatedStats> CalculatePokemonStats(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon,
+    public Task<CalculatedStats> CalculatePokemonStats(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon,
         PokemonStats baseStats)
     {
         var natureModifier = GetNatureModifier(pokemon.Nature);
@@ -722,14 +692,118 @@ public class PokemonService(
         // Check for special admin case
         var actualUserId = userId == 1081889316848017539 ? 946611594488602694UL : userId;
 
-        // Get all dead Pokemon that match user's Pokemon array in one query
+        // Get all Pokemon IDs owned by the user from the ownership table
+        var ownedPokemonIds = await dbContext.UserPokemonOwnerships
+            .Where(o => o.UserId == actualUserId)
+            .Select(o => o.PokemonId)
+            .ToListAsyncEF();
+
+        if (ownedPokemonIds.Count == 0)
+            return new List<DeadPokemon>();
+
+        // Get all dead Pokemon that match the user's owned Pokemon IDs
         return await dbContext.DeadPokemon
             .AsNoTracking()
-            .Where(d => dbContext.Users
-                .Where(u => u.UserId == actualUserId)
-                .SelectMany(u => u.Pokemon)
-                .Contains(d.Id))
+            .Where(d => ownedPokemonIds.Contains(d.Id))
             .ToListAsyncEF();
+    }
+
+    /// <summary>
+    ///     Checks if dead Pokemon references in a user's collection correspond to invalid references.
+    ///     This helps identify if references that couldn't be migrated might actually be dead Pokemon.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>A tuple containing lists of potentially recoverable and unrecoverable invalid references.</returns>
+    public async Task<(List<InvalidPokemonReference> PotentialDeadPokemon, List<InvalidPokemonReference>
+            UnrecoverableReferences)>
+        CheckInvalidReferencesAgainstDeadPokemon(ulong userId)
+    {
+        await using var dbContext = await dbProvider.GetContextAsync();
+
+        // Get all invalid references for this user
+        var invalidReferences = await dbContext.InvalidPokemonReferences
+            .Where(r => r.UserId == userId)
+            .ToListAsyncEF();
+
+        if (invalidReferences.Count == 0)
+            return (new List<InvalidPokemonReference>(), new List<InvalidPokemonReference>());
+
+        // Get all dead Pokemon IDs
+        var deadPokemonIds = await dbContext.DeadPokemon
+            .Select(d => d.Id)
+            .ToListAsyncEF();
+
+        // Check which invalid references match dead Pokemon IDs
+        var potentialDeadPokemon = invalidReferences
+            .Where(r => deadPokemonIds.Contains(r.PokemonId))
+            .ToList();
+
+        var unrecoverableReferences = invalidReferences
+            .Where(r => !deadPokemonIds.Contains(r.PokemonId))
+            .ToList();
+
+        return (potentialDeadPokemon, unrecoverableReferences);
+    }
+
+    /// <summary>
+    ///     Recovers dead Pokemon references for a user by creating ownership entries.
+    ///     This fixes cases where a user has dead Pokemon that weren't properly migrated to the ownership table.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <returns>The number of dead Pokemon references that were recovered.</returns>
+    public async Task<int> RecoverDeadPokemonReferences(ulong userId)
+    {
+        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+        try
+        {
+            var (potentialDeadPokemon, _) = await CheckInvalidReferencesAgainstDeadPokemon(userId);
+
+            if (potentialDeadPokemon.Count == 0)
+                return 0;
+
+            // Find the highest position for this user
+            var highestPosition = await dbContext.UserPokemonOwnerships
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.Position)
+                .Select(o => (int?)o.Position)
+                .FirstOrDefaultAsyncEF() ?? -1;
+
+            // Create ownership entries for the dead Pokemon
+            var ownerships = new List<UserPokemonOwnership>();
+
+            foreach (var reference in potentialDeadPokemon)
+            {
+                highestPosition++;
+
+                ownerships.Add(new UserPokemonOwnership
+                {
+                    UserId = userId,
+                    PokemonId = reference.PokemonId,
+                    Position = highestPosition
+                });
+            }
+
+            await dbContext.UserPokemonOwnerships.AddRangeAsync(ownerships);
+
+            // Remove the recovered references from invalid references
+            var referenceIds = potentialDeadPokemon.Select(r => r.PokemonId).ToList();
+            await dbContext.InvalidPokemonReferences
+                .Where(r => r.UserId == userId && referenceIds.Contains(r.PokemonId))
+                .ExecuteDeleteAsync();
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return potentialDeadPokemon.Count;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            Log.Error(ex, "Error recovering dead Pokemon references for user {UserId}", userId);
+            return 0;
+        }
     }
 
     /// <summary>
@@ -836,135 +910,145 @@ public class PokemonService(
     public async Task<int> GetPokemonIndex(ulong userId, ulong pokemonId)
     {
         await using var dbContext = await dbProvider.GetContextAsync();
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
 
-        if (user?.Pokemon == null)
+        // Directly query the position from the join table
+        var ownership = await dbContext.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.PokemonId == pokemonId)
+            .FirstOrDefaultAsyncEF();
+
+        if (ownership == null)
             return -1;
 
-        // Find the index of this Pokemon in the user's array
-        return Array.IndexOf(user.Pokemon, pokemonId) + 1; // +1 for 1-based indexing
+        // Return 1-based index for user interface
+        return ownership.Position + 1;
     }
 
     /// <summary>
-    ///     Gets a list of all Pokemon owned by a user with enhanced information and sorting options.
+    ///     Gets a filtered, sorted, and paginated list of Pokemon for display.
+    ///     Handles all database operations including party data retrieval and filtering.
     /// </summary>
-    /// <param name="userId">The ID of the user.</param>
-    /// <param name="order">The sort order for the list.</param>
-    /// <param name="filter">The filter to apply (e.g., "shiny", "legendary").</param>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="sortOrder">How to sort the Pokemon.</param>
+    /// <param name="filter">Filter to apply (all, shiny, radiant, etc).</param>
     /// <param name="search">Optional search term.</param>
-    /// <returns>A list of Pokemon list entries matching the criteria.</returns>
-    public async Task<List<PokemonListEntry>> GetPokemonList(ulong userId, SortOrder order = SortOrder.Default,
-        string filter = "all", string search = null)
+    /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
+    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<long> PartyPokemon,
+            ulong? SelectedPokemon)>
+        GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter, string search)
     {
         try
         {
             await using var db = await dbProvider.GetContextAsync();
             var conn = db.CreateLinqToDBConnection();
 
-            var userData = await conn.GetTable<Database.Linq.Models.User>()
+            // Get user data for party and selected - using LinqToDB, not EF Core, EF Core is slow sometimes.
+            var userData = await conn.GetTable<User>()
                 .Where(u => u.UserId == userId)
-                .Select(u => new { u.Pokemon, u.Party, u.Selected })
+                .Select(u => new { u.Party, u.Selected })
                 .FirstOrDefaultAsyncLinqToDB();
 
-            if (userData?.Pokemon == null || userData.Pokemon.Length == 0)
+            if (userData == null)
             {
-                var userExists = userData != null;
+                var userExists = await conn.GetTable<User>()
+                    .AnyAsyncLinqToDB(u => u.UserId == userId);
+
                 if (!userExists)
-                {
-                     userExists = await conn.GetTable<Database.Linq.Models.User>().AnyAsyncLinqToDB(u => u.UserId == userId);
-                     if (!userExists) return [];
-                }
-                return [];
+                    return (new List<PokemonListEntry>(), null, new HashSet<long>(), null);
             }
 
-            var userPokemonIds = new HashSet<int>(userData.Pokemon);
-            var partyLookup = userData.Party != null
-                ? new HashSet<int>(userData.Party.Where(id => id != 0))
-                : new HashSet<int>();
-             var indexLookup = userData.Pokemon
-                .Select((id, index) => new { Id = id, Number = index + 1 })
-                .ToDictionary(item => item.Id, item => item.Number);
+            // Create lookup sets for efficient checking
+            var partyLookup = userData?.Party != null
+                ? new HashSet<long>(userData.Party.Where(id => id != 0))
+                : new HashSet<long>();
 
+            // Get Pokemon from the ownership table using JOIN instead of separate queries
+            var query = from ownership in conn.GetTable<UserPokemonOwnership>()
+                join pokemon in conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
+                    on ownership.PokemonId equals pokemon.Id
+                where ownership.UserId == userId
+                select new { Pokemon = pokemon, ownership.Position };
 
-            var query = conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
-                .Where(p => userPokemonIds.Contains((int)p.Id));
-
-
+            // Apply filter
             query = filter switch
             {
-                "shiny" => query.Where(p => p.Shiny == true),
-                "radiant" => query.Where(p => p.Radiant == true),
-                "shadow" => query.Where(p => p.Skin == "shadow"),
-                "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.PokemonName)),
-                "favorite" => query.Where(p => p.Favorite),
-                "champion" => query.Where(p => p.Champion),
-                "party" => query.Where(p => partyLookup.Contains((int)p.Id)),
-                "market" => query.Where(p => p.MarketEnlist),
-                "all" => query,
+                "shiny" => query.Where(p => p.Pokemon.Shiny == true),
+                "radiant" => query.Where(p => p.Pokemon.Radiant == true),
+                "shadow" => query.Where(p => p.Pokemon.Skin == "shadow"),
+                "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.Pokemon.PokemonName)),
+                "favorite" => query.Where(p => p.Pokemon.Favorite),
+                "champion" => query.Where(p => p.Pokemon.Champion),
+                "party" => query.Where(p => partyLookup.Contains((int)p.Pokemon.Id)),
+                "market" => query.Where(p => p.Pokemon.MarketEnlist),
                 _ => query
             };
 
-            if (!string.IsNullOrEmpty(search))
-            {
-                 query = query.Where(p =>
-                    p.PokemonName.Contains(search) ||
-                    (p.Nickname != null && p.Nickname.Contains(search)) ||
-                    (p.Tags != null && p.Tags.Any(t => t.Contains(search))) ||
-                    (p.Moves != null && p.Moves.Any(m => m.Contains(search)))
-                 );
-            }
+            // Get collection stats before applying sort
+            var stats = await CalculateCollectionStatistics(userId, conn);
 
-
-            query = order switch
+            // Apply sorting
+            query = sortOrder switch
             {
                 SortOrder.Iv => query.OrderByDescending(p =>
-                    p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv),
-                SortOrder.Level => query.OrderByDescending(p => p.Level),
-                SortOrder.Name => query.OrderBy(p => p.PokemonName),
-                SortOrder.Recent => query.OrderByDescending(p => p.Timestamp),
-                SortOrder.Favorite => query.OrderByDescending(p => p.Favorite),
-                SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains((int)p.Id)),
-                SortOrder.Champion => query.OrderByDescending(p => p.Champion),
-                SortOrder.Default => query.OrderByDescending(p => p.Id),
-                _ => query.OrderByDescending(p => p.Id)
+                    p.Pokemon.HpIv + p.Pokemon.AttackIv + p.Pokemon.DefenseIv +
+                    p.Pokemon.SpecialAttackIv + p.Pokemon.SpecialDefenseIv + p.Pokemon.SpeedIv),
+                SortOrder.Level => query.OrderByDescending(p => p.Pokemon.Level),
+                SortOrder.Name => query.OrderBy(p => p.Pokemon.PokemonName),
+                SortOrder.Recent => query.OrderByDescending(p => p.Pokemon.Timestamp),
+                SortOrder.Favorite => query.OrderByDescending(p => p.Pokemon.Favorite),
+                SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains((int)p.Pokemon.Id)),
+                SortOrder.Champion => query.OrderByDescending(p => p.Pokemon.Champion),
+                _ => query.OrderBy(p => p.Position) // Default sort by position (index in collection)
             };
 
+            // Create the projection to get all needed fields
             var projectedQuery = query.Select(p => new
             {
-                p.Id,
-                p.DittoId,
-                p.PokemonName,
-                p.Nickname,
-                p.Level,
-                IvTotal = p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv,
-                p.Shiny,
-                p.Radiant,
-                p.Skin,
-                p.Gender,
-                p.Timestamp,
-                p.Favorite,
-                p.Champion,
-                p.MarketEnlist,
-                p.HeldItem,
-                p.Moves,
-                p.Tags,
-                p.Tradable,
-                p.Breedable
+                p.Pokemon.Id,
+                p.Pokemon.PokemonName,
+                p.Pokemon.Nickname,
+                p.Pokemon.Level,
+                IvTotal = p.Pokemon.HpIv + p.Pokemon.AttackIv + p.Pokemon.DefenseIv +
+                          p.Pokemon.SpecialAttackIv + p.Pokemon.SpecialDefenseIv + p.Pokemon.SpeedIv,
+                p.Pokemon.Shiny,
+                p.Pokemon.Radiant,
+                p.Pokemon.Skin,
+                p.Pokemon.Gender,
+                p.Pokemon.Timestamp,
+                p.Pokemon.Favorite,
+                p.Pokemon.Champion,
+                p.Pokemon.MarketEnlist,
+                p.Pokemon.HeldItem,
+                p.Pokemon.Moves,
+                p.Pokemon.Tags,
+                p.Pokemon.Tradable,
+                p.Pokemon.Breedable,
+                Position = p.Position + 1 // Convert to 1-based indexing for display
             });
 
-
+            // Execute the query and get the results
             var pokemonData = await projectedQuery.ToListAsyncLinqToDB();
 
+            if (!string.IsNullOrEmpty(search))
+            {
+                pokemonData = pokemonData.Where(p =>
+                    p.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (p.Nickname != null && p.Nickname.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                    (p.Tags != null && p.Tags.Any(t => t != null && t.Contains(search, StringComparison.OrdinalIgnoreCase))) ||
+                    (p.Moves != null && p.Moves.Any(m => m != null && m.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                ).ToList();
+            }
 
-            if (order != SortOrder.Type)
-                return pokemonData.Select(p =>
+            // If we need to sort by type, we need to process the results further
+            if (sortOrder == SortOrder.Type)
+            {
+                var typedPokemon = new List<(PokemonListEntry entry, string primaryType)>();
+
+                foreach (var p in pokemonData)
                 {
-                    var number = indexLookup.TryGetValue((int)p.Id, out var num) ? num : 0;
-                    return new PokemonListEntry(
-                        p.DittoId,
+                    var entry = new PokemonListEntry(
+                        p.Id,
                         p.PokemonName,
-                        number,
+                        p.Position,
                         p.Level,
                         p.IvTotal / 186.0,
                         p.Shiny ?? false,
@@ -982,155 +1066,25 @@ public class PokemonService(
                         p.Breedable,
                         p.Timestamp
                     );
-                }).ToList();
-            {
-                 var typedPokemon = new List<(PokemonListEntry entry, string primaryType)>();
-                 foreach (var p in pokemonData)
-                 {
-                     var number = indexLookup.TryGetValue((int)p.Id, out var num) ? num : 0;
-                     var entry = new PokemonListEntry(
-                         p.DittoId,
-                         p.PokemonName,
-                         number,
-                         p.Level,
-                         p.IvTotal / 186.0,
-                         p.Shiny ?? false,
-                         p.Radiant ?? false,
-                         p.Skin,
-                         p.Gender,
-                         p.Nickname,
-                         p.Favorite,
-                         p.Champion,
-                         p.MarketEnlist,
-                         p.HeldItem,
-                         p.Moves ?? [],
-                         p.Tags ?? [],
-                         p.Tradable,
-                         p.Breedable,
-                         p.Timestamp
-                     );
-                     var primaryType = await GetPrimaryType(p.PokemonName);
-                     typedPokemon.Add((entry, primaryType));
-                 }
-                 return typedPokemon.OrderBy(tp => tp.primaryType).ThenBy(tp => tp.entry.Name).Select(tp => tp.entry).ToList();
-             }
 
+                    var primaryType = await GetPrimaryType(p.PokemonName);
+                    typedPokemon.Add((entry, primaryType));
+                }
 
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Error getting Pokemon list for user {UserId} with order {Order}, filter {Filter}, search {Search}", userId, order, filter, search);
+                var sortedList = typedPokemon
+                    .OrderBy(tp => tp.primaryType)
+                    .ThenBy(tp => tp.entry.Name)
+                    .Select(tp => tp.entry)
+                    .ToList();
 
-            throw;
-        }
-    }
+                return (sortedList, stats, partyLookup, userData?.Selected);
+            }
 
-    /// <summary>
-    /// </summary>
-    /// <param name="userId"></param>
-    /// <param name="order"></param>
-    /// <param name="filter"></param>
-    /// <param name="search"></param>
-    /// <param name="page"></param>
-    /// <param name="pageSize"></param>
-    /// <returns></returns>
-    public async Task<(List<PokemonListEntry> Entries, int TotalCount)> GetPokemonListPaginated(
-        ulong userId, SortOrder order, string filter, string search, int page, int pageSize)
-    {
-        try
-        {
-            await using var db = await dbProvider.GetContextAsync();
-
-            // Get user data for party and selected
-            var userData = await EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(db.Users
-                .AsNoTracking()
-                .Where(u => u.UserId == userId)
-                .Select(u => new { u.Party, u.Selected }));
-
-            var partyLookup = userData?.Party != null
-                ? new HashSet<ulong>(userData.Party.Where(id => id != 0))
-                : new HashSet<ulong>();
-
-            // Create LinqToDB connection
-            var conn = db.CreateLinqToDBConnection();
-
-            // Base query
-            var query = conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
-                .Where(p => p.Owner == userId);
-
-            // Apply filter
-            query = filter switch
-            {
-                "shiny" => query.Where(p => p.Shiny == true),
-                "radiant" => query.Where(p => p.Radiant == true),
-                "shadow" => query.Where(p => p.Skin == "shadow"),
-                "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.PokemonName)),
-                "favorite" => query.Where(p => p.Favorite),
-                "champion" => query.Where(p => p.Champion),
-                "party" => query.Where(p => partyLookup.Contains(p.Id)),
-                "market" => query.Where(p => p.MarketEnlist),
-                _ => query
-            };
-
-            // Apply search if specified
-            if (!string.IsNullOrEmpty(search))
-                query = query.Where(p =>
-                    p.PokemonName.Contains(search) ||
-                    (p.Nickname != null && p.Nickname.Contains(search)) ||
-                    p.Tags.Any(t => t.Contains(search)) ||
-                    p.Moves.Any(m => m.Contains(search)));
-
-            // Get total count for pagination
-            var totalCount = await query.CountAsyncLinqToDB();
-
-            // Apply sorting
-            query = order switch
-            {
-                SortOrder.Iv => query.OrderByDescending(p =>
-                    p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv),
-                SortOrder.Level => query.OrderByDescending(p => p.Level),
-                SortOrder.Name => query.OrderBy(p => p.PokemonName),
-                SortOrder.Recent => query.OrderByDescending(p => p.Timestamp),
-                SortOrder.Favorite => query.OrderByDescending(p => p.Favorite),
-                SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains(p.Id)),
-                SortOrder.Champion => query.OrderByDescending(p => p.Champion),
-                _ => query.OrderByDescending(p => p.Id)
-            };
-
-            // Apply pagination
-            var skip = (page - 1) * pageSize;
-            var pokemonData = await query
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.DittoId,
-                    p.PokemonName,
-                    p.Nickname,
-                    p.Level,
-                    IvTotal = p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv,
-                    p.Shiny,
-                    p.Radiant,
-                    p.Skin,
-                    p.Gender,
-                    p.Timestamp,
-                    p.Favorite,
-                    p.Champion,
-                    p.MarketEnlist,
-                    p.HeldItem,
-                    p.Moves,
-                    p.Tags,
-                    p.Tradable,
-                    p.Breedable
-                })
-                .ToListAsyncLinqToDB();
-
-            // Convert to list entries
-            var result = pokemonData.Select((p, index) => new PokemonListEntry(
-                p.DittoId,
+            // Convert to PokemonListEntry objects
+            var result = pokemonData.Select(p => new PokemonListEntry(
+                p.Id,
                 p.PokemonName,
-                skip + index + 1, // Position in results
+                p.Position,
                 p.Level,
                 p.IvTotal / 186.0,
                 p.Shiny ?? false,
@@ -1142,99 +1096,87 @@ public class PokemonService(
                 p.Champion,
                 p.MarketEnlist,
                 p.HeldItem,
-                p.Moves,
-                p.Tags,
+                p.Moves ?? [],
+                p.Tags ?? [],
                 p.Tradable,
                 p.Breedable,
                 p.Timestamp
             )).ToList();
 
-            return (result, totalCount);
+            return (result, stats, partyLookup, userData?.Selected);
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error getting paginated Pokemon list for user {UserId}", userId);
+            Log.Error(e,
+                "Error getting filtered Pokemon list for user {UserId} with sort {SortOrder}, filter {Filter}, search {Search}",
+                userId, sortOrder, filter, search);
             throw;
         }
     }
 
     /// <summary>
+    ///     Calculates statistics about a user's Pokemon collection.
     /// </summary>
-    /// <param name="userId"></param>
-    /// <param name="filter"></param>
-    /// <returns></returns>
-    public async Task<Dictionary<string, int>> GetPokemonStats(ulong userId, string filter)
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="conn">The LinqToDB connection.</param>
+    /// <returns>A dictionary containing count statistics for different Pokemon categories.</returns>
+    private async Task<Dictionary<string, int>> CalculateCollectionStatistics(ulong userId, DataConnection conn)
+    {
+        // Get all ownership records for this user
+        var ownerships = conn.GetTable<UserPokemonOwnership>()
+            .Where(o => o.UserId == userId);
+
+        // Join with Pokemon table to get details needed for stats
+        var pokemonQuery = from o in ownerships
+            join p in conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
+                on o.PokemonId equals p.Id
+            select p;
+
+        // Get total count
+        var total = await pokemonQuery.CountAsyncLinqToDB();
+
+        // Get counts for different categories
+        var shinyCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Shiny == true);
+        var radiantCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Radiant == true);
+        var shadowCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Skin == "shadow");
+        var legendaryCount = await pokemonQuery.CountAsyncLinqToDB(p => PokemonList.LegendList.Contains(p.PokemonName));
+        var favoriteCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Favorite);
+        var championCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Champion);
+        var marketCount = await pokemonQuery.CountAsyncLinqToDB(p => p.MarketEnlist);
+
+        return new Dictionary<string, int>
+        {
+            { "Total", total },
+            { "Shiny", shinyCount },
+            { "Radiant", radiantCount },
+            { "Shadow", shadowCount },
+            { "Legendary", legendaryCount },
+            { "Favorite", favoriteCount },
+            { "Champion", championCount },
+            { "Market", marketCount }
+        };
+    }
+
+    /// <summary>
+    ///     Gets the total count of Pokemon owned by a user.
+    /// </summary>
+    /// <param name="userId">The ID of the user.</param>
+    /// <returns>The total count of Pokemon owned by the user.</returns>
+    public async Task<int> GetUserPokemonCount(ulong userId)
     {
         try
         {
             await using var db = await dbProvider.GetContextAsync();
             var conn = db.CreateLinqToDBConnection();
 
-            // Base query
-            var query = conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
-                .Where(p => p.Owner == userId);
-
-            // Get all stats in one query for better performance
-            var stats = await query
-                .GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    Total = g.Count(),
-                    Shiny = g.Count(p => p.Shiny == true),
-                    Radiant = g.Count(p => p.Radiant == true),
-                    Shadow = g.Count(p => p.Skin == "shadow"),
-                    Favorite = g.Count(p => p.Favorite),
-                    Champion = g.Count(p => p.Champion),
-                    Market = g.Count(p => p.MarketEnlist)
-                })
-                .FirstOrDefaultAsyncLinqToDB();
-
-            // Get legendary count with a separate query
-            var legendaryCount = await query
-                .CountAsyncLinqToDB(p => PokemonList.LegendList.Contains(p.PokemonName));
-
-            // Get filtered count if needed
-            var filteredCount = filter switch
-            {
-                "all" => stats?.Total ?? 0,
-                "shiny" => stats?.Shiny ?? 0,
-                "radiant" => stats?.Radiant ?? 0,
-                "shadow" => stats?.Shadow ?? 0,
-                "legendary" => legendaryCount,
-                "favorite" => stats?.Favorite ?? 0,
-                "champion" => stats?.Champion ?? 0,
-                "market" => stats?.Market ?? 0,
-                _ => stats?.Total ?? 0
-            };
-
-            return new Dictionary<string, int>
-            {
-                { "Total", stats?.Total ?? 0 },
-                { "Shiny", stats?.Shiny ?? 0 },
-                { "Radiant", stats?.Radiant ?? 0 },
-                { "Shadow", stats?.Shadow ?? 0 },
-                { "Legendary", legendaryCount },
-                { "Favorite", stats?.Favorite ?? 0 },
-                { "Champion", stats?.Champion ?? 0 },
-                { "Market", stats?.Market ?? 0 },
-                { "Filtered", filteredCount }
-            };
+            return await conn.GetTable<UserPokemonOwnership>()
+                .CountAsyncLinqToDB(o => o.UserId == userId);
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error getting Pokemon stats for user {UserId}", userId);
-            throw;
+            Log.Error(e, "Error getting Pokemon count for user {UserId}", userId);
+            return 0;
         }
-    }
-
-    /// <summary>
-    ///     Determines if a Pokemon is legendary based on its name.
-    /// </summary>
-    /// <param name="pokemonName">The name of the Pokemon.</param>
-    /// <returns>True if the Pokemon is legendary, false otherwise.</returns>
-    public bool IsLegendary(string pokemonName)
-    {
-        return PokemonList.LegendList.Contains(pokemonName);
     }
 
     /// <summary>
@@ -1365,7 +1307,7 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokemon">The Pokemon to calculate friendship for.</param>
     /// <returns>The calculated friendship value.</returns>
-    public int CalculateFriendship(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon)
+    public int CalculateFriendship(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon)
     {
         // Base friendship starts at 70
         var friendship = 70;

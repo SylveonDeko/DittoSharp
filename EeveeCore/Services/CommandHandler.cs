@@ -29,8 +29,9 @@ public class CommandHandler : INService
     private readonly GuildSettingsService _guildSettings;
     private readonly InteractionService _interactions;
     private readonly ConcurrentHashSet<ulong> _usersOnShortCooldown = [];
+
     /// <summary>
-    /// Gets the IServiceProvider for the bot.
+    ///     Gets the IServiceProvider for the bot.
     /// </summary>
     public readonly IServiceProvider Services;
 
@@ -38,7 +39,7 @@ public class CommandHandler : INService
     ///     Initializes a new instance of the <see cref="CommandHandler" /> class.
     /// </summary>
     /// <param name="client">The Discord client.</param>
-    /// <param name="db">The database service.</param>
+    /// <param name="dbContext">The database service.</param>
     /// <param name="commands">The service for handling commands.</param>
     /// <param name="services">The service provider for dependency injection.</param>
     /// <param name="interactions">The service for handling interactions.</param>
@@ -73,12 +74,12 @@ public class CommandHandler : INService
     }
 
     /// <summary>
-    /// Runs when a command is executed.
+    ///     Runs when a command is executed.
     /// </summary>
     public event Func<IUserMessage, CommandInfo, Task> CommandExecuted = delegate { return Task.CompletedTask; };
 
     /// <summary>
-    /// Runs when a command errored.
+    ///     Runs when a command errored.
     /// </summary>
     public event Func<CommandInfo, ITextChannel, string, IUser?, Task> CommandErrored = delegate
     {
@@ -86,7 +87,7 @@ public class CommandHandler : INService
     };
 
     /// <summary>
-    /// Runs the handle event found in HelpService.
+    ///     Runs the handle event found in HelpService.
     /// </summary>
     public event Func<IUserMessage, Task> OnMessageNoTrigger = delegate { return Task.CompletedTask; };
 
@@ -120,7 +121,7 @@ public class CommandHandler : INService
     }
 
     /// <summary>
-    /// Executes a command in the given channel in the queue.
+    ///     Executes a command in the given channel in the queue.
     /// </summary>
     /// <param name="channelId">The channel id o the channel to run a command in.</param>
     /// <returns>Whether the run was successful.</returns>

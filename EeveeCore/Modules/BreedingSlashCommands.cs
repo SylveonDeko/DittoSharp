@@ -1,28 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Discord;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Breeding.Services;
-using System.IO;
-using Microsoft.EntityFrameworkCore;
-using LinqToDB.EntityFrameworkCore;
-using System.Text;
+using EeveeCore.Modules.Pokemon.Services;
 
 namespace EeveeCore.Modules.Breeding;
 
 /// <summary>
-/// Module containing Pokémon breeding commands and interactions.
+///     Module containing Pokémon breeding commands and interactions.
 /// </summary>
 [Group("breeding", "Commands for Pokémon breeding")]
-public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
+public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<BreedingService>
 {
     private static readonly HashSet<ulong> AllowedUserIds = [790722073248661525];
 
     /// <summary>
-    /// Clears the user's breeding list of female IDs.
+    ///     Clears the user's breeding list of female IDs.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("clear", "Clears your breeding list of female IDs")]
@@ -33,7 +25,7 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
     }
 
     /// <summary>
-    /// Sets the list of female Pokémon IDs for breeding.
+    ///     Sets the list of female Pokémon IDs for breeding.
     /// </summary>
     /// <param name="femaleIds">Space or comma-separated list of female Pokémon IDs.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -66,35 +58,27 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
             var isValid = await Service.ValidateFemaleIdAsync(ctx.User.Id, id);
 
             if (isValid)
-            {
                 validatedIds.Add(id);
-            }
             else
-            {
                 invalidIds.Add(idStr);
-            }
         }
 
         // Update the user's females list
-        if (validatedIds.Any())
-        {
-            await Service.UpdateUserFemalesAsync(ctx.User.Id, validatedIds);
-        }
+        if (validatedIds.Any()) await Service.UpdateUserFemalesAsync(ctx.User.Id, validatedIds);
 
         // Build response message
-        var responseMessage = $"Your female Pokémon list has been updated with valid IDs: {string.Join(", ", validatedIds)}";
+        var responseMessage =
+            $"Your female Pokémon list has been updated with valid IDs: {string.Join(", ", validatedIds)}";
 
         if (invalidIds.Any())
-        {
             responseMessage += $"\nInvalid or non-female IDs detected: {string.Join(", ", invalidIds)}.";
-        }
 
         // Send as an embedded response
         await ctx.Interaction.SendConfirmFollowupAsync(responseMessage);
     }
 
     /// <summary>
-    /// Breeds a male Pokémon with the first female Pokémon in the user's breeding list.
+    ///     Breeds a male Pokémon with the first female Pokémon in the user's breeding list.
     /// </summary>
     /// <param name="maleId">The ID of the male Pokémon to breed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -107,17 +91,16 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
     }
 
     /// <summary>
-    /// Core breeding implementation that handles the breeding process.
+    ///     Core breeding implementation that handles the breeding process.
     /// </summary>
     /// <param name="maleId">The ID of the male Pokémon to breed.</param>
-    /// <param name="message">The message to update with breeding results.</param>
+    /// <param name="interaction">The message to update with breeding results.</param>
     /// <param name="auto">Whether this is an auto-retry.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private async Task BreedPokemon(int maleId, IDiscordInteraction interaction, bool auto = false)
+    private async Task BreedPokemon(int male, IDiscordInteraction interaction, bool auto = false)
     {
         // Get the first female from the user's breeding list
         var femaleId = await Service.FetchFirstFemaleAsync(ctx.User.Id);
-
         if (femaleId == null)
         {
             var eb = new EmbedBuilder()
@@ -131,23 +114,21 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         }
 
         // Attempt to breed
-        var result = await Service.AttemptBreedAsync(ctx.User.Id, maleId, femaleId.Value);
+        var result = await Service.AttemptBreedAsync(ctx.User.Id, male, femaleId.Value);
 
         // If there was an error, display it and return
         if (!result.Success)
         {
             var embed = new EmbedBuilder()
                 .WithTitle("Breeding Attempt Failed!")
-                .WithDescription($"{result.ErrorMessage}\nYou can breed again: <t:{DateTimeOffset.UtcNow.AddSeconds(50).ToUnixTimeSeconds()}:R>")
+                .WithDescription(
+                    $"{result.ErrorMessage}\nYou can breed again: <t:{DateTimeOffset.UtcNow.AddSeconds(50).ToUnixTimeSeconds()}:R>")
                 .WithColor(Color.Red);
 
-            if (result.Chance > 0)
-            {
-                embed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
-            }
+            if (result.Chance > 0) embed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
             // Create components based on whether this is an auto-retry
-            var components = CreateFailureComponents(maleId, auto);
+            var components = CreateFailureComponents(male, auto);
 
             await interaction.ModifyOriginalResponseAsync(m =>
             {
@@ -156,53 +137,47 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
             });
 
             // Handle auto-retry if enabled
-            if (auto && Service.GetAutoBreedState(ctx.User.Id) == maleId)
+            if (auto && Service.GetAutoBreedState(ctx.User.Id) == male)
             {
-                var retryCount = Service.GetBreedRetries(ctx.User.Id, maleId);
+                var retryCount = Service.GetBreedRetries(ctx.User.Id, male);
 
                 if (retryCount < 15) // Limit to 15 retries
                 {
-                    var newRetryCount = Service.IncrementBreedRetries(ctx.User.Id, maleId);
+                    var newRetryCount = Service.IncrementBreedRetries(ctx.User.Id, male);
 
                     var retryEmbed = new EmbedBuilder()
                         .WithTitle("Breeding Attempt Failed!")
-                        .WithDescription($"{result.ErrorMessage}\nYou can breed again: Now!\n\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`")
+                        .WithDescription(
+                            $"{result.ErrorMessage}\nYou can breed again: Now!\n\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`")
                         .WithColor(Color.Red);
 
-                    if (result.Chance > 0)
-                    {
-                        retryEmbed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
-                    }
+                    if (result.Chance > 0) retryEmbed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
                     await interaction.ModifyOriginalResponseAsync(m => { m.Embed = retryEmbed.Build(); });
 
                     await Task.Delay(500); // Small delay before retrying
-                    await BreedPokemon(maleId, interaction, true);
+                    await BreedPokemon(male, interaction, true);
                     return;
                 }
-                else
+
+                var limitEmbed = new EmbedBuilder()
+                    .WithTitle("Auto-breed retry limit reached!!")
+                    .WithDescription(
+                        $"Please use the breed command to try again.\n`Auto-retry attempts:` **{retryCount}**\n`(max 15)`")
+                    .WithColor(Color.Red);
+
+                if (result.Chance > 0) limitEmbed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
+
+                await interaction.ModifyOriginalResponseAsync(m =>
                 {
-                    var limitEmbed = new EmbedBuilder()
-                        .WithTitle("Auto-breed retry limit reached!!")
-                        .WithDescription($"Please use the breed command to try again.\n`Auto-retry attempts:` **{retryCount}**\n`(max 15)`")
-                        .WithColor(Color.Red);
+                    m.Embed = limitEmbed.Build();
+                    m.Components = new ComponentBuilder().Build();
+                });
+                await ctx.Channel.SendMessageAsync(ctx.User.Mention);
 
-                    if (result.Chance > 0)
-                    {
-                        limitEmbed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
-                    }
-
-                    await interaction.ModifyOriginalResponseAsync(m =>
-                    {
-                        m.Embed = limitEmbed.Build();
-                        m.Components = new ComponentBuilder().Build();
-                    });
-                    await ctx.Channel.SendMessageAsync(ctx.User.Mention);
-
-                    // Reset retry counter
-                    Service.ResetBreedRetries(ctx.User.Id, maleId);
-                    return;
-                }
+                // Reset retry counter
+                Service.ResetBreedRetries(ctx.User.Id, male);
+                return;
             }
 
             return;
@@ -212,13 +187,13 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         Service.SetAutoBreedState(ctx.User.Id, null);
 
         // Get parent names for the image
-        var parentNames = await Service.GetParentNamesAsync(ctx.User.Id, maleId, femaleId.Value);
+        var parentNames = await Service.GetParentNamesAsync(ctx.User.Id, male, femaleId.Value);
 
         // Generate success image
         var imageData = await Service.CreateSuccessImageAsync(
             result,
-            fatherName: parentNames.FatherName,
-            motherName: parentNames.MotherName
+            parentNames.FatherName,
+            parentNames.MotherName
         );
 
         var file = new FileAttachment(new MemoryStream(imageData), "image.png");
@@ -227,8 +202,8 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         var successEmbed = new EmbedBuilder()
             .WithTitle("Success!")
             .WithDescription($"It will hatch after {result.Counter} *counted* messages!\n" +
-                            $"Your {parentNames.MotherName} will be on breeding cooldown for 6 Hours!\n\n" +
-                            $"You can breed again in <t:{DateTimeOffset.UtcNow.AddSeconds(50).ToUnixTimeSeconds()}:R>")
+                             $"Your {parentNames.MotherName} will be on breeding cooldown for 6 Hours!\n\n" +
+                             $"You can breed again in <t:{DateTimeOffset.UtcNow.AddSeconds(50).ToUnixTimeSeconds()}:R>")
             .WithImageUrl("attachment://image.png")
             .WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
@@ -241,18 +216,9 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
             successEmbed.WithColor(new Color(0x0fff13));
 
         // Remove the first female from the list if not a Ditto
-        if (result.Child.Name.ToLower() != "ditto")
-        {
-            await Service.RemoveFirstFemaleAsync(ctx.User.Id);
-        }
+        if (result.Child.Name.ToLower() != "ditto") await Service.RemoveFirstFemaleAsync(ctx.User.Id);
 
-        // Send the success message
-        if (auto)
-        {
-            await ctx.Channel.SendFileAsync(file, ctx.User.Mention, embed: successEmbed.Build());
-        }
         else
-        {
             await interaction.ModifyOriginalResponseAsync(m =>
             {
                 m.Content = ctx.User.Mention;
@@ -260,15 +226,13 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
                 m.Components = new ComponentBuilder().Build();
                 m.Attachments = new[] { file };
             });
-        }
 
         // Reset retry counter
-        Service.ResetBreedRetries(ctx.User.Id, maleId);
-
+        Service.ResetBreedRetries(ctx.User.Id, male);
     }
 
     /// <summary>
-    /// Creates the component buttons for a breeding failure message.
+    ///     Creates the component buttons for a breeding failure message.
     /// </summary>
     /// <param name="maleId">The ID of the male Pokémon being bred.</param>
     /// <param name="auto">Whether this is an auto-retry.</param>
@@ -278,21 +242,18 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         var components = new ComponentBuilder();
 
         if (auto)
-        {
-            components.WithButton("Cancel auto breed", $"cancel_auto_breed_{maleId}", ButtonStyle.Danger, emote: new Emoji("❎"));
-        }
+            components.WithButton("Cancel auto breed", $"cancel_auto_breed_{maleId}", ButtonStyle.Danger,
+                new Emoji("❎"));
         else
-        {
-            components.WithButton("Redo breed", $"redo_breed_{maleId}", ButtonStyle.Secondary, emote: new Emoji("✅"))
-                     .WithButton("Auto redo until success", $"auto_redo_{maleId}", ButtonStyle.Primary, emote: new Emoji("🔄"));
-        }
+            components.WithButton("Redo breed", $"redo_breed_{maleId}", ButtonStyle.Secondary, new Emoji("✅"))
+                .WithButton("Auto redo until success", $"auto_redo_{maleId}", ButtonStyle.Primary, new Emoji("🔄"));
 
         return components;
     }
 
 
     /// <summary>
-    /// Handler for the redo breed button interaction.
+    ///     Handler for the redo breed button interaction.
     /// </summary>
     /// <param name="maleIdStr">The string ID of the male Pokémon to breed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -319,7 +280,7 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
     }
 
     /// <summary>
-    /// Handler for the auto-redo button interaction.
+    ///     Handler for the auto-redo button interaction.
     /// </summary>
     /// <param name="maleIdStr">The string ID of the male Pokémon to breed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -346,7 +307,7 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         if (currentAutoBreed != null)
         {
             var cancelComponents = new ComponentBuilder()
-                .WithButton("Cancel auto breed", $"cancel_auto_breed_{maleId}", ButtonStyle.Danger, emote: new Emoji("❎"))
+                .WithButton("Cancel auto breed", $"cancel_auto_breed_{maleId}", ButtonStyle.Danger, new Emoji("❎"))
                 .Build();
 
             await FollowupAsync(
@@ -368,14 +329,12 @@ public class BreedingModule : EeveeCoreSlashModuleBase<BreedingService>
         await Task.Delay(37000); // 37 seconds
 
         if (Service.GetAutoBreedState(ctx.User.Id) == maleId)
-        {
             // Invoke the breed method with auto=true
             await BreedPokemon(maleId, ctx.Interaction, true);
-        }
     }
 
     /// <summary>
-    /// Handler for the cancel auto-breed button interaction.
+    ///     Handler for the cancel auto-breed button interaction.
     /// </summary>
     /// <param name="maleIdStr">The string ID of the male Pokémon being bred.</param>
     /// <returns>A task representing the asynchronous operation.</returns>

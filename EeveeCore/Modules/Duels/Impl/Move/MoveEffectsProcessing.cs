@@ -6,7 +6,8 @@ public partial class Move
     ///     Processes special move effects that need to run before damage calculation.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string ProcessMoveEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, ElementType currentType, int? effectChance, bool bounced)
+    private string ProcessMoveEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle,
+        ElementType currentType, int? effectChance, bool bounced)
     {
         var msg = "";
 

@@ -1,12 +1,12 @@
 namespace EeveeCore.Common.Constants;
 
 /// <summary>
-/// Provides collections of legendary and special Pokémon categorized by their classification.
+///     Provides collections of legendary and special Pokémon categorized by their classification.
 /// </summary>
 public static class LegendaryPokemon
 {
     /// <summary>
-    /// Gets a list of all legendary Pokémon names from various generations.
+    ///     Gets a list of all legendary Pokémon names from various generations.
     /// </summary>
     public static readonly string[] LegendList =
     [
@@ -28,7 +28,7 @@ public static class LegendaryPokemon
     ];
 
     /// <summary>
-    /// Gets a list of all Ultra Beast Pokémon names that originate from Ultra Space.
+    ///     Gets a list of all Ultra Beast Pokémon names that originate from Ultra Space.
     /// </summary>
     public static readonly string[] UltraBeasts =
     [

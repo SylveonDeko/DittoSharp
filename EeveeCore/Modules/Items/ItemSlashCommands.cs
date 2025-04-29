@@ -37,10 +37,10 @@ public class ItemSlashCommands : EeveeCoreSlashModuleBase<ItemsService>
     /// <summary>
     ///     Transfers an item from the user's selected Pokémon to another Pokémon in their party.
     /// </summary>
-    /// <param name="pokemonNumber">The party position of the target Pokémon (1-based).</param>
+    /// <param name="pokemonNumber">The pokemon number to transfer to..</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("transfer", "Transfer an item from your selected pokemon to another")]
-    public async Task Transfer(int pokemonNumber)
+    public async Task Transfer(ulong pokemonNumber)
     {
         var result = await Service.Transfer(ctx.User.Id, pokemonNumber);
         await RespondAsync(result.Message);

@@ -1,5 +1,5 @@
-using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Database.Models.Mongo.Pokemon;
+using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Services;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;

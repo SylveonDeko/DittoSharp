@@ -15,7 +15,8 @@ namespace EeveeCore.Modules.Items.Services;
 ///     Handles item operations such as equipping, unequipping, buying, and applying items to Pokémon.
 ///     Also manages special items like evolution stones, berries, and market spaces.
 /// </summary>
-public class ItemsService(IMongoService mongoDb,
+public class ItemsService(
+    IMongoService mongoDb,
     DbContextProvider dbContextProvider,
     PokemonService pokemonService) : INService
 {
@@ -66,7 +67,7 @@ public class ItemsService(IMongoService mongoDb,
     ///     Cache service for storing and retrieving frequently used data.
     /// </summary>
     private readonly IDataCache _cache;
-    
+
     /// <summary>
     ///     Random number generator for various operations.
     /// </summary>
@@ -179,31 +180,34 @@ public class ItemsService(IMongoService mongoDb,
     }
 
     /// <summary>
-    ///     Transfers an item from the user's selected Pokémon to another Pokémon in their party.
+    ///     Transfers an item from the user's selected Pokémon to another Pokémon in their collection.
     /// </summary>
     /// <param name="userId">The Discord ID of the user.</param>
-    /// <param name="pokemonNumber">The party position of the target Pokémon (1-based).</param>
+    /// <param name="pokemonNumber">The actual ID of the target Pokémon.</param>
     /// <returns>A CommandResult containing the operation result message.</returns>
-    public async Task<CommandResult> Transfer(ulong userId, int pokemonNumber)
+    public async Task<CommandResult> Transfer(ulong userId, ulong pokemonNumber)
     {
         var prepResult = await PrepItemRemove(userId);
         if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
 
         await using var db = await dbContextProvider.GetContextAsync();
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-        if (user == null || pokemonNumber <= 0 || pokemonNumber > user.Pokemon.Length)
-            return new CommandResult { Message = "You do not have that Pokemon!" };
 
-        var targetPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == user.Pokemon[pokemonNumber - 1]);
-        if (targetPokemon == null) return new CommandResult { Message = "That Pokemon does not exist!" };
+        // Find the target Pokemon directly by its ID
+        var targetPokemon = await db.UserPokemon
+            .FirstOrDefaultAsync(p => p.Id == pokemonNumber && p.Owner == userId);
+
+        if (targetPokemon == null)
+            return new CommandResult { Message = "You do not have that Pokemon!" };
 
         if (targetPokemon.HeldItem.ToLower() != "none")
             return new CommandResult { Message = "That Pokemon is already holding an item" };
 
-        await db.UserPokemon.Where(p => p.Id == user.Selected)
+        // Remove item from source Pokemon
+        await db.UserPokemon.Where(p => p.Id == pokemonNumber)
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.HeldItem, "None"));
 
+        // Add item to target Pokemon
         await db.UserPokemon.Where(p => p.Id == targetPokemon.Id)
             .ExecuteUpdateAsync(p => p
                 .SetProperty(x => x.HeldItem, prepResult.HeldItem));
@@ -796,8 +800,9 @@ public class ItemsService(IMongoService mongoDb,
 
         if (selectedId == null) return new CommandResult { Message = "You need to select a pokemon first!" };
 
-        var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.DittoId == selectedId);
-        if (selectedPokemon == null) return new CommandResult { Message = "Selected pokemon not found!" };
+        var ownedPoke = await db.UserPokemonOwnerships.FirstOrDefaultAsyncEF(p => p.Position == (int)selectedId-1 && p.UserId == userId);
+        if (ownedPoke == null) return new CommandResult { Message = "Selected pokemon not found!" };
+        var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsync(x => x.Id == ownedPoke.PokemonId);
 
         var credits = await db.Users
             .Where(u => u.UserId == userId)
@@ -818,7 +823,7 @@ public class ItemsService(IMongoService mongoDb,
 
         try
         {
-            await db.UserPokemon.Where(p => p.DittoId == selectedId)
+            await db.UserPokemon.Where(p => p.Id == ownedPoke.PokemonId)
                 .ExecuteUpdateAsync(p => p
                     .SetProperty(x => x.Level, x => x.Level + useAmount));
 
@@ -1108,17 +1113,17 @@ public class ItemsService(IMongoService mongoDb,
         ///     Gets the message to display to the user.
         /// </summary>
         public string Message { get; init; }
-        
+
         /// <summary>
         ///     Gets the embed to display to the user, if any.
         /// </summary>
         public Embed Embed { get; init; }
-        
+
         /// <summary>
         ///     Gets a value indicating whether the message should be ephemeral (only visible to the command user).
         /// </summary>
         public bool Ephemeral { get; init; }
-        
+
         /// <summary>
         ///     Gets a value indicating whether the operation was successful.
         ///     An operation is considered successful if it produced either a message or an embed.

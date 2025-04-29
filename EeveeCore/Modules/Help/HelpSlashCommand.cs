@@ -44,13 +44,12 @@ public class HelpSlashCommand(
     [ComponentInteraction("helpselect:*", true)]
     public async Task HelpSlash(string unused, string[] selected)
     {
-        var currentmsg = new EeveeCoreMessage()
+        var currentmsg = new EeveeCoreMessage
         {
             Content = "help", Author = ctx.User, Channel = ctx.Channel
         };
 
         if (HelpMessages.TryGetValue(ctx.Channel.Id, out var msgId))
-        {
             try
             {
                 await ctx.Channel.DeleteMessageAsync(msgId);
@@ -61,7 +60,6 @@ public class HelpSlashCommand(
             {
                 // ignored
             }
-        }
 
         var module = selected.FirstOrDefault();
         module = module?.Trim().ToUpperInvariant().Replace(" ", "");
@@ -76,7 +74,7 @@ public class HelpSlashCommand(
 
         var commandInfos = cmds.SlashCommands
             .Where(c => c.Module.GetTopLevelModule().Name.ToUpperInvariant()
-                            .StartsWith(module, StringComparison.InvariantCulture))
+                .StartsWith(module, StringComparison.InvariantCulture))
             .Distinct()
             .ToList();
 
@@ -89,7 +87,8 @@ public class HelpSlashCommand(
         // Check preconditions
         var preconditionTasks = commandInfos.Select(async x =>
         {
-            var pre = await x.CheckPreconditionsAsync(new InteractionContext(ctx.Client, ctx.Interaction), serviceProvider);
+            var pre = await x.CheckPreconditionsAsync(new InteractionContext(ctx.Client, ctx.Interaction),
+                serviceProvider);
             return (Cmd: x, Succ: pre.IsSuccess);
         });
         var preconditionResults = await Task.WhenAll(preconditionTasks).ConfigureAwait(false);
@@ -123,7 +122,8 @@ public class HelpSlashCommand(
             .WithActionOnCancellation(ActionOnStop.DeleteMessage)
             .Build();
 
-        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(60)).ConfigureAwait(false);
+        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(60))
+            .ConfigureAwait(false);
 
         Task<PageBuilder> PageFactory(int page)
         {

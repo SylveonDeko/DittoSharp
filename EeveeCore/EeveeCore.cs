@@ -34,12 +34,14 @@ public class EeveeCore
     ///     Gets the credentials used by the bot.
     /// </summary>
     public BotCredentials Credentials { get; }
+
     private int ReadyCount { get; set; }
 
     /// <summary>
     ///     Gets the Discord client used by the bot.
     /// </summary>
     public DiscordShardedClient Client { get; }
+
     private GuildSettingsService GuildSettingsService { get; }
     private CommandService CommandService { get; }
 
@@ -57,6 +59,7 @@ public class EeveeCore
     ///     Gets a TaskCompletionSource that completes when the bot is ready.
     /// </summary>
     public TaskCompletionSource<bool> Ready { get; } = new();
+
     private IServiceProvider Services { get; }
     private IDataCache Cache { get; }
 

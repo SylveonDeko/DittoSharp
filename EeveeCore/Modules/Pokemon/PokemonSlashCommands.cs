@@ -1,12 +1,10 @@
 using System.Text;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Pokemon.Services;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
 using Humanizer;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace EeveeCore.Modules.Pokemon;
@@ -16,9 +14,8 @@ namespace EeveeCore.Modules.Pokemon;
 ///     Includes commands for viewing, managing, and interacting with Pokemon in the user's collection.
 /// </summary>
 /// <param name="interactivity">Service for handling interactive components like pagination.</param>
-/// <param name="dbContextProvider">Provider for database context access.</param>
 [Group("pokemon", "Pokemon related commands")]
-public class PokemonSlashCommands(InteractiveService interactivity, DbContextProvider dbContextProvider)
+public class PokemonSlashCommands(InteractiveService interactivity)
     : EeveeCoreSlashModuleBase<PokemonService>
 {
     /// <summary>
@@ -83,7 +80,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     ///     Supports various sorting methods, filters, view modes, and search functionality.
     /// </summary>
     /// <param name="sortBy">The method to sort Pokemon by (iv, level, name, recent, type, favorite, party, champion).</param>
-    /// <param name="filter">Filter to apply to the Pokemon list (all, shiny, radiant, shadow, legendary, favorite, champion, party, market).</param>
+    /// <param name="filter">
+    ///     Filter to apply to the Pokemon list (all, shiny, radiant, shadow, legendary, favorite, champion,
+    ///     party, market).
+    /// </param>
     /// <param name="viewMode">The display mode for the list (normal, compact, detailed).</param>
     /// <param name="search">Optional search term to filter Pokemon by name, nickname, tags, or moves.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -133,50 +133,15 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
             _ => SortOrder.Default
         };
 
-        // Get user data for party and selected Pokemon lookups
-        await using var dbContext = await dbContextProvider.GetContextAsync();
-        var user = await dbContext.Users
-            .AsNoTracking()
-            .Where(u => u.UserId == ctx.User.Id)
-            .Select(u => new { u.Party, u.Selected })
-            .FirstOrDefaultAsync();
+        // Get filtered Pokemon list with all the necessary data from the service
+        var (filteredList, stats, partyLookup, selectedPokemon) =
+            await Service.GetFilteredPokemonList(ctx.User.Id, sortOrder, filter, search);
 
-        // Create lookup sets for efficient checking
-        var partyLookup = user?.Party != null
-            ? new HashSet<ulong>(user.Party.Where(id => id != 0))
-            : new HashSet<ulong>();
-
-        // Get complete Pokemon list first
-        var pokemonList = await Service.GetPokemonList(ctx.User.Id, sortOrder);
-        if (pokemonList.Count == 0)
+        if (filteredList.Count == 0)
         {
             await FollowupAsync("You have not started!\nStart with `/start` first!");
             return;
         }
-
-        // Apply filters
-        var filteredList = filter switch
-        {
-            "shiny" => pokemonList.Where(p => p.Shiny).ToList(),
-            "radiant" => pokemonList.Where(p => p.Radiant).ToList(),
-            "shadow" => pokemonList.Where(p => p.Skin == "shadow").ToList(),
-            "legendary" => pokemonList.Where(p => Service.IsLegendary(p.Name)).ToList(),
-            "favorite" => pokemonList.Where(p => p.Favorite).ToList(),
-            "champion" => pokemonList.Where(p => p.Champion).ToList(),
-            "party" => pokemonList.Where(p => partyLookup.Contains(p.botId)).ToList(),
-            "market" => pokemonList.Where(p => p.MarketEnlist).ToList(),
-            _ => pokemonList
-        };
-
-        // Apply search if specified
-        if (!string.IsNullOrEmpty(search))
-            filteredList = filteredList
-                .Where(p =>
-                    p.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                    p.Nickname?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
-                    p.Tags.Any(t => t.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
-                    p.Moves.Any(m => m.Contains(search, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
 
         // Handle empty results after filtering
         if (filteredList.Count == 0)
@@ -189,7 +154,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
         var statsEmbed = new EmbedBuilder()
             .WithTitle("Your Pokemon Collection")
             .WithColor(Color.Gold)
-            .WithDescription(GenerateCollectionStats(pokemonList, filteredList, filter))
+            .WithDescription(GenerateCollectionStats(stats, filter, filteredList.Count))
             .Build();
 
         // Create paginated list based on view mode
@@ -215,8 +180,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
             if (viewMode == "detailed")
                 foreach (var pokemon in pageItems)
                 {
-                    description.AppendLine(GenerateDetailedListEntry(pokemon, partyLookup.Contains(pokemon.botId),
-                        pokemon.botId == user?.Selected));
+                    description.AppendLine(GenerateDetailedListEntry(
+                        pokemon,
+                        partyLookup.Contains((long)pokemon.botId),
+                        pokemon.botId == selectedPokemon));
                     description.AppendLine(); // Add space between entries
                 }
             else // Normal or compact
@@ -225,8 +192,8 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
                     var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
                     var gender = GetGenderEmoji(pokemon.Gender);
                     var favorite = pokemon.Favorite ? "⭐ " : "";
-                    var inParty = partyLookup.Contains(pokemon.botId) ? "👥 " : "";
-                    var isSelected = pokemon.botId == user?.Selected ? "🔍 " : "";
+                    var inParty = partyLookup.Contains((long)pokemon.botId) ? "👥 " : "";
+                    var isSelected = pokemon.botId == selectedPokemon ? "🔍 " : "";
                     var champion = pokemon.Champion ? "🏆 " : "";
                     var market = pokemon.MarketEnlist ? "💰 " : "";
 
@@ -309,32 +276,31 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     /// <param name="filtered">The filtered list of Pokemon based on current view options.</param>
     /// <param name="filter">The current filter being applied.</param>
     /// <returns>A formatted string containing collection statistics.</returns>
-    private string GenerateCollectionStats(List<PokemonListEntry> allPokemon, List<PokemonListEntry> filtered,
-        string filter)
+    private string GenerateCollectionStats(Dictionary<string, int> stats, string filter, int filteredCount)
     {
-        var stats = new StringBuilder();
+        var statsBuilder = new StringBuilder();
 
-        stats.AppendLine($"**Collection Overview** - {allPokemon.Count} total Pokémon");
-        stats.AppendLine($"• Shiny: {allPokemon.Count(p => p.Shiny)}");
-        stats.AppendLine($"• Radiant: {allPokemon.Count(p => p.Radiant)}");
-        stats.AppendLine($"• Shadow: {allPokemon.Count(p => p.Skin == "shadow")}");
-        stats.AppendLine($"• Legendary: {allPokemon.Count(p => Service.IsLegendary(p.Name))}");
-        stats.AppendLine($"• Favorite: {allPokemon.Count(p => p.Favorite)}");
-        stats.AppendLine($"• Champion: {allPokemon.Count(p => p.Champion)}");
-        stats.AppendLine($"• Market Listed: {allPokemon.Count(p => p.MarketEnlist)}");
+        statsBuilder.AppendLine($"**Collection Overview** - {stats["Total"]} total Pokémon");
+        statsBuilder.AppendLine($"• Shiny: {stats["Shiny"]}");
+        statsBuilder.AppendLine($"• Radiant: {stats["Radiant"]}");
+        statsBuilder.AppendLine($"• Shadow: {stats["Shadow"]}");
+        statsBuilder.AppendLine($"• Legendary: {stats["Legendary"]}");
+        statsBuilder.AppendLine($"• Favorite: {stats["Favorite"]}");
+        statsBuilder.AppendLine($"• Champion: {stats["Champion"]}");
+        statsBuilder.AppendLine($"• Market Listed: {stats["Market"]}");
 
         // If filtering, show filter summary
         if (filter != "all")
         {
-            stats.AppendLine();
-            stats.AppendLine($"**Current Filter**: {filter.Capitalize()} - {filtered.Count} Pokémon");
+            statsBuilder.AppendLine();
+            statsBuilder.AppendLine($"**Current Filter**: {filter.Capitalize()} - {filteredCount} Pokémon");
         }
 
-        stats.AppendLine();
-        stats.AppendLine("Use the arrow controls to navigate your Pokemon list");
-        stats.AppendLine("Check the last page for an icon legend");
+        statsBuilder.AppendLine();
+        statsBuilder.AppendLine("Use the arrow controls to navigate your Pokemon list");
+        statsBuilder.AppendLine("Check the last page for an icon legend");
 
-        return stats.ToString();
+        return statsBuilder.ToString();
     }
 
     /// <summary>
@@ -406,6 +372,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
 
     /// <summary>
     ///     Attempts to resurrect all dead Pokemon belonging to the user.
+    ///     Also checks invalid references against dead Pokemon records to recover missing entries.
     ///     Displays a paginated list of successfully resurrected Pokemon with their details.
     /// </summary>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -415,10 +382,30 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     {
         await DeferAsync();
 
+        // First, check for invalid references that might be dead Pokemon
+        var (potentialDeadPokemon, _) = await Service.CheckInvalidReferencesAgainstDeadPokemon(ctx.User.Id);
+        var recoveredCount = 0;
+
+        if (potentialDeadPokemon.Count > 0)
+        {
+            // Recover the references first by creating ownership entries for them
+            recoveredCount = await Service.RecoverDeadPokemonReferences(ctx.User.Id);
+
+            if (recoveredCount > 0)
+                await FollowupAsync(
+                    $"Recovered {recoveredCount} references to dead Pokémon that were missing from your collection.");
+        }
+
+        // Now get all dead Pokemon, which should include any we just recovered
         var deadPokemon = await Service.GetDeadPokemon(ctx.User.Id);
+
         if (deadPokemon.Count == 0)
         {
-            await FollowupAsync("You do not have any dead Pokemon.");
+            if (recoveredCount > 0)
+                await FollowupAsync(
+                    "Strange... recovered references to dead Pokémon, but couldn't find any actual dead Pokémon.");
+            else
+                await FollowupAsync("You do not have any dead Pokémon.");
             return;
         }
 
@@ -438,13 +425,34 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
                 var ivPercentage = (pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
                                     pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100;
 
+                // Mark newly recovered Pokemon with a special emoji
+                var recoveredEmoji = potentialDeadPokemon.Any(r => r.PokemonId == pokemon.Id) ? "🔄 " : "✅ ";
+
                 pageBuilder.AppendLine(
-                    $"✅ **ID: `{pokemon.Id}` | Name: `{pokemon.PokemonName}` | IV%: `{ivPercentage:F2}`%**");
+                    $"{recoveredEmoji}**ID: `{pokemon.Id}` | Name: `{pokemon.PokemonName}` | IV%: `{ivPercentage:F2}`%**");
             }
 
             pages.Add(new PageBuilder()
                 .WithColor(Color.Purple)
                 .WithDescription(pageBuilder.ToString()));
+        }
+
+        // Add an info page at the beginning if we recovered any Pokemon
+        if (recoveredCount > 0)
+        {
+            var infoPage = new PageBuilder()
+                .WithColor(Color.Blue)
+                .WithTitle("Pokémon Recovery Report")
+                .WithDescription(
+                    $"📊 **Recovery Summary**\n\n" +
+                    $"• Found {recoveredCount} references to dead Pokémon that were missing from your collection\n" +
+                    $"• Successfully linked these references to your actual dead Pokémon\n" +
+                    $"• Proceeding with resurrection of all {deadPokemon.Count} dead Pokémon\n\n" +
+                    $"In the following pages, recovered Pokémon are marked with 🔄\n" +
+                    $"Regular resurrections are marked with ✅"
+                );
+
+            pages.Insert(0, infoPage);
         }
 
         // Now resurrect the Pokemon
@@ -476,10 +484,10 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     [RequireContext(ContextType.Guild)]
     public async Task Info(string poke = null, PokemonVariantType? variant = null)
     {
-        var list = (await Service.GetPokemonList(ctx.User.Id)).Select(x => x.botId).ToList();
         try
         {
-            Database.Models.PostgreSQL.Pokemon.Pokemon ownedPokemon = null;
+            Database.Models.PostgreSQL.Pokemon.Pokemon? ownedPokemon = null;
+            var totalPokemonCount = await Service.GetUserPokemonCount(ctx.User.Id);
 
             // Case 1: No parameter - get selected Pokemon
             if (string.IsNullOrWhiteSpace(poke))
@@ -493,7 +501,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
                 }
 
                 var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, pokemonIndex);
+                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
                 return;
             }
 
@@ -507,7 +515,8 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
                     return;
                 }
 
-                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, list.IndexOf(ownedPokemon.DittoId));
+                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
+                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
                 return;
             }
 
@@ -535,7 +544,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
                 }
 
                 var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayOwnedPokemonInfo(ownedPokemon, list.Count, pokemonIndex);
+                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
                 return;
             }
 
@@ -640,7 +649,8 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     /// <summary>
     ///     Displays the user's Pokedex progress.
     ///     Shows which Pokemon the user has caught and which ones they still need to find.
-    ///     Different variants can be shown such as the national dex, unowned Pokemon, or specific variants like shiny or shadow.
+    ///     Different variants can be shown such as the national dex, unowned Pokemon, or specific variants like shiny or
+    ///     shadow.
     /// </summary>
     /// <param name="variant">The variant type of Pokedex to display (national, unowned, shadow, shiny, radiant, skin).</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -1112,7 +1122,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
     /// <param name="pokeCount">The total number of Pokemon the user has.</param>
     /// <param name="selectedPoke">The index of the selected Pokemon.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
-    private async Task DisplayOwnedPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon, int pokeCount,
+    private async Task DisplayOwnedPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon, int pokeCount,
         int selectedPoke)
     {
         var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
@@ -1151,7 +1161,7 @@ public class PokemonSlashCommands(InteractiveService interactivity, DbContextPro
             .WithTitle(
                 $"{titlePrefix}{GetPokemonEmoji(pokemon.Shiny.GetValueOrDefault(), pokemon.Radiant.GetValueOrDefault(), pokemon.Skin)}{genderEmoji}{pokemon.PokemonName.Titleize()}")
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
-            .WithFooter($"Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.DittoId}");
+            .WithFooter($"Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.Id}");
 
         // Basic information section
         var infoField = new StringBuilder();

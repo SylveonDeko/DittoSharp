@@ -11,6 +11,7 @@ using LinqToDB.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Serilog;
+using StackExchange.Redis;
 using Bot_User = EeveeCore.Database.Models.PostgreSQL.Bot.User;
 
 namespace EeveeCore.Modules.Spawn.Services;
@@ -90,6 +91,7 @@ public class SpawnService : INService
     /// </summary>
     private bool _alwaysSpawn;
 
+
     /// <summary>
     ///     Initializes a new instance of the SpawnService class.
     ///     Sets up event handlers and required services.
@@ -116,6 +118,72 @@ public class SpawnService : INService
         _random = new Random();
 
         handler.MessageReceived += HandleMessageAsync;
+    }
+
+    /// <summary>
+    ///     Checks if a Pokémon spawn message has already been caught using Redis.
+    /// </summary>
+    /// <param name="messageId">The ID of the spawn message.</param>
+    /// <returns>True if the Pokémon has already been caught, false otherwise.</returns>
+    public async Task<bool> IsPokemonAlreadyCaught(ulong messageId)
+    {
+        var key = $"pokemon:caught:{messageId}";
+        return await _cache.Redis.GetDatabase().KeyExistsAsync(key);
+    }
+
+    /// <summary>
+    ///     Tries to mark a Pokémon spawn message as caught using Redis.
+    ///     Uses NX (Not Exists) flag to ensure atomic operation.
+    /// </summary>
+    /// <param name="messageId">The ID of the spawn message.</param>
+    /// <param name="userId">The ID of the user who caught the Pokémon.</param>
+    /// <returns>True if successfully marked (was not previously caught), false otherwise.</returns>
+    public async Task<bool> TryMarkPokemonAsCaught(ulong messageId, ulong userId)
+    {
+        var key = $"pokemon:caught:{messageId}";
+
+        // Set key only if it doesn't exist, with 15 minute expiry
+        // This ensures that even if the code never cleans up, the key will expire
+        var result = await _cache.Redis.GetDatabase().StringSetAsync(
+            key,
+            userId.ToString(),
+            TimeSpan.FromMinutes(15),
+            When.NotExists);
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Handles the catching of a Pokémon by a user, with Redis-based message ID validation.
+    ///     Processes reward distribution and creates the Pokémon in the user's collection.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user catching the Pokémon.</param>
+    /// <param name="guildId">The Discord ID of the guild where the catch occurred.</param>
+    /// <param name="pokemonName">The name of the caught Pokémon.</param>
+    /// <param name="isShiny">Whether the Pokémon is shiny.</param>
+    /// <param name="legendChance">The legendary spawn chance value.</param>
+    /// <param name="ubChance">The Ultra Beast spawn chance value.</param>
+    /// <param name="messageId">The ID of the spawn message.</param>
+    /// <returns>A CatchResult with information about the catch outcome.</returns>
+    public async Task<CatchResult> HandleCatchWithMessageCheck(
+        ulong userId,
+        ulong guildId,
+        string? pokemonName,
+        bool isShiny,
+        int legendChance,
+        int ubChance,
+        ulong messageId)
+    {
+        // First check if this Pokémon message has already been caught
+        if (await IsPokemonAlreadyCaught(messageId))
+            return new CatchResult(false, "This Pokémon has already been caught by someone else!", null, false, false);
+
+        // Try to mark the Pokémon as caught - if this fails, someone else caught it since our check
+        if (!await TryMarkPokemonAsCaught(messageId, userId))
+            return new CatchResult(false, "This Pokémon has already been caught by someone else!", null, false, false);
+
+        // Now proceed with the normal catch logic
+        return await HandleCatch(userId, guildId, pokemonName, isShiny, legendChance, ubChance);
     }
 
     /// <summary>
@@ -210,11 +278,12 @@ public class SpawnService : INService
     /// </summary>
     /// <param name="userId">The Discord ID of the user.</param>
     /// <param name="channelId">The Discord ID of the channel.</param>
-    /// <param name="db">The database context for queries.</param>
+    /// <param name="dbContext">The database context for queries.</param>
     /// <returns>A tuple containing shiny status and honey effect.</returns>
-    private async Task<(bool IsShiny, Honey? Honey)> GetSpawnModifiers(ulong userId, ulong channelId, EeveeCoreContext db)
+    private async Task<(bool IsShiny, Honey? Honey)> GetSpawnModifiers(ulong userId, ulong channelId,
+        EeveeCoreContext db)
     {
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         if (user == null) return (false, null);
 
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}");
@@ -223,7 +292,7 @@ public class SpawnService : INService
             threshold = (int)(threshold - threshold * (inventory.GetValueOrDefault("shiny-multiplier", 0) / 100.0));
 
         var isShiny = _random.Next(threshold) == 0;
-        var honey = await db.Honey.FirstOrDefaultAsyncEF(h => h.ChannelId == channelId);
+        var honey = await db.Honey.FirstOrDefaultAsync(h => h.ChannelId == channelId);
 
         return (isShiny, honey);
     }
@@ -364,7 +433,7 @@ public class SpawnService : INService
             _ => "redeem"
         };
 
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == message.Author.Id);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == message.Author.Id);
         if (user == null) return null;
 
         switch (rewardType)
@@ -402,7 +471,6 @@ public class SpawnService : INService
 
             var shifted = (char)(c + shift);
             if (char.IsLower(c))
-            {
                 switch (shifted)
                 {
                     case > 'z':
@@ -412,9 +480,7 @@ public class SpawnService : INService
                         shifted += (char)26;
                         break;
                 }
-            }
             else
-            {
                 switch (shifted)
                 {
                     case > 'Z':
@@ -424,7 +490,6 @@ public class SpawnService : INService
                         shifted += (char)26;
                         break;
                 }
-            }
 
             encoded.Append(shifted);
         }
@@ -437,7 +502,7 @@ public class SpawnService : INService
     ///     Either increases the user's shadow hunt chain or rewards a shadow Pokemon.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="db">The database context.</param>
+    /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleShadowReward(Bot_User user, EeveeCoreContext db)
     {
@@ -449,7 +514,7 @@ public class SpawnService : INService
 
         if (isShadow)
         {
-            await CreatePokemon(user.UserId.GetValueOrDefault(), user.Hunt, false, skin: "shadow", boosted: true,
+            await CreatePokemon(user.UserId.GetValueOrDefault(), user.Hunt, skin: "shadow", boosted: true,
                 level: 100);
             return $"Shadows pour from the vault and circle around you! You got a shadow {user.Hunt}!";
         }
@@ -464,7 +529,7 @@ public class SpawnService : INService
     ///     Adds a chest item to the user's inventory.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="db">The database context.</param>
+    /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleChestReward(Bot_User user, EeveeCoreContext db)
     {
@@ -499,7 +564,7 @@ public class SpawnService : INService
     ///     Creates and returns a gift item.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="db">The database context.</param>
+    /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleGiftReward(Bot_User user, EeveeCoreContext db)
     {
@@ -513,7 +578,7 @@ public class SpawnService : INService
     ///     Adds redeems to the user's account.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="db">The database context.</param>
+    /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleRedeemReward(Bot_User user, EeveeCoreContext db)
     {
@@ -603,7 +668,7 @@ public class SpawnService : INService
     private async Task<bool> ShadowHuntCheck(ulong userId, string? pokemon)
     {
         await using var dbContext = await _dbContextProvider.GetContextAsync();
-        var user = await dbContext.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
 
         if (user?.Hunt != pokemon.Capitalize())
             return false;
@@ -687,6 +752,7 @@ public class SpawnService : INService
     /// <summary>
     ///     Handles message collection for Pokemon catching.
     ///     Monitors chat for messages containing the Pokemon's name.
+    ///     Uses Redis to prevent multiple catches of the same Pokemon.
     /// </summary>
     /// <param name="channel">The channel to monitor.</param>
     /// <param name="spawnMsg">The spawn message.</param>
@@ -713,6 +779,16 @@ public class SpawnService : INService
 
                     var content = message.Content.ToLower().Replace(" ", "-");
                     if (!catchOptions.Contains(content)) continue;
+
+                    // Check if this Pokemon has already been caught
+                    if (await IsPokemonAlreadyCaught(spawnMsg.Id))
+                        // Someone already caught it since we started processing
+                        break;
+
+                    // Try to mark as caught - this is atomic thanks to Redis
+                    if (!await TryMarkPokemonAsCaught(spawnMsg.Id, message.Author.Id))
+                        // Another thread marked it as caught before we could
+                        break;
 
                     // Process catch
                     var result = await HandleCatch(
@@ -774,13 +850,17 @@ public class SpawnService : INService
         if (!hasCaught)
             try
             {
-                var timeoutEmbed = spawnMsg.Embeds.First().ToEmbedBuilder();
-                timeoutEmbed.Title = "Despawned!";
-                await spawnMsg.ModifyAsync(m =>
+                // Make sure no one caught it while we were deciding to despawn
+                if (!await IsPokemonAlreadyCaught(spawnMsg.Id))
                 {
-                    m.Embed = timeoutEmbed.Build();
-                    m.Components = new ComponentBuilder().Build();
-                });
+                    var timeoutEmbed = spawnMsg.Embeds.First().ToEmbedBuilder();
+                    timeoutEmbed.Title = "Despawned!";
+                    await spawnMsg.ModifyAsync(m =>
+                    {
+                        m.Embed = timeoutEmbed.Build();
+                        m.Components = new ComponentBuilder().Build();
+                    });
+                }
             }
             catch
             {
@@ -1137,23 +1217,24 @@ public class SpawnService : INService
         {
             if (pokemonName.ToLower().Contains("nidoran-"))
                 gender = pokemonName.ToLower().EndsWith("f") ? "-f" : "-m";
-            else switch (pokemonName.ToLower())
-            {
-                case "illumise":
-                    gender = "-f";
-                    break;
-                case "volbeat":
-                    gender = "-m";
-                    break;
-                default:
+            else
+                switch (pokemonName.ToLower())
                 {
-                    if (pokemonInfo.GenderRate == -1)
-                        gender = "-x";
-                    else
-                        gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
-                    break;
+                    case "illumise":
+                        gender = "-f";
+                        break;
+                    case "volbeat":
+                        gender = "-m";
+                        break;
+                    default:
+                    {
+                        if (pokemonInfo.GenderRate == -1)
+                            gender = "-x";
+                        else
+                            gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
+                        break;
+                    }
                 }
-            }
         }
 
         // Check for shadow override if no skin is specified
@@ -1206,30 +1287,54 @@ public class SpawnService : INService
             Tradable = true,
             Breedable = true,
             Temporary = false,
-            Happiness = pokemonInfo.BaseHappiness ?? 70
+            Happiness = pokemonInfo.BaseHappiness ?? 70,
+            Timestamp = DateTime.UtcNow
         };
 
-        // Save to database and get ID
+        // Start a transaction to ensure consistency
         await using var dbContext = await _dbContextProvider.GetContextAsync();
-        await dbContext.UserPokemon.AddAsync(pokemon);
-        await dbContext.SaveChangesAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        // Add to user's pokemon array
-        var user = await dbContext.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
-        if (user == null) return pokemon;
+        try
+        {
+            // Add and save the Pokemon to get its ID
+            await dbContext.UserPokemon.AddAsync(pokemon);
+            await dbContext.SaveChangesAsync();
 
-        var pokeList = user.Pokemon.ToList();
-        pokeList.Add(pokemon.Id);
-        user.Pokemon = pokeList.ToArray();
-        await dbContext.SaveChangesAsync();
+            // Find the highest current position for this user
+            var highestPosition = await dbContext.UserPokemonOwnerships
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.Position)
+                .Select(o => (int?)o.Position)
+                .FirstOrDefaultAsync() ?? -1;
 
-        // Update achievements
-        if (shiny)
-            await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE achievements SET shiny_caught = shiny_caught + 1 WHERE u_id = {userId}");
-        else
-            await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE achievements SET pokemon_caught = pokemon_caught + 1 WHERE u_id = {userId}");
+            // Create a new ownership record with the next position
+            var ownership = new UserPokemonOwnership
+            {
+                UserId = userId,
+                PokemonId = pokemon.Id,
+                Position = highestPosition + 1 // Use the next available position
+            };
+
+            await dbContext.UserPokemonOwnerships.AddAsync(ownership);
+
+            // Update achievements
+            if (shiny)
+                await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE achievements SET shiny_caught = shiny_caught + 1 WHERE u_id = {userId}");
+            else
+                await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE achievements SET pokemon_caught = pokemon_caught + 1 WHERE u_id = {userId}");
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            Log.Error(ex, "Error creating Pokemon {Name} for user {UserId}", pokemonName, userId);
+            return null;
+        }
 
         return pokemon;
     }

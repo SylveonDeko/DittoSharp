@@ -3,7 +3,8 @@ namespace EeveeCore.Modules.Duels.Impl;
 /// <summary>
 ///     Helper enum for ability IDs to make them more readable in code.
 ///     Maps numeric ability IDs from the game data to named constants.
-///     Represents the special powers and characteristics that determine how Pokémon interact with moves and battle conditions.
+///     Represents the special powers and characteristics that determine how Pokémon interact with moves and battle
+///     conditions.
 /// </summary>
 public enum Ability
 {

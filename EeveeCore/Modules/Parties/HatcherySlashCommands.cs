@@ -115,8 +115,7 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
         foreach (var groupEntry in addedEggs)
             embed.AddField(
                 $"Group {groupEntry.Key}",
-                $"Eggs added to slots: {string.Join(", ", groupEntry.Value)}",
-                false);
+                $"Eggs added to slots: {string.Join(", ", groupEntry.Value)}");
 
         await ctx.Interaction.RespondAsync(embed: embed.Build());
     }

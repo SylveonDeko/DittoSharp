@@ -1,4 +1,3 @@
-#nullable enable
 using System.Net.Http.Headers;
 using Discord.Interactions;
 using Fergun.Interactive;
@@ -10,7 +9,6 @@ namespace EeveeCore.Extensions;
 /// </summary>
 public static class Extensions
 {
-
     /// <summary>
     ///     Sends a confirmation message asynchronously.
     /// </summary>

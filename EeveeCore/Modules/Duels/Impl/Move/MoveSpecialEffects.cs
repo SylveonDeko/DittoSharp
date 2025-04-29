@@ -9,7 +9,7 @@ public partial class Move
     private string HandleSpecialEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance)
     {
         var msg = "";
-        
+
         switch (Effect)
         {
             // OldMove locking
@@ -158,7 +158,7 @@ public partial class Move
                 msg += $"{attacker.Name} protected itself!\n";
                 break;
         }
-        
+
         // Sound-based move with throat spray
         if (IsSoundBased() && attacker.HeldItem == "throat-spray")
         {
@@ -193,10 +193,10 @@ public partial class Move
                 msg += $"{defender.Name} got covered in sticky candy syrup!\n";
                 break;
         }
-        
+
         return msg;
     }
-    
+
     /// <summary>
     ///     Handles swap effects.
     /// </summary>
@@ -204,7 +204,7 @@ public partial class Move
     private string HandleSwapEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle)
     {
         var msg = "";
-        
+
         // Swap outs
         // A poke is force-swapped out before activating red-card
         if (Effect is 29 or 314)
@@ -301,10 +301,10 @@ public partial class Move
 
         // Attacker faints
         if (new[] { 169, 221, 271, 321 }.Contains(Effect)) msg += attacker.Faint(battle);
-        
+
         return msg;
     }
-    
+
     /// <summary>
     ///     Handles life orb damage.
     /// </summary>
@@ -312,7 +312,7 @@ public partial class Move
     private string HandleLifeOrb(DuelPokemon attacker, DuelPokemon defender, Battle battle)
     {
         var msg = "";
-        
+
         // Life orb
         if (
             attacker.HeldItem == "life-orb" &&
@@ -322,7 +322,7 @@ public partial class Move
             Effect != 149
         )
             msg += attacker.Damage(attacker.StartingHp / 10, battle, source: "its life orb");
-        
+
         return msg;
     }
 }

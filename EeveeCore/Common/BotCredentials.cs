@@ -3,16 +3,16 @@
 namespace EeveeCore.Common;
 
 /// <summary>
-/// Provides configuration and credentials for the bot application.
+///     Provides configuration and credentials for the bot application.
 /// </summary>
 public class BotCredentials : IBotCredentials
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="BotCredentials"/> class.
-    /// Loads configuration from config.json and environment variables.
+    ///     Initializes a new instance of the <see cref="BotCredentials" /> class.
+    ///     Loads configuration from config.json and environment variables.
     /// </summary>
     /// <exception cref="ArgumentNullException">
-    /// Thrown when required configuration values are missing.
+    ///     Thrown when required configuration values are missing.
     /// </exception>
     public BotCredentials()
     {
@@ -68,52 +68,52 @@ public class BotCredentials : IBotCredentials
     }
 
     /// <summary>
-    /// Gets the Discord bot token used for authentication.
+    ///     Gets the Discord bot token used for authentication.
     /// </summary>
     public string Token { get; }
 
     /// <summary>
-    /// Gets the guild ID used for testing and debugging purposes.
+    ///     Gets the guild ID used for testing and debugging purposes.
     /// </summary>
     public ulong DebugGuildId { get; }
 
     /// <summary>
-    /// Gets the channel ID where guild join notifications are sent.
+    ///     Gets the channel ID where guild join notifications are sent.
     /// </summary>
     public ulong GuildJoinsChannelId { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the bot is running in debug mode.
+    ///     Gets a value indicating whether the bot is running in debug mode.
     /// </summary>
     public bool IsDebug { get; }
 
     /// <summary>
-    /// Gets the default command prefix for the bot.
+    ///     Gets the default command prefix for the bot.
     /// </summary>
     public string DefaultPrefix { get; }
 
     /// <summary>
-    /// Gets the configuration for PostgreSQL database connection.
+    ///     Gets the configuration for PostgreSQL database connection.
     /// </summary>
     public DbConfig PostgresConfig { get; }
 
     /// <summary>
-    /// Gets the configuration for MongoDB database connection.
+    ///     Gets the configuration for MongoDB database connection.
     /// </summary>
     public DbConfig MongoConfig { get; }
 
     /// <summary>
-    /// Gets the configuration for Redis database connection.
+    ///     Gets the configuration for Redis database connection.
     /// </summary>
     public DbConfig RedisConfig { get; }
 
     /// <summary>
-    /// Gets or sets the collection of user IDs that have owner privileges.
+    ///     Gets or sets the collection of user IDs that have owner privileges.
     /// </summary>
     public ImmutableArray<ulong> OwnerIds { get; set; }
 
     /// <summary>
-    /// Determines whether a user has owner privileges.
+    ///     Determines whether a user has owner privileges.
     /// </summary>
     /// <param name="u">The user to check.</param>
     /// <returns>True if the user is an owner; otherwise, false.</returns>
@@ -124,57 +124,57 @@ public class BotCredentials : IBotCredentials
 }
 
 /// <summary>
-/// Defines the interface for bot credentials and configuration.
+///     Defines the interface for bot credentials and configuration.
 /// </summary>
 public interface IBotCredentials
 {
     /// <summary>
-    /// Gets the Discord bot token used for authentication.
+    ///     Gets the Discord bot token used for authentication.
     /// </summary>
     string Token { get; }
 
     /// <summary>
-    /// Gets or sets the collection of user IDs that have owner privileges.
+    ///     Gets or sets the collection of user IDs that have owner privileges.
     /// </summary>
     public ImmutableArray<ulong> OwnerIds { get; set; }
 
     /// <summary>
-    /// Gets the default command prefix for the bot.
+    ///     Gets the default command prefix for the bot.
     /// </summary>
     string DefaultPrefix { get; }
 
     /// <summary>
-    /// Gets the guild ID used for testing and debugging purposes.
+    ///     Gets the guild ID used for testing and debugging purposes.
     /// </summary>
     ulong DebugGuildId { get; }
 
     /// <summary>
-    /// Gets the channel ID where guild join notifications are sent.
+    ///     Gets the channel ID where guild join notifications are sent.
     /// </summary>
     ulong GuildJoinsChannelId { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the bot is running in debug mode.
+    ///     Gets a value indicating whether the bot is running in debug mode.
     /// </summary>
     bool IsDebug { get; }
 
     /// <summary>
-    /// Gets the configuration for PostgreSQL database connection.
+    ///     Gets the configuration for PostgreSQL database connection.
     /// </summary>
     DbConfig PostgresConfig { get; }
 
     /// <summary>
-    /// Gets the configuration for MongoDB database connection.
+    ///     Gets the configuration for MongoDB database connection.
     /// </summary>
     DbConfig MongoConfig { get; }
 
     /// <summary>
-    /// Gets the configuration for Redis database connection.
+    ///     Gets the configuration for Redis database connection.
     /// </summary>
     DbConfig RedisConfig { get; }
 
     /// <summary>
-    /// Determines whether a user has owner privileges.
+    ///     Determines whether a user has owner privileges.
     /// </summary>
     /// <param name="u">The user to check.</param>
     /// <returns>True if the user is an owner; otherwise, false.</returns>
@@ -185,17 +185,17 @@ public interface IBotCredentials
 }
 
 /// <summary>
-/// Represents database connection configuration.
+///     Represents database connection configuration.
 /// </summary>
 public class DbConfig
 {
     /// <summary>
-    /// Gets or sets the connection string for the database.
+    ///     Gets or sets the connection string for the database.
     /// </summary>
     public string ConnectionString { get; set; }
 
     /// <summary>
-    /// Gets or sets the friendly name of the database.
+    ///     Gets or sets the friendly name of the database.
     /// </summary>
     public string Name { get; set; }
 }

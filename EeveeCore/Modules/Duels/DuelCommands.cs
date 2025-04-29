@@ -18,10 +18,10 @@ namespace EeveeCore.Modules.Duels;
 [Group("duel", "Duel related commands")]
 public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 {
-    private readonly IMongoService _mongoService;
-    private readonly DbContextProvider _db;
-    private readonly DiscordShardedClient _client;
-    private readonly RedisCache _redis;
+    /// <summary>
+    ///     Date format used for storing and parsing timestamps in Redis.
+    /// </summary>
+    private const string DATE_FORMAT = "MM/dd/yyyy, HH:mm:ss";
 
     /// <summary>
     ///     Collection of GIFs to display during battle loading screens.
@@ -34,16 +34,16 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
         "https://skylarr1227.github.io/images/duel4.gif"
     ];
 
-    /// <summary>
-    ///     Date format used for storing and parsing timestamps in Redis.
-    /// </summary>
-    private const string DATE_FORMAT = "MM/dd/yyyy, HH:mm:ss";
+    private readonly DiscordShardedClient _client;
+    private readonly DbContextProvider _db;
+    private readonly IMongoService _mongoService;
+    private readonly RedisCache _redis;
 
     /// <summary>
     ///     Initializes a new instance of the PokemonBattleModule class with required dependencies.
     /// </summary>
     /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
-    /// <param name="db">The database context provider for Entity Framework operations.</param>
+    /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown management.</param>
     public PokemonBattleModule(
@@ -265,7 +265,8 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             }
 
             // Check if user has energy
-            if (userData.Energy <= 0 && ctx.Channel.Id != 1351200647743275142) // Skip energy check in designated channel
+            if (userData.Energy <= 0 &&
+                ctx.Channel.Id != 1351200647743275142) // Skip energy check in designated channel
             {
                 await FollowupAsync(
                     "You don't have any energy left!");

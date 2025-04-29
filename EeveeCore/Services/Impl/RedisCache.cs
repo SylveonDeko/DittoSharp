@@ -9,11 +9,11 @@ public class RedisCache : IDataCache
     private readonly IDatabase _db;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RedisCache"/> class.
-    /// Attempts to establish a connection to the redis server.
+    ///     Initializes a new instance of the <see cref="RedisCache" /> class.
+    ///     Attempts to establish a connection to the redis server.
     /// </summary>
     /// <exception cref="RedisConnectionException">
-    /// Thrown when Redis is either not running or cannot be reached.
+    ///     Thrown when Redis is either not running or cannot be reached.
     /// </exception>
     public RedisCache(BotCredentials creds)
     {

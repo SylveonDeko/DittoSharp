@@ -1,5 +1,4 @@
-﻿
-using EeveeCore.Database.Models.Mongo.Discord;
+﻿using EeveeCore.Database.Models.Mongo.Discord;
 using EeveeCore.Database.Models.Mongo.Game;
 using EeveeCore.Database.Models.Mongo.Pokemon;
 using MongoDB.Driver;

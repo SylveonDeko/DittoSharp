@@ -249,6 +249,7 @@ public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
     /// <summary>
     ///     Handles catching Pokémon through the modal dialog.
     ///     Validates the user's guess and processes the catch if correct.
+    ///     Uses Redis-based locking to prevent multiple users from catching the same Pokémon.
     /// </summary>
     /// <param name="pokemonName">The name of the spawned Pokémon.</param>
     /// <param name="shiny">Whether the Pokémon is shiny.</param>
@@ -263,11 +264,11 @@ public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
     {
         await ctx.Interaction.DeferAsync();
 
-        // Check if pokemon is still available
+        // Check if pokemon is still available in the channel
         if (await ctx.Channel.GetMessageAsync(messageId) is not IUserMessage message ||
             message.Embeds.FirstOrDefault()?.Title == "Caught!")
         {
-            await ctx.Interaction.FollowupAsync("This Pokemon has already been caught!", ephemeral: true);
+            await ctx.Interaction.FollowupAsync("This Pokémon has already been caught!", ephemeral: true);
             return;
         }
 
@@ -283,6 +284,22 @@ public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
 
         var legChance = int.Parse(legendChance);
         var ultraChance = int.Parse(ubChance);
+
+        // Check if this Pokémon has already been caught using Redis
+        if (await Service.IsPokemonAlreadyCaught(messageId))
+        {
+            await ctx.Interaction.FollowupAsync("This Pokémon has already been caught by someone else!",
+                ephemeral: true);
+            return;
+        }
+
+        // Try to acquire the catch lock using Redis
+        if (!await Service.TryMarkPokemonAsCaught(messageId, ctx.User.Id))
+        {
+            await ctx.Interaction.FollowupAsync("This Pokémon has already been caught by someone else!",
+                ephemeral: true);
+            return;
+        }
 
         // Handle the catch through service
         var result = await Service.HandleCatch(

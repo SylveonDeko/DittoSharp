@@ -6,7 +6,8 @@ public partial class Move
     ///     Calculates and applies damage from the move.
     /// </summary>
     /// <returns>A string of formatted results and the number of hits.</returns>
-    private string CalculateDamage(DuelPokemon attacker, DuelPokemon defender, Battle battle, ElementType currentType, ref int numHits)
+    private string CalculateDamage(DuelPokemon attacker, DuelPokemon defender, Battle battle, ElementType currentType,
+        ref int numHits)
     {
         var msg = "";
 

@@ -1,9 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using Serilog;
-using StackExchange.Redis;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Services.Impl;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+using StackExchange.Redis;
 
 namespace EeveeCore.Modules.Duels.Services;
 
@@ -14,11 +14,6 @@ namespace EeveeCore.Modules.Duels.Services;
 /// </summary>
 public class DuelService : INService
 {
-    private readonly IMongoService _mongoService;
-    private readonly DiscordShardedClient _client;
-    private readonly DbContextProvider _db;
-    private readonly RedisCache _redis;
-    private DateTime? _duelResetTime;
     private const string DateFormat = "MM/dd/yyyy, HH:mm:ss";
 
     /// <summary>
@@ -27,12 +22,18 @@ public class DuelService : INService
     /// </summary>
     private readonly Dictionary<(ulong, ulong), Battle> _activeBattles = new();
 
+    private readonly DiscordShardedClient _client;
+    private readonly DbContextProvider _db;
+    private readonly IMongoService _mongoService;
+    private readonly RedisCache _redis;
+    private DateTime? _duelResetTime;
+
     /// <summary>
     ///     Initializes a new instance of the DuelService class with required dependencies.
     ///     Sets up Redis for tracking battle cooldowns and states.
     /// </summary>
     /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
-    /// <param name="db">The database context provider for Entity Framework operations.</param>
+    /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown and battle state persistence.</param>
     public DuelService(
@@ -195,9 +196,9 @@ public class DuelService : INService
             // Store battle metadata in a hash
             var battleKey = $"battle:{interactionId}";
             await db.HashSetAsync(battleKey, [
-                new("user1", userId1),
-                new("user2", userId2),
-                new("created", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+                new HashEntry("user1", userId1),
+                new HashEntry("user2", userId2),
+                new HashEntry("created", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
             ]);
 
             // Set expiration to 2 hours (max battle duration)
@@ -259,11 +260,10 @@ public class DuelService : INService
         try
         {
             var db = _redis.Redis.GetDatabase();
-            var exists =  await db.KeyExistsAsync($"user_in_battle:{userId}");
+            var exists = await db.KeyExistsAsync($"user_in_battle:{userId}");
             if (!exists) return false;
             await db.KeyDeleteAsync($"user_in_battle:{userId}");
             return false;
-
         }
         catch (Exception ex)
         {
