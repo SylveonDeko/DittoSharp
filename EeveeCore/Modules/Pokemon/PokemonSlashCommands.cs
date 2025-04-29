@@ -182,8 +182,8 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 {
                     description.AppendLine(GenerateDetailedListEntry(
                         pokemon,
-                        partyLookup.Contains((long)pokemon.botId),
-                        pokemon.botId == selectedPokemon));
+                        partyLookup.Contains((int)pokemon.BotId),
+                        pokemon.BotId == selectedPokemon));
                     description.AppendLine(); // Add space between entries
                 }
             else // Normal or compact
@@ -192,8 +192,8 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                     var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
                     var gender = GetGenderEmoji(pokemon.Gender);
                     var favorite = pokemon.Favorite ? "⭐ " : "";
-                    var inParty = partyLookup.Contains((long)pokemon.botId) ? "👥 " : "";
-                    var isSelected = pokemon.botId == selectedPokemon ? "🔍 " : "";
+                    var inParty = partyLookup.Contains((int)pokemon.BotId) ? "👥 " : "";
+                    var isSelected = pokemon.BotId == selectedPokemon ? "🔍 " : "";
                     var champion = pokemon.Champion ? "🏆 " : "";
                     var market = pokemon.MarketEnlist ? "💰 " : "";
 

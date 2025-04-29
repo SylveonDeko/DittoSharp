@@ -932,7 +932,7 @@ public class PokemonService(
     /// <param name="filter">Filter to apply (all, shiny, radiant, etc).</param>
     /// <param name="search">Optional search term.</param>
     /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
-    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<long> PartyPokemon,
+    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<int> PartyPokemon,
             ulong? SelectedPokemon)>
         GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter, string search)
     {
@@ -953,13 +953,13 @@ public class PokemonService(
                     .AnyAsyncLinqToDB(u => u.UserId == userId);
 
                 if (!userExists)
-                    return (new List<PokemonListEntry>(), null, new HashSet<long>(), null);
+                    return (new List<PokemonListEntry>(), null, new HashSet<int>(), null);
             }
 
             // Create lookup sets for efficient checking
             var partyLookup = userData?.Party != null
-                ? new HashSet<long>(userData.Party.Where(id => id != 0))
-                : new HashSet<long>();
+                ? new HashSet<int>(userData.Party.Where(id => id != 0))
+                : new HashSet<int>();
 
             // Get Pokemon from the ownership table using JOIN instead of separate queries
             var query = from ownership in conn.GetTable<UserPokemonOwnership>()
@@ -1723,7 +1723,7 @@ public class PokemonService(
 /// <summary>
 ///     Represents a Pokemon in a list view.
 /// </summary>
-/// <param name="botId">The bot ID of the Pokemon.</param>
+/// <param name="BotId">The bot ID of the Pokemon.</param>
 /// <param name="Name">The name of the Pokemon.</param>
 /// <param name="Number">The number of the Pokemon in the user's collection.</param>
 /// <param name="Level">The level of the Pokemon.</param>
@@ -1734,7 +1734,7 @@ public class PokemonService(
 /// <param name="Gender">The gender of the Pokemon.</param>
 /// <param name="Nickname">The nickname of the Pokemon, if any.</param>
 public record PokemonListEntry(
-    ulong botId,
+    ulong BotId,
     string Name,
     int Number,
     int Level,
