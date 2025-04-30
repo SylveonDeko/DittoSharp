@@ -293,7 +293,7 @@ public class BreedingService : INService
             "HMSET",
             "breedcooldowns",
             userId.ToString(),
-            (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 35).ToString());
+            (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 10).ToString());
 
         // Basic validation
         if (maleId == femaleId)
