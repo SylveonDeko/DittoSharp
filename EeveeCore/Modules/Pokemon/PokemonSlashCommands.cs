@@ -110,6 +110,12 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         [Choice("Party", "party")]
         [Choice("Market", "market")]
         string filter = "all",
+        [Summary("gender", "Filter by gender")]
+        [Choice("All", "all")]
+        [Choice("Male", "male")]
+        [Choice("Female", "female")]
+        [Choice("Genderless", "genderless")]
+        string genderPicked = "all",
         [Summary("view", "View mode")]
         [Choice("Normal", "normal")]
         [Choice("Compact", "compact")]
@@ -135,18 +141,18 @@ public class PokemonSlashCommands(InteractiveService interactivity)
 
         // Get filtered Pokemon list with all the necessary data from the service
         var (filteredList, stats, partyLookup, selectedPokemon) =
-            await Service.GetFilteredPokemonList(ctx.User.Id, sortOrder, filter, search);
+            await Service.GetFilteredPokemonList(ctx.User.Id, sortOrder, filter, genderPicked, search);
 
-        if (filteredList.Count == 0)
+        if (filteredList.Count == 0 && genderPicked == "all" && sortBy == "default" && filter == "all" && string.IsNullOrWhiteSpace(search))
         {
-            await FollowupAsync("You have not started!\nStart with `/start` first!");
+            await ctx.Interaction.SendErrorFollowupAsync("You have not started!\nStart with `/start` first!");
             return;
         }
 
         // Handle empty results after filtering
         if (filteredList.Count == 0)
         {
-            await FollowupAsync("No Pokemon match your filters! Try different filter options.");
+            await ctx.Interaction.SendErrorFollowupAsync("No Pokemon match your filters! Try different filter options.");
             return;
         }
 
@@ -280,7 +286,8 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     {
         var statsBuilder = new StringBuilder();
 
-        statsBuilder.AppendLine($"**Collection Overview** - {stats["Total"]} total Pokémon");
+        // Shows stats for the filtered collection
+        statsBuilder.AppendLine($"**Collection Overview** - {stats["Total"]} Pokémon");
         statsBuilder.AppendLine($"• Shiny: {stats["Shiny"]}");
         statsBuilder.AppendLine($"• Radiant: {stats["Radiant"]}");
         statsBuilder.AppendLine($"• Shadow: {stats["Shadow"]}");
@@ -288,6 +295,16 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         statsBuilder.AppendLine($"• Favorite: {stats["Favorite"]}");
         statsBuilder.AppendLine($"• Champion: {stats["Champion"]}");
         statsBuilder.AppendLine($"• Market Listed: {stats["Market"]}");
+        statsBuilder.AppendLine($"• Male: {stats["Male"]}");
+        statsBuilder.AppendLine($"• Female: {stats["Female"]}");
+        statsBuilder.AppendLine($"• Genderless: {stats["Genderless"]}");
+
+        // Show total collection size for comparison
+        if (stats.ContainsKey("TotalCount") && stats["TotalCount"] != stats["Total"])
+        {
+            statsBuilder.AppendLine();
+            statsBuilder.AppendLine($"**Total Collection Size**: {stats["TotalCount"]} Pokémon");
+        }
 
         // If filtering, show filter summary
         if (filter != "all")

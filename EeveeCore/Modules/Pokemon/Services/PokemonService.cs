@@ -934,7 +934,7 @@ public class PokemonService(
     /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
     public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<int> PartyPokemon,
             ulong? SelectedPokemon)>
-        GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter, string search)
+        GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter,string gender, string search)
     {
         try
         {
@@ -968,6 +968,8 @@ public class PokemonService(
                 where ownership.UserId == userId
                 select new { Pokemon = pokemon, ownership.Position };
 
+            var totalCount = await query.CountAsyncLinqToDB();
+
             // Apply filter
             query = filter switch
             {
@@ -982,8 +984,30 @@ public class PokemonService(
                 _ => query
             };
 
+            query = gender switch
+            {
+                "male" => query.Where(p => p.Pokemon.Gender == "-m"),
+                "female" => query.Where(p => p.Pokemon.Gender == "-f"),
+                "genderless" => query.Where(p => p.Pokemon.Gender == "-x"),
+                _ => query
+            };
+
             // Get collection stats before applying sort
-            var stats = await CalculateCollectionStatistics(userId, conn);
+            var stats = new Dictionary<string, int> {
+                { "TotalCount", totalCount }
+            };
+
+            stats["Total"] = await query.CountAsyncLinqToDB();
+            stats["Shiny"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Shiny == true);
+            stats["Radiant"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Radiant == true);
+            stats["Shadow"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Skin == "shadow");
+            stats["Legendary"] = await query.CountAsyncLinqToDB(p => PokemonList.LegendList.Contains(p.Pokemon.PokemonName));
+            stats["Favorite"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Favorite);
+            stats["Champion"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Champion);
+            stats["Market"] = await query.CountAsyncLinqToDB(p => p.Pokemon.MarketEnlist);
+            stats["Male"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-m");
+            stats["Female"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-f");
+            stats["Genderless"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-x");
 
             // Apply sorting
             query = sortOrder switch

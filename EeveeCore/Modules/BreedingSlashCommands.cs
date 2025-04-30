@@ -148,14 +148,41 @@ public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<Br
                     var retryEmbed = new EmbedBuilder()
                         .WithTitle("Breeding Attempt Failed!")
                         .WithDescription(
-                            $"{result.ErrorMessage}\nYou can breed again: Now!\n\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`")
+                            $"{result.ErrorMessage}\n\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`")
                         .WithColor(Color.Red);
 
                     if (result.Chance > 0) retryEmbed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
                     await interaction.ModifyOriginalResponseAsync(m => { m.Embed = retryEmbed.Build(); });
 
-                    await Task.Delay(500); // Small delay before retrying
+                    // Check if we hit cooldown
+                    if (result.ErrorMessage.Contains("Command on cooldown for"))
+                    {
+                        // Extract cooldown time from error message
+                        var cooldownSeconds = ExtractCooldownTime(result.ErrorMessage);
+                        if (cooldownSeconds > 0)
+                        {
+                            var cooldownMs = (cooldownSeconds + 1) * 1000; // Add 1 second buffer
+                            retryEmbed.WithDescription(
+                                $"{result.ErrorMessage}\n\nWaiting for cooldown...\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`");
+                            await interaction.ModifyOriginalResponseAsync(m => { m.Embed = retryEmbed.Build(); });
+
+                            // Wait for cooldown to expire
+                            await Task.Delay(cooldownMs);
+                        }
+                        else
+                        {
+                            // Default wait of 36 seconds if we can't extract time
+                            await Task.Delay(36000);
+                        }
+                    }
+                    else
+                    {
+                        // Small delay for other errors
+                        await Task.Delay(500);
+                    }
+
+                    // Try again after waiting
                     await BreedPokemon(male, interaction, true);
                     return;
                 }
@@ -229,6 +256,24 @@ public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<Br
 
         // Reset retry counter
         Service.ResetBreedRetries(ctx.User.Id, male);
+    }
+
+    private static int ExtractCooldownTime(string errorMessage)
+    {
+        try
+        {
+            // Extract number from "Command on cooldown for Xs"
+            var match = System.Text.RegularExpressions.Regex.Match(errorMessage, @"cooldown for (\d+)s");
+            if (match.Success && match.Groups.Count > 1)
+            {
+                return int.Parse(match.Groups[1].Value);
+            }
+        }
+        catch
+        {
+            // If parsing fails, return 0
+        }
+        return 0;
     }
 
     /// <summary>
