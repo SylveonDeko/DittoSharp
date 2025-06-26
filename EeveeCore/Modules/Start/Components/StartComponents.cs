@@ -103,7 +103,7 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
                              "**Use the `/settings spawns enable` command to enable in this channel. See `/settings` for other spawn subcommands.")
             .WithColor(new Color(0xDD, 0x00, 0xDD));
 
-        await ctx.Interaction.RespondAsync(embed: welcomeEmbed.Build());
+        await ctx.Interaction.FollowupAsync(embed: welcomeEmbed.Build());
 
         // Send additional info
         var infoEmbed = new EmbedBuilder()

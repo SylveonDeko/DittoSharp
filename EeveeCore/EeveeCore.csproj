@@ -31,6 +31,7 @@
         <PackageReference Include="SkiaSharp" Version="3.119.0-preview.1.2"/>
         <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0-preview.1.2"/>
         <PackageReference Include="StackExchange.Redis" Version="2.8.31"/>
+        <PackageReference Include="DbUp-PostgreSQL" Version="5.0.40"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -48,5 +49,9 @@
 
     <ItemGroup>
         <None Include="data\**" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Database\Migrations\*.sql" />
     </ItemGroup>
 </Project>

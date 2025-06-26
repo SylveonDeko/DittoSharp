@@ -45,21 +45,35 @@ public class StartService(DbContextProvider dbContext, DiscordShardedClient clie
         };
 
         db.Users.Add(newUser);
+        
+        // Save the user first to satisfy foreign key constraints
+        await db.SaveChangesAsync();
 
-        // Create achievement record
-        await db.Achievements.AddAsync(new Achievement
+        // Create achievement record (ON CONFLICT DO NOTHING equivalent)
+        var existingAchievement = await db.Achievements.AnyAsync(a => a.UserId == userId);
+        if (!existingAchievement)
         {
-            UserId = userId
-        });
-
-        // Create egg hatchery entries for user (3 groups)
-        for (short group = 1; group <= 3; group++)
-            await db.EggHatcheries.AddAsync(new EggHatchery
+            await db.Achievements.AddAsync(new Achievement
             {
-                UserId = userId,
-                Group = group
+                UserId = userId
             });
+        }
 
+        // Create egg hatchery entries for user (3 groups) - check for existing first
+        for (short group = 1; group <= 3; group++)
+        {
+            var existingHatchery = await db.EggHatcheries.AnyAsync(h => h.UserId == userId && h.Group == group);
+            if (!existingHatchery)
+            {
+                await db.EggHatcheries.AddAsync(new EggHatchery
+                {
+                    UserId = userId,
+                    Group = group
+                });
+            }
+        }
+
+        // Save the remaining records
         await db.SaveChangesAsync();
         return (true, "Successfully registered new user");
     }

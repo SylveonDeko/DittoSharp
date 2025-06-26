@@ -1,6 +1,7 @@
 ﻿using Discord.Commands;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBehaviors;
+using EeveeCore.Database;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Services.Impl;
 using Fergun.Interactive;
@@ -61,6 +62,7 @@ public class Program
                     .AddSingleton<RedisCache>()
                     .AddSingleton<IDataCache>(s => s.GetRequiredService<RedisCache>())
                     .AddSingleton<DbContextProvider>()
+                    .AddSingleton<DatabaseMigrator>()
                     .AddSingleton<EventHandler>()
                     .AddSingleton<InteractiveService>()
                     .AddSingleton(new CommandService(new CommandServiceConfig

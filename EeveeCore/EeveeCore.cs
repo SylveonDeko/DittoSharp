@@ -3,6 +3,7 @@ using System.Reflection;
 using Discord.Commands;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBehaviors;
+using EeveeCore.Database;
 using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.Mongo.Discord;
 using Serilog;
@@ -213,6 +214,17 @@ public class EeveeCore
         try
         {
             LoadTypeReaders(typeof(EeveeCore).Assembly);
+
+            // Run database migrations
+            var migrator = Services.GetRequiredService<DatabaseMigrator>();
+            var migrationSuccessful = await migrator.MigrateAsync();
+            if (!migrationSuccessful)
+            {
+                throw new InvalidOperationException("Database migration failed");
+            }
+
+            // Small delay to ensure migration connections are fully disposed
+            await Task.Delay(100);
 
             var dbProvider = Services.GetRequiredService<DbContextProvider>();
             await using var context = await dbProvider.GetContextAsync();
