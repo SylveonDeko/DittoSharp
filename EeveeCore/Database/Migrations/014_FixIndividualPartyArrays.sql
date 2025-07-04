@@ -7,7 +7,7 @@ BEGIN
     UPDATE users 
     SET party = CASE
         WHEN array_length(party, 1) < 6 THEN 
-            party || ARRAY[0,0,0,0,0,0]::numeric(20,0)[][1:6-array_length(party, 1)]
+            party || (SELECT ARRAY(SELECT 0::numeric(20,0) FROM generate_series(1, 6-array_length(party, 1))))
         WHEN array_length(party, 1) > 6 THEN 
             party[1:6]
         ELSE 
@@ -20,7 +20,7 @@ BEGIN
     UPDATE users 
     SET type_tokens = CASE
         WHEN array_length(type_tokens, 1) < 18 THEN 
-            type_tokens || ARRAY[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]::numeric(20,0)[][1:18-array_length(type_tokens, 1)]
+            type_tokens || (SELECT ARRAY(SELECT 0::numeric(20,0) FROM generate_series(1, 18-array_length(type_tokens, 1))))
         WHEN array_length(type_tokens, 1) > 18 THEN 
             type_tokens[1:18]
         ELSE 
