@@ -4,9 +4,7 @@ using EeveeCore.Modules.Trade.Models;
 using Serilog;
 using TokenType = EeveeCore.Modules.Trade.Models.TokenType;
 using LinqToDB;
-using User = EeveeCore.Database.Linq.Models.Bot.User;
 using UserPokemonOwnership = EeveeCore.Database.Linq.Models.Pokemon.UserPokemonOwnership;
-using Token = EeveeCore.Database.Linq.Models.Bot.Token; 
 
 namespace EeveeCore.Modules.Trade.Services;
 

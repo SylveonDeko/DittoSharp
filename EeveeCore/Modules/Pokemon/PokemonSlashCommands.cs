@@ -1,6 +1,5 @@
 using System.Text;
 using Discord.Interactions;
-using Discord.Rest;
 using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Pokemon.Services;

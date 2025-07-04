@@ -1,5 +1,4 @@
 using Discord.Interactions;
-using EeveeCore.Extensions;
 using LinqToDB;
 using Serilog;
 

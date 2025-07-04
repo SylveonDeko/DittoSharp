@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using EeveeCore.Modules.Fishing.Services;
-using EeveeCore.Services.Impl;
 using LinqToDB;
 using Serilog;
 

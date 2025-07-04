@@ -2,8 +2,6 @@ using System.Text.Json;
 using EeveeCore.Modules.Trade.Models;
 using TokenType = EeveeCore.Modules.Trade.Models.TokenType;
 using LinqToDB;
-using User = EeveeCore.Database.Linq.Models.Bot.User;
-using UserPokemonOwnership = EeveeCore.Database.Linq.Models.Pokemon.UserPokemonOwnership;
 using TradeLog = EeveeCore.Database.Linq.Models.Game.TradeLog;
 
 namespace EeveeCore.Modules.Trade.Services;

@@ -1,6 +1,4 @@
-using Discord;
 using Discord.Interactions;
-using EeveeCore.Extensions;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;

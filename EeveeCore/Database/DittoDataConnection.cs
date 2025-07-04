@@ -1,6 +1,5 @@
 using LinqToDB;
 using LinqToDB.Data;
-using LinqToDB.Mapping;
 using EeveeCore.Database.Linq.Models.Art;
 using EeveeCore.Database.Linq.Models.Bot;
 using EeveeCore.Database.Linq.Models.Game;

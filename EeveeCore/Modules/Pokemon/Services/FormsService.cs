@@ -1,5 +1,3 @@
-using EeveeCore.Common.Logic;
-using EeveeCore.Database.Models.Mongo.Pokemon;
 using EeveeCore.Services.Impl;
 using LinqToDB;
 using MongoDB.Driver;

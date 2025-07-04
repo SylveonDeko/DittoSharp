@@ -2,8 +2,6 @@ using LinqToDB;
 using System.Text;
 using System.Text.Json;
 using EeveeCore.Database.Linq.Models.Bot;
-using EeveeCore.Database.Linq.Models.Game;
-using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Spawn.Constants;
 using EeveeCore.Services.Helpers;
@@ -12,7 +10,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Serilog;
-using User = EeveeCore.Database.Linq.Models.Bot.User;
 
 namespace EeveeCore.Controllers;
 

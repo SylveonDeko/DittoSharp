@@ -2,7 +2,6 @@ using EeveeCore.Modules.Trade.Models;
 using System.Text.Json;
 using Serilog;
 using LinqToDB;
-using EeveeCore.Common.Enums;
 using EeveeCore.Database.Linq.Models.Game;
 
 namespace EeveeCore.Modules.Trade.Services;

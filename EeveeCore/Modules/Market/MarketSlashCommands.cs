@@ -1,4 +1,3 @@
-using System.Text;
 using Discord.Interactions;
 using EeveeCore.Common.Attributes.Interactions;
 using EeveeCore.Common.AutoCompletes;
