@@ -78,8 +78,9 @@ public class AllPokemonAutocompleteHandler : AutocompleteHandler
             // Create autocomplete results
             var pokemonResults = userPokemon.Select(p => 
             {
-                var displayName = CreateDisplayName(p.PokemonName!, p.Nickname, p.Position, p.Level, p.Shiny, p.Radiant, p.Favorite);
-                return new AutocompleteResult(displayName, p.Position.ToString());
+                // Position is 0-indexed in DB, but display as 1-indexed and pass 1-indexed value
+                var displayName = CreateDisplayName(p.PokemonName!, p.Nickname, p.Position + 1, p.Level, p.Shiny, p.Radiant, p.Favorite);
+                return new AutocompleteResult(displayName, (p.Position + 1).ToString());
             }).ToList();
 
             // Cache the results
