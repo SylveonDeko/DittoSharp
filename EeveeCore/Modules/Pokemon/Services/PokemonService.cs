@@ -947,7 +947,7 @@ public class PokemonService(
             // Get user data for party and selected - using LinqToDB, not EF Core, EF Core is slow sometimes.
             var userData = await db.Users
                 .Where(u => u.UserId == userId)
-                .Select(u => new { u._party, u.Selected })
+                .Select(u => new { Party = u._party, Selected = u.Selected })
                 .FirstOrDefaultAsync();
 
             if (userData == null)
@@ -960,8 +960,8 @@ public class PokemonService(
             }
 
             // Create lookup sets for efficient checking - convert from long[] to ulong[]
-            var partyLookup = userData?._party != null
-                ? new HashSet<ulong>(userData._party.Where(id => id != 0).Select(id => (ulong)id))
+            var partyLookup = userData?.Party != null
+                ? new HashSet<ulong>(userData.Party.Where(id => id != 0).Select(id => (ulong)id))
                 : new HashSet<ulong>();
 
             // Get Pokemon from the ownership table using JOIN instead of separate queries

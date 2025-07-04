@@ -78,25 +78,13 @@ BEGIN
             
             RAISE NOTICE 'Ensuring females column supports nullable elements';
             
-            -- Check if there are any non-integer values that might cause issues
+            -- Clear any malformed data
             UPDATE users SET females = NULL 
             WHERE females IS NOT NULL 
             AND EXISTS (
                 SELECT 1 FROM unnest(females) AS elem 
-                WHERE elem::text !~ '^-?[0-9]+$'
+                WHERE elem IS NULL OR elem::text !~ '^-?[0-9]+$'
             );
-            
-            -- Ensure proper data type
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                          WHERE table_name = 'users' AND column_name = 'females' 
-                          AND data_type = 'ARRAY' AND udt_name = '_int4') THEN
-                
-                ALTER TABLE users ALTER COLUMN females TYPE integer[] 
-                USING CASE 
-                    WHEN females IS NULL THEN NULL
-                    ELSE females::integer[]
-                END;
-            END IF;
         END IF;
         
         -- Fix titles column - ensure it's text[] not varchar[]
