@@ -659,8 +659,8 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         }
         catch (Exception ex)
         {
-            await ctx.Interaction.SendErrorAsync("That Pokemon does not exist!");
-            Log.Error(ex, "Error in info command");
+            Log.Error(ex, "Error in info command for user {UserId} with parameter '{Parameter}'", ctx.User.Id, poke ?? "null");
+            await ctx.Interaction.SendErrorAsync($"An error occurred while retrieving Pokemon information.\n**Error**: {ex.Message}");
         }
     }
 
@@ -1213,11 +1213,13 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error generating Pokemon info page for position {Position}", p.CurrentPageIndex + 1);
+                Log.Error(ex, "Error generating Pokemon info page for user {UserId} at position {Position}", 
+                    ctx?.User?.Id ?? 0, p.CurrentPageIndex + 1);
                 return new PageBuilder()
                     .WithTitle("Error")
-                    .WithDescription($"Error loading Pokemon at position {p.CurrentPageIndex + 1}")
+                    .WithDescription($"Error loading Pokemon at position {p.CurrentPageIndex + 1}\n**Error**: {ex.Message}")
                     .WithColor(Color.Red)
+                    .WithFooter("Please report this error to support")
                     .Build();
             }
         }
@@ -1235,15 +1237,18 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     /// <returns>An Embed containing the Pokemon information.</returns>
     private async Task<Embed> CreatePokemonInfoEmbed(Database.Linq.Models.Pokemon.Pokemon pokemon, ulong pokeCount, ulong selectedPoke, int? currentIndex = null, int? totalRecent = null)
     {
-        var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
-        if (pokemonInfo == null)
+        try
         {
-            return new EmbedBuilder()
-                .WithTitle("Error")
-                .WithDescription("Error retrieving pokemon information.")
-                .WithColor(Color.Red)
-                .Build();
-        }
+            var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
+            if (pokemonInfo == null)
+            {
+                Log.Warning("Pokemon info not found for {PokemonName} (ID: {PokemonId})", pokemon.PokemonName, pokemon.Id);
+                return new EmbedBuilder()
+                    .WithTitle("Error")
+                    .WithDescription($"Could not find information for {pokemon.PokemonName}. This Pokemon may not exist in the database.")
+                    .WithColor(Color.Red)
+                    .Build();
+            }
 
         // Calculate stats
         var calculatedStats = await Service.CalculateStats(pokemon, pokemonInfo.Stats);
@@ -1378,6 +1383,19 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             embed.AddField("Usage Stats", $"This Pokemon has been used `{pokemon.Counter.Value}` times.");
 
         return embed.Build();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error creating Pokemon info embed for {PokemonName} (ID: {PokemonId}) owned by user {UserId}", 
+                pokemon.PokemonName, pokemon.Id, ctx?.User?.Id ?? 0);
+            
+            return new EmbedBuilder()
+                .WithTitle("Error")
+                .WithDescription($"Failed to load information for {pokemon.PokemonName}.\n**Error**: {ex.Message}")
+                .WithColor(Color.Red)
+                .WithFooter($"Pokemon ID: {pokemon.Id} | Please report this error to support")
+                .Build();
+        }
     }
 
 
