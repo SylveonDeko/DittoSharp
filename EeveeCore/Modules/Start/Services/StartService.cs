@@ -1,8 +1,7 @@
-using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Database.Models.PostgreSQL.Bot;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
+using EeveeCore.Database.Linq.Models.Bot;
+using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Modules.Spawn.Services;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 
 namespace EeveeCore.Modules.Start.Services;
 
@@ -13,7 +12,7 @@ namespace EeveeCore.Modules.Start.Services;
 /// <param name="dbContext">The database context for data access.</param>
 /// <param name="client">The Discord client for messaging.</param>
 /// <param name="svc">The spawn service for creating Pokémon.</param>
-public class StartService(DbContextProvider dbContext, DiscordShardedClient client, SpawnService svc) : INService
+public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedClient client, SpawnService svc) : INService
 {
     /// <summary>
     ///     Handles creating a new user account
@@ -22,7 +21,7 @@ public class StartService(DbContextProvider dbContext, DiscordShardedClient clie
     /// <returns>A tuple containing a success indicator and a message.</returns>
     public async Task<(bool Success, string Message)> RegisterNewUser(ulong userId)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbContext.GetConnectionAsync();
 
         // Check if user already exists
         var exists = await db.Users.AnyAsync(u => u.UserId == userId);
@@ -44,16 +43,13 @@ public class StartService(DbContextProvider dbContext, DiscordShardedClient clie
             Party = [0, 0, 0, 0, 0, 0]
         };
 
-        db.Users.Add(newUser);
-        
-        // Save the user first to satisfy foreign key constraints
-        await db.SaveChangesAsync();
+        await db.InsertAsync(newUser);
 
         // Create achievement record (ON CONFLICT DO NOTHING equivalent)
         var existingAchievement = await db.Achievements.AnyAsync(a => a.UserId == userId);
         if (!existingAchievement)
         {
-            await db.Achievements.AddAsync(new Achievement
+            await db.InsertAsync(new Achievement
             {
                 UserId = userId
             });
@@ -65,16 +61,13 @@ public class StartService(DbContextProvider dbContext, DiscordShardedClient clie
             var existingHatchery = await db.EggHatcheries.AnyAsync(h => h.UserId == userId && h.Group == group);
             if (!existingHatchery)
             {
-                await db.EggHatcheries.AddAsync(new EggHatchery
+                await db.InsertAsync(new EggHatchery
                 {
                     UserId = userId,
                     Group = group
                 });
             }
         }
-
-        // Save the remaining records
-        await db.SaveChangesAsync();
         return (true, "Successfully registered new user");
     }
 

@@ -25,19 +25,19 @@ public class ShopItem
     ///     Gets or sets the price of the item in the game's currency.
     /// </summary>
     [BsonElement("price")]
-    public int Price { get; set; }
+    public ulong Price { get; set; }
 
     /// <summary>
     ///     Gets or sets the primary type identifier for the item.
     /// </summary>
     [BsonElement("type")]
-    public int Type { get; set; }
+    public double Type { get; set; }
 
     /// <summary>
     ///     Gets or sets the secondary type identifier for the item.
     /// </summary>
     [BsonElement("second_type")]
-    public int SecondType { get; set; }
+    public double SecondType { get; set; }
 
     /// <summary>
     ///     Gets or sets the description of the item and its effects.

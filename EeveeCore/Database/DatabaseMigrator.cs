@@ -1,12 +1,9 @@
 using DbUp;
-using DbUp.Engine;
-using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace EeveeCore.Database;
 
 /// <summary>
-/// Handles database migrations using DbUp for PostgreSQL.
 /// </summary>
 public class DatabaseMigrator : INService
 {

@@ -1,6 +1,6 @@
 ﻿using Serilog;
-using Serilog.Core;
 using Serilog.Events;
+using ILogger = Serilog.ILogger;
 
 namespace EeveeCore.Common;
 
@@ -10,7 +10,7 @@ namespace EeveeCore.Common;
 public static class LogSetup
 {
     /// <summary>
-    ///     Creates and configures a Serilog logger with standard settings.
+    ///     Creates and configures a Serilog logger with standard settings and sets it as the global logger.
     /// </summary>
     /// <param name="name">The base name used for log files.</param>
     /// <returns>A configured Serilog Logger instance.</returns>
@@ -21,9 +21,9 @@ public static class LogSetup
     ///     - Override minimum log levels for specific namespaces
     ///     - Retain logs for 7 days with a maximum file size of 50MB
     /// </remarks>
-    public static Logger SetupLogger(string name)
+    public static ILogger SetupLogger(string name)
     {
-        return new LoggerConfiguration()
+        var logger = Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
@@ -31,16 +31,12 @@ public static class LogSetup
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .MinimumLevel.Override("EntityFramework", LogEventLevel.Information)
             .Enrich.FromLogContext()
+            .Enrich.WithProperty("LogSource", name)
             .WriteTo.Console(
                 LogEventLevel.Information,
                 "[{Timestamp:HH:mm:ss} {Level:u3}] | {Message:lj}{NewLine}{Exception}")
-            .WriteTo.File($"logs/{name}-.log",
-                LogEventLevel.Information,
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 7,
-                fileSizeLimitBytes: 52428800,
-                outputTemplate:
-                "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-            .CreateLogger();
+            .CreateBootstrapLogger();
+        
+        return logger;
     }
 }

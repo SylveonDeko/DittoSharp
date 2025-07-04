@@ -4,7 +4,7 @@ using Discord.Commands;
 using Discord.Interactions;
 using Discord.Net;
 using EeveeCore.Common.Collections;
-using EeveeCore.Database.DbContextStuff;
+using Fergun.Interactive;
 using Serilog;
 using ExecuteResult = Discord.Commands.ExecuteResult;
 using IResult = Discord.Interactions.IResult;
@@ -25,10 +25,10 @@ public class CommandHandler : INService
 
     private readonly NonBlocking.ConcurrentDictionary<ulong, ConcurrentQueue<IUserMessage>> _commandParseQueue = new();
     private readonly CommandService _commands;
-    private readonly DbContextProvider _db;
     private readonly GuildSettingsService _guildSettings;
     private readonly InteractionService _interactions;
     private readonly ConcurrentHashSet<ulong> _usersOnShortCooldown = [];
+    private readonly InteractiveService _interactive;
 
     /// <summary>
     ///     Gets the IServiceProvider for the bot.
@@ -49,20 +49,19 @@ public class CommandHandler : INService
     public CommandHandler(
         DiscordShardedClient client,
         CommandService commands,
-        DbContextProvider db,
         GuildSettingsService guildSettings,
         InteractionService interactions,
         IServiceProvider services,
         IDataCache cache,
-        EventHandler eventHandler)
+        EventHandler eventHandler, InteractiveService interactive)
     {
         _client = client;
         _commands = commands;
-        _db = db;
         _guildSettings = guildSettings;
         _interactions = interactions;
         Services = services;
         _cache = cache;
+        _interactive = interactive;
 
         _clearUsersOnShortCooldown = new Timer(_ => _usersOnShortCooldown.Clear(),
             null, GlobalCommandsCooldown, GlobalCommandsCooldown);
@@ -338,6 +337,9 @@ public class CommandHandler : INService
 
     private async Task HandleInteractionAsync(SocketInteraction interaction)
     {
+        if (_interactive.IsManaged(interaction))
+            return;
+
         try
         {
             var ctx = new ShardedInteractionContext(_client, interaction);

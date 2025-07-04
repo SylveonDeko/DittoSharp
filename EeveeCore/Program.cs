@@ -1,14 +1,14 @@
-﻿using Discord.Commands;
+﻿using System.Text.Json.Serialization;
+using Discord.Commands;
 using Discord.Interactions;
+using EeveeCore.AuthHandlers;
 using EeveeCore.Common.ModuleBehaviors;
-using EeveeCore.Database;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Services.Impl;
 using Fergun.Interactive;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 using Serilog;
-using Serilog.Events;
 using RunMode = Discord.Commands.RunMode;
 
 namespace EeveeCore;
@@ -31,64 +31,231 @@ public class Program
         LogSetup.SetupLogger("EeveeCore");
         var credentials = new BotCredentials();
 
-        var builder = Host.CreateDefaultBuilder(args)
-            .UseSerilog((context, config) =>
-            {
-                config
-                    .MinimumLevel.Information()
-                    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                    .WriteTo.Console(
-                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] | {Message:lj}{NewLine}{Exception}");
-            })
-            .ConfigureServices((context, services) =>
-            {
-                var client = new DiscordShardedClient(new DiscordSocketConfig
+        if (credentials.IsApiEnabled)
+        {
+            var builder = WebApplication.CreateBuilder(args);
+            
+            // Clear default logging providers and configure Serilog
+            builder.Logging.ClearProviders();
+            
+            ConfigureServices(builder.Services, credentials);
+
+            builder.WebHost.UseUrls($"http://localhost:{credentials.ApiPort}");
+
+            // Register JWT token service
+            builder.Services.AddSingleton<JwtTokenService>();
+            builder.Services.AddHttpClient<JwtTokenService>();
+
+            // Configure authentication schemes
+            builder.Services.AddTransient<IApiKeyValidation, ApiKeyValidation>();
+            var auth = builder.Services.AddAuthentication();
+
+            // Add existing API Key authentication
+            auth.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>("ApiKey", null);
+
+            // Add new JWT authentication
+            auth.AddScheme<AuthenticationSchemeOptions, JwtAuthHandler>("Jwt", null);
+
+            // Configure authorization policies
+            builder.Services.AddAuthorizationBuilder()
+                .AddPolicy("ApiKeyPolicy",
+                    policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("ApiKey"))
+                .AddPolicy("JwtPolicy",
+                    policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("Jwt"))
+                .AddPolicy("AdminPolicy",
+                    policy => policy.RequireAuthenticatedUser()
+                        .AddAuthenticationSchemes("Jwt")
+                        .RequireAssertion(context =>
+                        {
+                            var isAdmin = bool.TryParse(context.User.FindFirst("IsAdmin")?.Value, out var admin) &&
+                                          admin;
+                            var isBotOwner =
+                                bool.TryParse(context.User.FindFirst("IsBotOwner")?.Value, out var owner) && owner;
+                            return isAdmin || isBotOwner;
+                        }))
+                .AddPolicy("BotOwnerPolicy",
+                    policy => policy.RequireAuthenticatedUser()
+                        .AddAuthenticationSchemes("Jwt")
+                        .RequireAssertion(context =>
+                        {
+                            return bool.TryParse(context.User.FindFirst("IsBotOwner")?.Value, out var isBotOwner) &&
+                                   isBotOwner;
+                        }));
+
+            builder.Services.AddAuthorization();
+
+            // Add controllers with JSON options
+            builder.Services.AddControllers()
+                .AddJsonOptions(options =>
                 {
-                    MessageCacheSize = 15,
-                    LogLevel = LogSeverity.Debug,
-                    ConnectionTimeout = int.MaxValue,
-                    AlwaysDownloadUsers = true,
-                    GatewayIntents = GatewayIntents.All,
-                    LogGatewayIntentWarnings = false,
-                    DefaultRetryMode = RetryMode.RetryRatelimit
+                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+                    options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+                    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+                })
+                .ConfigureApiBehaviorOptions(options => { options.SuppressModelStateInvalidFilter = true; });
+
+            // Update Swagger configuration to support both authentication schemes
+            builder.Services.AddEndpointsApiExplorer();
+            builder.Services.AddSwaggerGen(x =>
+            {
+                // API Key authentication
+                x.AddSecurityDefinition("ApiKeyHeader", new OpenApiSecurityScheme
+                {
+                    Name = "X-API-Key",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.ApiKey,
+                    Description = "Authorization by X-API-Key inside request's header"
                 });
 
-                services.AddSingleton(client)
-                    .AddSingleton(credentials)
-                    .AddDbContextFactory<EeveeCoreContext>(options =>
-                        options.UseNpgsql(credentials.PostgresConfig.ConnectionString))
-                    .AddSingleton<IMongoClient>(new MongoClient(credentials.MongoConfig.ConnectionString))
-                    .AddTransient<IMongoService, MongoService>()
-                    .AddSingleton<RedisCache>()
-                    .AddSingleton<IDataCache>(s => s.GetRequiredService<RedisCache>())
-                    .AddSingleton<DbContextProvider>()
-                    .AddSingleton<DatabaseMigrator>()
-                    .AddSingleton<EventHandler>()
-                    .AddSingleton<InteractiveService>()
-                    .AddSingleton(new CommandService(new CommandServiceConfig
-                    {
-                        CaseSensitiveCommands = false,
-                        DefaultRunMode = RunMode.Async
-                    }))
-                    .AddSingleton(s => new InteractionService(s.GetRequiredService<DiscordShardedClient>()))
-                    .AddSingleton<GuildSettingsService>()
-                    .AddSingleton<CommandHandler>()
-                    .AddSingleton<EeveeCore>()
-                    .AddHostedService<EeveeCoreService>();
+                // JWT Bearer authentication
+                x.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description =
+                        "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
+                });
 
-                services.Scan(scan => scan.FromAssemblyOf<IReadyExecutor>()
-                    .AddClasses(classes => classes.AssignableToAny(
-                        typeof(INService),
-                        typeof(IEarlyBehavior),
-                        typeof(ILateBlocker),
-                        typeof(IInputTransformer),
-                        typeof(ILateExecutor)))
-                    .AsSelfWithInterfaces()
-                    .WithSingletonLifetime());
+                // Add security requirements for both schemes
+                x.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "ApiKeyHeader"
+                            }
+                        },
+                        []
+                    }
+                });
+
+                x.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        []
+                    }
+                });
             });
 
-        var host = builder.Build();
-        await host.RunAsync();
+            // Update CORS policy to include auth endpoints
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("FraudDashboardPolicy", policy =>
+                {
+                    policy
+                        .WithOrigins($"http://localhost:{credentials.ApiPort}",
+                            $"https://localhost:{credentials.ApiPort}",
+                            "http://localhost:3000", // Add your Svelte dev server
+                            "http://localhost:5173") // Add Vite dev server default port
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials();
+                });
+            });
+
+            var app = builder.Build();
+
+            app.UseCors("FraudDashboardPolicy");
+            app.UseSerilogRequestLogging();
+
+            if (builder.Environment.IsDevelopment())
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "EeveeCore API V1");
+                    c.RoutePrefix = "swagger";
+                });
+            }
+
+            // Add authentication and authorization middleware
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.MapControllers();
+
+            Log.Information("EeveeCore API listening on http://localhost:{Port}", credentials.ApiPort);
+            Log.Information("Swagger UI available at http://localhost:{Port}/swagger", credentials.ApiPort);
+            await app.RunAsync();
+        }
+        else
+        {
+            var builder = Host.CreateDefaultBuilder(args)
+                .ConfigureLogging(logging => logging.ClearProviders())
+                .ConfigureServices((context, services) => { ConfigureServices(services, credentials); });
+
+            var host = builder.Build();
+            Log.Information("API is disabled. Starting bot only.");
+            await host.RunAsync();
+        }
+    }
+
+    /// <summary>
+    ///     Configures the shared services for the application (both bot and API).
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <param name="credentials">The bot credentials.</param>
+    private static void ConfigureServices(IServiceCollection services, BotCredentials credentials)
+    {
+        // Add Serilog to service collection
+        services.AddSerilog(LogSetup.SetupLogger("EeveeCore"));
+        
+        var client = new DiscordShardedClient(new DiscordSocketConfig
+        {
+            MessageCacheSize = 15,
+            LogLevel = LogSeverity.Debug,
+            ConnectionTimeout = int.MaxValue,
+            AlwaysDownloadUsers = true,
+            GatewayIntents = GatewayIntents.All,
+            LogGatewayIntentWarnings = false,
+            DefaultRetryMode = RetryMode.RetryRatelimit
+        });
+
+        services.AddSingleton(client)
+            .AddSingleton(credentials)
+            .AddSingleton<LinqToDbConnectionProvider>(provider => 
+                new LinqToDbConnectionProvider(credentials.PostgresConfig.ConnectionString))
+            .AddSingleton<IMongoClient>(new MongoClient(credentials.MongoConfig.ConnectionString))
+            .AddTransient<IMongoService, MongoService>()
+            .AddSingleton<RedisCache>()
+            .AddSingleton<IDataCache>(s => s.GetRequiredService<RedisCache>())
+            .AddSingleton<DatabaseMigrator>()
+            .AddSingleton<EventHandler>()
+            .AddSingleton<InteractiveService>()
+            .AddSingleton(new CommandService(new CommandServiceConfig
+            {
+                CaseSensitiveCommands = false,
+                DefaultRunMode = RunMode.Async
+            }))
+            .AddSingleton(s => new InteractionService(s.GetRequiredService<DiscordShardedClient>()))
+            .AddSingleton<GuildSettingsService>()
+            .AddSingleton<CommandHandler>()
+            .AddSingleton<EeveeCore>()
+            .AddHostedService<EeveeCoreService>()
+            .AddHostedService<BackgroundTaskService>();
+
+        services.Scan(scan => scan.FromAssemblyOf<IReadyExecutor>()
+            .AddClasses(classes => classes.AssignableToAny(
+                typeof(INService),
+                typeof(IEarlyBehavior),
+                typeof(ILateBlocker),
+                typeof(IInputTransformer),
+                typeof(ILateExecutor)))
+            .AsSelfWithInterfaces()
+            .WithSingletonLifetime());
     }
 }
 

@@ -1,10 +1,8 @@
 using System.Text.Json;
-using EeveeCore.Database.DbContextStuff;
+using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Database.Models.Mongo.Pokemon;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Services.Impl;
-using LinqToDB.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using MongoDB.Driver;
 using Serilog;
 using SkiaSharp;
@@ -21,7 +19,7 @@ public class BreedingService : INService
 
     // Dictionary to track auto-breeding attempts
     private readonly Dictionary<(ulong UserId, int MaleId), int> _breedRetries = new();
-    private readonly DbContextProvider _dbContextProvider;
+    private readonly LinqToDbConnectionProvider _dbContextProvider;
     private readonly IMongoService _mongoService;
 
     /// <summary>
@@ -52,7 +50,7 @@ public class BreedingService : INService
     /// <param name="redisCache">The Redis cache service.</param>
     public BreedingService(
         IMongoService mongoService,
-        DbContextProvider dbContextProvider,
+        LinqToDbConnectionProvider dbContextProvider,
         RedisCache redisCache)
     {
         _mongoService = mongoService;
@@ -91,15 +89,15 @@ public class BreedingService : INService
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task ClearUserFemalesAsync(ulong userId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         // Create an array of 10 nulls
         var emptyFemales = new int?[10];
 
         await db.Users
             .Where(u => u.UserId == userId)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Females, emptyFemales));
+            .Set(u => u.Females, emptyFemales)
+            .UpdateAsync();
     }
 
     /// <summary>
@@ -167,17 +165,17 @@ public class BreedingService : INService
     /// <param name="userId">The user's Discord ID.</param>
     /// <param name="femaleIds">The list of female Pokémon IDs.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task UpdateUserFemalesAsync(ulong userId, List<int> femaleIds)
+    public async Task UpdateUserFemalesAsync(ulong userId, List<ulong> femaleIds)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         // Convert the list to an array of the correct type
         var newFemales = femaleIds.Select(id => (int?)id).ToArray();
 
         await db.Users
             .Where(u => u.UserId == userId)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Females, newFemales));
+            .Set(u => u.Females, newFemales)
+            .UpdateAsync();
     }
 
     /// <summary>
@@ -185,18 +183,18 @@ public class BreedingService : INService
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
     /// <returns>The first female Pokémon ID, or null if none exists.</returns>
-    public async Task<int?> FetchFirstFemaleAsync(ulong userId)
+    public async Task<ulong?> FetchFirstFemaleAsync(ulong userId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var females = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => u.Females)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (females == null || females.Length == 0) return null;
 
-        return females[0];
+        return (ulong?)females[0];
     }
 
     /// <summary>
@@ -206,12 +204,12 @@ public class BreedingService : INService
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task RemoveFirstFemaleAsync(ulong userId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var females = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => u.Females)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (females == null || females.Length == 0) return;
 
@@ -219,8 +217,8 @@ public class BreedingService : INService
 
         await db.Users
             .Where(u => u.UserId == userId)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Females, newFemales));
+            .Set(u => u.Females, newFemales)
+            .UpdateAsync();
     }
 
     /// <summary>
@@ -265,16 +263,16 @@ public class BreedingService : INService
     /// <param name="maleId">The male Pokémon ID.</param>
     /// <param name="femaleId">The female Pokémon ID.</param>
     /// <returns>A <see cref="BreedingResult" /> containing the result of the breeding attempt.</returns>
-    public async Task<BreedingResult> AttemptBreedAsync(ulong userId, int maleId, int femaleId)
+    public async Task<BreedingResult> AttemptBreedAsync(ulong userId, ulong maleId, ulong femaleId)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         // Check cooldown
         var breedResetResult =
             await _redisCache.Redis.GetDatabase().ExecuteAsync("HMGET", "breedcooldowns", userId.ToString());
         double cooldownTime = 0;
 
-        if (breedResetResult != null && breedResetResult.Length > 0 && breedResetResult[0] != null &&
+        if (breedResetResult is { Length: > 0 } && breedResetResult[0] != null &&
             !string.IsNullOrEmpty(breedResetResult[0].ToString()))
             cooldownTime = double.Parse(breedResetResult[0].ToString());
 
@@ -440,7 +438,7 @@ public class BreedingService : INService
             else
             {
                 // Cooldown expired, remove the entry
-                db.Mothers.Remove(motherRecord);
+                await db.DeleteAsync(motherRecord);
             }
         }
 
@@ -566,7 +564,7 @@ public class BreedingService : INService
         await InsertEggAsync(userId, child, counter, isShadow);
 
         // Add mother to cooldown table
-        await db.Mothers.AddAsync(new Mother
+        await db.InsertAsync(new Mother
         {
             PokemonId = motherDetails.Id,
             OwnerId = userId,
@@ -577,20 +575,18 @@ public class BreedingService : INService
         if (isShadow)
             await db.Achievements
                 .Where(a => a.UserId == userId)
-                .ExecuteUpdateAsync(a => a
-                    .SetProperty(x => x.ShadowBred, x => x.ShadowBred + 1));
+                .Set(a => a.ShadowBred, a => a.ShadowBred + 1)
+                .UpdateAsync();
         else if (isShiny)
             await db.Achievements
                 .Where(a => a.UserId == userId)
-                .ExecuteUpdateAsync(a => a
-                    .SetProperty(x => x.ShinyBred, x => x.ShinyBred + 1));
+                .Set(a => a.ShinyBred, a => a.ShinyBred + 1)
+                .UpdateAsync();
         else
             await db.Achievements
                 .Where(a => a.UserId == userId)
-                .ExecuteUpdateAsync(a => a
-                    .SetProperty(x => x.BreedSuccess, x => x.BreedSuccess + 1));
-
-        await db.SaveChangesAsync();
+                .Set(a => a.BreedSuccess, a => a.BreedSuccess + 1)
+                .UpdateAsync();
 
         return new BreedingResult
         {
@@ -609,7 +605,7 @@ public class BreedingService : INService
     /// </summary>
     /// <param name="pokemon">The Pokémon database record.</param>
     /// <returns>A <see cref="BreedingPokemon" /> representing the parent, or null if invalid.</returns>
-    private async Task<BreedingPokemon> GetParentAsync(Database.Models.PostgreSQL.Pokemon.Pokemon pokemon)
+    private async Task<BreedingPokemon?> GetParentAsync(Database.Linq.Models.Pokemon.Pokemon pokemon)
     {
         var pokemonName = pokemon.PokemonName.ToLower();
 
@@ -909,12 +905,12 @@ public class BreedingService : INService
     /// <returns>True if the Pokémon is eligible, false otherwise.</returns>
     private async Task<bool> CheckShadowHuntAsync(ulong userId, string pokemonName)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var user = await db.Users
             .Where(u => u.UserId == userId)
             .Select(u => new { u.Hunt, u.Chain })
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (user == null || string.IsNullOrEmpty(user.Hunt)) return false;
 
@@ -943,13 +939,13 @@ public class BreedingService : INService
     {
         try
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
-            await using var transaction = await db.Database.BeginTransactionAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            await using var transaction = await db.BeginTransactionAsync();
 
             try
             {
                 // Create new egg Pokémon
-                var egg = new Database.Models.PostgreSQL.Pokemon.Pokemon
+                var eggPokemon = new Database.Linq.Models.Pokemon.Pokemon
                 {
                     PokemonName = "Egg",
                     HpIv = child.Hp,
@@ -988,8 +984,7 @@ public class BreedingService : INService
                 };
 
                 // Save the egg to get its ID
-                await db.UserPokemon.AddAsync(egg);
-                await db.SaveChangesAsync();
+                eggPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(eggPokemon);
 
                 // Find the highest position for this user's Pokémon
                 var highestPosition = await db.UserPokemonOwnerships
@@ -1002,12 +997,11 @@ public class BreedingService : INService
                 var ownership = new UserPokemonOwnership
                 {
                     UserId = userId,
-                    PokemonId = egg.Id,
-                    Position = highestPosition + 1
+                    PokemonId = eggPokemon.Id,
+                    Position = (ulong)(highestPosition + 1)
                 };
 
-                await db.UserPokemonOwnerships.AddAsync(ownership);
-                await db.SaveChangesAsync();
+                await db.InsertAsync(ownership);
 
                 await transaction.CommitAsync();
             }
@@ -1032,22 +1026,22 @@ public class BreedingService : INService
     /// <returns>A byte array containing the image data.</returns>
     public async Task<byte[]> CreateSuccessImageAsync(BreedingResult result, string fatherName, string motherName)
     {
-        // Determine image URL based on result
-        string imageUrl;
+        // Determine image path based on result
+        string imagePath;
         if (result.IsShadow)
-            imageUrl = "https://images.mewdeko.tech/images/eggstatsshadow2.png";
+            imagePath = Path.Combine("data", "images", "eggstatsshadow2.png");
         else if (result.IsShiny)
-            imageUrl = "https://images.mewdeko.tech/images/eggstatsshiny.png";
+            imagePath = Path.Combine("data", "images", "eggstatsshiny.png");
         else
-            imageUrl = "https://images.mewdeko.tech/images/eggstats.png";
-
-        // Download image
-        using var httpClient = new HttpClient();
-        using var response = await httpClient.GetAsync(imageUrl);
-        using var stream = await response.Content.ReadAsStreamAsync();
+            imagePath = Path.Combine("data", "images", "eggstats.png");
 
         // Load image with SkiaSharp
-        using var bitmap = SKBitmap.Decode(stream);
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"Egg stats image not found at: {imagePath}");
+        }
+        
+        using var bitmap = SKBitmap.Decode(imagePath);
         using var surface = SKSurface.Create(new SKImageInfo(bitmap.Width, bitmap.Height));
         var canvas = surface.Canvas;
 
@@ -1195,13 +1189,15 @@ public class BreedingService : INService
     /// <returns>A byte array containing the image data.</returns>
     public async Task<byte[]> CreateFailureImageAsync(int retryCount, bool auto)
     {
-        // Download the failure image
-        using var httpClient = new HttpClient();
-        using var response = await httpClient.GetAsync("https://images.mewdeko.tech/images/failure.png");
-        using var stream = await response.Content.ReadAsStreamAsync();
+        // Load the failure image from local data
+        var failureImagePath = Path.Combine("data", "images", "failure.png");
+        if (!File.Exists(failureImagePath))
+        {
+            throw new FileNotFoundException($"Failure image not found at: {failureImagePath}");
+        }
 
         // Load image with SkiaSharp
-        using var bitmap = SKBitmap.Decode(stream);
+        using var bitmap = SKBitmap.Decode(failureImagePath);
         using var surface = SKSurface.Create(new SKImageInfo(bitmap.Width, bitmap.Height));
         var canvas = surface.Canvas;
 
@@ -1244,11 +1240,11 @@ public class BreedingService : INService
     /// <param name="userId">The user's Discord ID.</param>
     /// <param name="pokemonId">The ID of the Pokémon to validate.</param>
     /// <returns>True if the Pokémon is female or a Ditto, false otherwise.</returns>
-    public async Task<bool> ValidateFemaleIdAsync(ulong userId, int pokemonId)
+    public async Task<bool> ValidateFemaleIdAsync(ulong userId, ulong pokemonId)
     {
         try
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             // Convert from 1-based UI indexing to 0-based database indexing
             var position = pokemonId - 1;
@@ -1272,7 +1268,7 @@ public class BreedingService : INService
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            Log.Information("{Exception}", e);
             throw;
         }
     }
@@ -1284,10 +1280,10 @@ public class BreedingService : INService
     /// <param name="malePosition">The ID of the male Pokémon.</param>
     /// <param name="femalePosition">The ID of the female Pokémon.</param>
     /// <returns>A tuple containing the father's and mother's names.</returns>
-    public async Task<(string FatherName, string MotherName)> GetParentNamesAsync(ulong userId, int malePosition,
-        int femalePosition)
+    public async Task<(string FatherName, string MotherName)> GetParentNamesAsync(ulong userId, ulong malePosition,
+        ulong femalePosition)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
 
         var maleOwnership = await db.UserPokemonOwnerships

@@ -679,6 +679,18 @@ public static partial class StringExtensions
         ms.Position = 0;
         return ms;
     }
+    
+    /// <summary>
+    ///     Converts a string representation of an emoji to an IEmote.
+    /// </summary>
+    /// <param name="emojiStr">String representation of the emoji.</param>
+    /// <returns>The corresponding IEmote instance.</returns>
+    public static IEmote? ToIEmote(this string emojiStr)
+    {
+        return Emote.TryParse(emojiStr, out var maybeEmote)
+            ? maybeEmote
+            : new Emoji(emojiStr);
+    }
 
     /// <summary>
     ///     Checks if the string contains a Discord invite link.

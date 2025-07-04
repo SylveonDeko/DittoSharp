@@ -1,6 +1,7 @@
-using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
+using EggHatchery = EeveeCore.Database.Linq.Models.Pokemon.EggHatchery;
+using UserPokemonOwnership = EeveeCore.Database.Linq.Models.Pokemon.UserPokemonOwnership;
+using User = EeveeCore.Database.Linq.Models.Bot.User;
 
 namespace EeveeCore.Modules.Parties.Services;
 
@@ -11,7 +12,7 @@ namespace EeveeCore.Modules.Parties.Services;
 /// </summary>
 /// <param name="dbContext">The database context for accessing egg and user data.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient client) : INService
+public class HatcheryService(LinqToDbConnectionProvider dbContext, DiscordShardedClient client) : INService
 {
     private const string PremiumX2Icon = "<:premiumX2:1064764945578852382>";
     private const string PremiumX3Icon = "<:premiumX3:1064764942848376893>";
@@ -157,12 +158,12 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
     ///     A task representing the asynchronous operation that returns a tuple with
     ///     a success indicator and a result message.
     /// </returns>
-    public async Task<(bool Success, string Message)> AddEggToHatchery(ulong userId, int eggIndex, short group,
+    public async Task<(bool Success, string Message)> AddEggToHatchery(ulong userId, ulong eggIndex, short group,
         int slot)
     {
         try
         {
-            await using var db = await dbContext.GetContextAsync();
+            await using var db = await dbContext.GetConnectionAsync();
             // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
 
@@ -182,7 +183,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
             var position = eggIndex - 1;
 
             // Get the egg from the ownership table by position
-            var ownership = await db.UserPokemonOwnerships
+            var ownership = await db.GetTable<UserPokemonOwnership>()
                 .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
 
             if (ownership == null)
@@ -190,13 +191,13 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
 
             // Get the egg Pokémon
             var eggId = ownership.PokemonId;
-            var egg = await db.UserPokemon
+            var egg = await db.GetTable<Database.Linq.Models.Pokemon.Pokemon>()
                 .FirstOrDefaultAsync(p => p.Id == eggId && p.PokemonName == "Egg");
 
             if (egg == null) return (false, "The provided ID is not a valid Egg or doesn't exist.");
 
             // Check if this egg is already in any hatchery
-            var hatcheriesWithEgg = await db.EggHatcheries
+            var hatcheriesWithEgg = await db.GetTable<EggHatchery>()
                 .Where(h => h.UserId == userId &&
                             (h.Slot1 == eggId || h.Slot2 == eggId || h.Slot3 == eggId ||
                              h.Slot4 == eggId || h.Slot5 == eggId || h.Slot6 == eggId ||
@@ -206,7 +207,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
             if (hatcheriesWithEgg) return (false, "This Egg is already in a hatchery slot.");
 
             // Get or create the hatchery record for this user and group
-            var hatchery = await db.EggHatcheries
+            var hatchery = await db.GetTable<EggHatchery>()
                 .FirstOrDefaultAsync(h => h.UserId == userId && h.Group == group);
 
             if (hatchery == null)
@@ -217,7 +218,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
                     UserId = userId,
                     Group = group
                 };
-                db.EggHatcheries.Add(hatchery);
+                hatchery.Id = (ulong)await db.InsertWithInt64IdentityAsync(hatchery);
             }
 
             // Check if the selected slot is already occupied
@@ -238,22 +239,70 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
 
             if (isSlotOccupied) return (false, $"Slot {slot} in group {group} is already occupied.");
 
-            // Update the appropriate slot with the egg ID
+            // Update the hatchery record using LinqToDB Set pattern
             switch (slot)
             {
-                case 1: hatchery.Slot1 = eggId; break;
-                case 2: hatchery.Slot2 = eggId; break;
-                case 3: hatchery.Slot3 = eggId; break;
-                case 4: hatchery.Slot4 = eggId; break;
-                case 5: hatchery.Slot5 = eggId; break;
-                case 6: hatchery.Slot6 = eggId; break;
-                case 7: hatchery.Slot7 = eggId; break;
-                case 8: hatchery.Slot8 = eggId; break;
-                case 9: hatchery.Slot9 = eggId; break;
-                case 10: hatchery.Slot10 = eggId; break;
+                case 1:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot1, eggId)
+                        .UpdateAsync();
+                    break;
+                case 2:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot2, eggId)
+                        .UpdateAsync();
+                    break;
+                case 3:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot3, eggId)
+                        .UpdateAsync();
+                    break;
+                case 4:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot4, eggId)
+                        .UpdateAsync();
+                    break;
+                case 5:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot5, eggId)
+                        .UpdateAsync();
+                    break;
+                case 6:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot6, eggId)
+                        .UpdateAsync();
+                    break;
+                case 7:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot7, eggId)
+                        .UpdateAsync();
+                    break;
+                case 8:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot8, eggId)
+                        .UpdateAsync();
+                    break;
+                case 9:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot9, eggId)
+                        .UpdateAsync();
+                    break;
+                case 10:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot10, eggId)
+                        .UpdateAsync();
+                    break;
             }
-
-            await db.SaveChangesAsync();
 
             return (true, $"Egg has been added to slot {slot} in group {group}.");
         }
@@ -281,7 +330,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
     {
         try
         {
-            await using var db = await dbContext.GetContextAsync();
+            await using var db = await dbContext.GetConnectionAsync();
 
             // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
@@ -310,22 +359,70 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
 
             if (eggId == null) return (false, $"Slot {slot} in group {group} is empty.");
 
-            // Remove the egg from the slot
+            // Update the hatchery record using LinqToDB
             switch (slot)
             {
-                case 1: hatchery.Slot1 = null; break;
-                case 2: hatchery.Slot2 = null; break;
-                case 3: hatchery.Slot3 = null; break;
-                case 4: hatchery.Slot4 = null; break;
-                case 5: hatchery.Slot5 = null; break;
-                case 6: hatchery.Slot6 = null; break;
-                case 7: hatchery.Slot7 = null; break;
-                case 8: hatchery.Slot8 = null; break;
-                case 9: hatchery.Slot9 = null; break;
-                case 10: hatchery.Slot10 = null; break;
+                case 1:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot1, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 2:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot2, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 3:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot3, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 4:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot4, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 5:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot5, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 6:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot6, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 7:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot7, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 8:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot8, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 9:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot9, (ulong?)null)
+                        .UpdateAsync();
+                    break;
+                case 10:
+                    await db.GetTable<EggHatchery>()
+                        .Where(h => h.Id == hatchery.Id)
+                        .Set(h => h.Slot10, (ulong?)null)
+                        .UpdateAsync();
+                    break;
             }
-
-            await db.SaveChangesAsync();
 
             return (true, $"Removed egg from slot {slot} in group {group}.");
         }
@@ -373,7 +470,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
             if (eggIndex.HasValue)
             {
                 var slot = slotIndex + 1;
-                var result = await AddEggToHatchery(userId, eggIndex.Value, group, slot);
+                var result = await AddEggToHatchery(userId, (ulong)eggIndex.Value, group, slot);
 
                 if (result.Success)
                 {
@@ -401,7 +498,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
     {
         try
         {
-            await using var db = await dbContext.GetContextAsync();
+            await using var db = await dbContext.GetConnectionAsync();
 
             // Find which slots these eggs are in
             var hatcheries = await db.EggHatcheries
@@ -689,7 +786,6 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
                 case 10: hatchery1.Slot10 = temp2; break;
             }
 
-            await db.SaveChangesAsync();
 
             return (true, $"Eggs {egg1Id} and {egg2Id} have been swapped.");
         }
@@ -721,7 +817,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
             List<(int SlotNumber, string EggName, int? PokemonNumber, int StepCounter)>
             )> GetHatcheryData(ulong userId, short group, PatreonTier patreonTier)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbContext.GetConnectionAsync();
 
         // Get max slots based on Patreon tier
         var maxSlots = patreonTier switch
@@ -743,8 +839,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
                 UserId = userId,
                 Group = group
             };
-            db.EggHatcheries.Add(hatchery);
-            await db.SaveChangesAsync();
+            hatchery.Id = (ulong)await db.InsertWithInt64IdentityAsync(hatchery);
         }
 
         // Get all slots data
@@ -754,7 +849,7 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
         // Helper function to process each slot
         async Task ProcessSlot(int slotNumber, ulong? eggId)
         {
-            if (eggId.HasValue && eggId.Value > 0)
+            if (eggId is > 0)
             {
                 var pokemon = await db.UserPokemon
                     .FirstOrDefaultAsync(p => p.Id == eggId.Value);
@@ -762,11 +857,11 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
                 if (pokemon != null)
                 {
                     // Find the Pokemon's index by querying the ownership table
-                    var ownership = await db.UserPokemonOwnerships
+                    var ownership = await db.GetTable<UserPokemonOwnership>()
                         .Where(o => o.UserId == userId && o.PokemonId == eggId.Value)
                         .FirstOrDefaultAsync();
 
-                    var pokemonIndex = ownership != null ? ownership.Position + 1 : -1; // Convert to 1-based if found
+                    var pokemonIndex = ownership != null ? (int)(ownership.Position + 1) : -1; // Convert to 1-based if found
                     slotData.Add((slotNumber, pokemon.Name, pokemonIndex, pokemon.Counter ?? 0));
                 }
                 else
@@ -814,9 +909,9 @@ public class HatcheryService(DbContextProvider dbContext, DiscordShardedClient c
     /// </returns>
     private async Task<PatreonTier> GetPatreonTier(ulong userId)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbContext.GetConnectionAsync();
 
-        var user = await db.Users
+        var user = await db.GetTable<User>()
             .Where(u => u.UserId == userId)
             .Select(u => new { u.Patreon, u.PatreonOverride })
             .FirstOrDefaultAsync();

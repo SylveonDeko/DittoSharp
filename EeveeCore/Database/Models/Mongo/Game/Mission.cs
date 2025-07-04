@@ -67,5 +67,33 @@ public class Mission
     ///     Gets or sets the Unix timestamp when the mission was started.
     /// </summary>
     [BsonElement("started_epoch")]
-    public ulong StartedEpoch { get; set; }
+    [BsonIgnoreIfDefault]
+    public DateTime? StartedEpoch { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the alternate field name for started timestamp (for backwards compatibility).
+    /// </summary>
+    [BsonElement("started")]
+    [BsonIgnoreIfDefault]
+    public DateTime? Started { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the secondary target value for multi-target missions.
+    /// </summary>
+    [BsonElement("target2")]
+    [BsonIgnoreIfDefault]
+    public int? Target2 { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the tertiary target value for multi-target missions.
+    /// </summary>
+    [BsonElement("target3")]
+    [BsonIgnoreIfDefault]
+    public int? Target3 { get; set; }
+
+    /// <summary>
+    ///     Gets or sets additional mission data not explicitly defined in the schema.
+    /// </summary>
+    [BsonExtraElements]
+    public Dictionary<string, object>? ExtraElements { get; set; }
 }

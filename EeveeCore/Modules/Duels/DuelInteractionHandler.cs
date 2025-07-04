@@ -1,13 +1,12 @@
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Modules.Duels.Impl.Helpers;
 using EeveeCore.Modules.Duels.Impl.Move;
 using EeveeCore.Modules.Duels.Services;
 using EeveeCore.Services.Impl;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using Serilog;
 
 namespace EeveeCore.Modules.Duels;
@@ -25,7 +24,7 @@ namespace EeveeCore.Modules.Duels;
 public class DuelInteractionHandler(
     IMongoService mongoService,
     DuelRenderer battleRenderer,
-    DbContextProvider dbContext,
+    LinqToDbConnectionProvider dbContext,
     DiscordShardedClient client) : EeveeCoreSlashModuleBase<DuelService>
 {
     private static readonly Dictionary<(ulong, ulong), Battle?> ActiveBattles = new();
@@ -35,10 +34,10 @@ public class DuelInteractionHandler(
     /// </summary>
     private static readonly string[] PregameGifs =
     [
-        "https://skylarr1227.github.io/images/duel1.gif",
-        "https://skylarr1227.github.io/images/duel2.gif",
-        "https://skylarr1227.github.io/images/duel3.gif",
-        "https://skylarr1227.github.io/images/duel4.gif"
+        Path.Combine("data", "images", "duel1.gif"),
+        Path.Combine("data", "images", "duel2.gif"),
+        Path.Combine("data", "images", "duel3.gif"),
+        Path.Combine("data", "images", "duel4.gif")
     ];
 
     /// <summary>
@@ -52,7 +51,7 @@ public class DuelInteractionHandler(
     /// <returns>
     ///     A task representing the asynchronous operation that returns the winning Trainer.
     /// </returns>
-    public static async Task<Trainer> RunBattle(Battle battle, DbContextProvider dbProvider,
+    public static async Task<Trainer> RunBattle(Battle battle, LinqToDbConnectionProvider dbProvider,
         DiscordShardedClient client, DuelService duelService)
     {
         Trainer? winner = null;
@@ -104,20 +103,22 @@ public class DuelInteractionHandler(
             try
             {
                 // Check for human vs human battle
-                if (battle.Trainer1 is MemberTrainer t1 && battle.Trainer2 is MemberTrainer t2)
+                if (battle is { Trainer1: MemberTrainer t1, Trainer2: MemberTrainer t2 })
                 {
                     // Handle post-battle rewards, XP gain, etc.
                     var description = "";
 
-                    await using var db = await dbProvider.GetContextAsync();
+                    await using var db = await dbProvider.GetConnectionAsync();
 
                     var memWinner = winner as MemberTrainer;
                     // Update achievements for both players
                     await db.Achievements.Where(a => a.UserId == memWinner.Id)
-                        .ExecuteUpdateAsync(s => s.SetProperty(a => a.DuelPartyWins, a => a.DuelPartyWins + 1));
+                        .Set(a => a.DuelPartyWins, a => a.DuelPartyWins + 1)
+                        .UpdateAsync();
 
                     await db.Achievements.Where(a => a.UserId == t1.Id || a.UserId == t2.Id)
-                        .ExecuteUpdateAsync(s => s.SetProperty(a => a.DuelsTotal, a => a.DuelsTotal + 1));
+                        .Set(a => a.DuelsTotal, a => a.DuelsTotal + 1)
+                        .UpdateAsync();
 
                     // Grant XP to winning Pokémon
                     foreach (var poke in winner.Party.Where(poke => poke.Hp != 0 && poke.EverSentOut))
@@ -148,15 +149,13 @@ public class DuelInteractionHandler(
                             // Update the Pokémon in the database
                             await db.UserPokemon
                                 .Where(p => p.Id == poke.Id)
-                                .ExecuteUpdateAsync(s => s
-                                    .SetProperty(p => p.Happiness, p => p.Happiness + 1)
-                                    .SetProperty(p => p.Experience, p => p.Experience + exp));
+                                .Set(p => p.Happiness, p => p.Happiness + 1)
+                                .Set(p => p.Experience, p => p.Experience + exp)
+                                .UpdateAsync();
                         }
                     }
 
-                    // Save changes
-                    await db.SaveChangesAsync();
-
+                    
                     // Display XP gains if any
                     if (!string.IsNullOrEmpty(description))
                     {
@@ -272,14 +271,24 @@ public class DuelInteractionHandler(
                 return;
             }
 
-            // Create loading embed
+            // Create loading embed with local GIF attachment
+            var selectedGifPath = PregameGifs[new Random().Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle accepted! Loading...")
                 .WithDescription("Please wait")
-                .WithColor(new Color(255, 182, 193))
-                .WithImageUrl(PregameGifs[new Random().Next(PregameGifs.Length)]);
+                .WithColor(new Color(255, 182, 193));
 
-            await FollowupAsync(embed: loadingEmbed.Build());
+            if (File.Exists(selectedGifPath))
+            {
+                loadingEmbed.WithImageUrl("attachment://duel.gif");
+                await using var fileStream = new FileStream(selectedGifPath, FileMode.Open, FileAccess.Read);
+                var fileAttachment = new FileAttachment(fileStream, "duel.gif");
+                await FollowupWithFileAsync(embed: loadingEmbed.Build(), attachment: fileAttachment);
+            }
+            else
+            {
+                await FollowupAsync(embed: loadingEmbed.Build());
+            }
 
             switch (battleType)
             {
@@ -498,9 +507,7 @@ public class DuelInteractionHandler(
         components.WithButton("Forfeit", "battle:forfeit", ButtonStyle.Danger, row: 2);
 
         // Add mega evolution button if applicable
-        if (trainer.CurrentPokemon != null &&
-            trainer.CurrentPokemon.MegaTypeIds != null &&
-            !trainer.HasMegaEvolved)
+        if (trainer is { CurrentPokemon: { MegaTypeIds: not null }, HasMegaEvolved: false })
         {
             var megaStyle = trainer.CurrentPokemon.ShouldMegaEvolve ? ButtonStyle.Success : ButtonStyle.Secondary;
             components.WithButton("Mega Evolve", "battle:mega_toggle", megaStyle, row: 0);
@@ -871,7 +878,7 @@ public class DuelInteractionHandler(
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleSingleBattle(IUser challenger)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbContext.GetConnectionAsync();
 
         // Get challenger's selected Pokemon
         var challengerSelected = await db.Users

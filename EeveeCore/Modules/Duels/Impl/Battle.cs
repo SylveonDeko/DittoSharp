@@ -1,6 +1,7 @@
 using EeveeCore.Database.Models.Mongo.Pokemon;
 using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Services;
+using EeveeCore.Modules.Duels.Utils;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
@@ -399,10 +400,9 @@ public class Battle
                 break;
             }
 
-            if (t1.CurrentPokemon != null && t2.CurrentPokemon != null)
-                if (!t2.SelectedAction.IsSwitch)
-                    Msg += ((Trainer.MoveAction)t2.SelectedAction).Move.Setup(t2.CurrentPokemon, t1.CurrentPokemon,
-                        this);
+            if (t1.CurrentPokemon != null && t2 is { CurrentPokemon: not null, SelectedAction.IsSwitch: false })
+                Msg += ((Trainer.MoveAction)t2.SelectedAction).Move.Setup(t2.CurrentPokemon, t1.CurrentPokemon,
+                    this);
 
             if (!t2.HasAlivePokemon())
             {
@@ -770,8 +770,11 @@ public class Battle
             for (var i = 0; i < swapper.Party.Count; i++)
             {
                 var pokemon = swapper.Party[i];
+                // Sanitize the name for button display
+                var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 15);
+
                 components.WithButton(
-                    $"{pokemon.Name} | {pokemon.Hp}hp",
+                    $"{sanitizedName} | {pokemon.Hp}hp",
                     $"battle:mid_swap:{i}",
                     ButtonStyle.Secondary,
                     disabled: !validSwaps.Contains(i),

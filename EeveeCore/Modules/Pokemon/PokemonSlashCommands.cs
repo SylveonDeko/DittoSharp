@@ -1,5 +1,6 @@
 using System.Text;
 using Discord.Interactions;
+using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Pokemon.Services;
 using Fergun.Interactive;
@@ -62,10 +63,21 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("select", "Select a pokemon by ID number")]
     [RequireContext(ContextType.Guild)]
-    public async Task SelectPokemon(int pokeId)
+    public async Task SelectPokemon(
+        [Summary("pokemon", "Pokemon to select")]
+        [Autocomplete(typeof(PokemonSelectAutocompleteHandler))]
+        string pokeId)
     {
         await DeferAsync();
-        var result = await Service.SelectPokemon(ctx.User.Id, pokeId);
+        
+        // Parse the Pokemon ID from the autocomplete value
+        if (!ulong.TryParse(pokeId, out var pokemonId))
+        {
+            await ctx.Interaction.SendErrorFollowupAsync("Invalid Pokemon ID provided.");
+            return;
+        }
+        
+        var result = await Service.SelectPokemon(ctx.User.Id, pokemonId+1);
         if (!result.Success)
         {
             await ctx.Interaction.SendErrorFollowupAsync(result.Message);
@@ -188,7 +200,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 {
                     description.AppendLine(GenerateDetailedListEntry(
                         pokemon,
-                        partyLookup.Contains((int)pokemon.BotId),
+                        partyLookup.Contains(pokemon.BotId),
                         pokemon.BotId == selectedPokemon));
                     description.AppendLine(); // Add space between entries
                 }
@@ -198,7 +210,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                     var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
                     var gender = GetGenderEmoji(pokemon.Gender);
                     var favorite = pokemon.Favorite ? "⭐ " : "";
-                    var inParty = partyLookup.Contains((int)pokemon.BotId) ? "👥 " : "";
+                    var inParty = partyLookup.Contains(pokemon.BotId) ? "👥 " : "";
                     var isSelected = pokemon.BotId == selectedPokemon ? "🔍 " : "";
                     var champion = pokemon.Champion ? "🏆 " : "";
                     var market = pokemon.MarketEnlist ? "💰 " : "";
@@ -261,7 +273,6 @@ public class PokemonSlashCommands(InteractiveService interactivity)
 
         pages.Add(legendPage);
 
-        // Create paginator with enhanced controls
         var pager = new StaticPaginatorBuilder()
             .WithPages(pages)
             .WithUsers(ctx.User)
@@ -273,7 +284,6 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             InteractionResponseType.DeferredUpdateMessage);
     }
 
-// Helper methods
     /// <summary>
     ///     Generates summary statistics for the user's Pokemon collection.
     ///     Creates a formatted string with counts of different Pokemon types and variants.
@@ -357,7 +367,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             entry.AppendLine($"Type: {string.Join(" ", types.Select(GetTypeEmote))}");
 
         // Add move preview if available
-        if (pokemon.Moves != null && pokemon.Moves.Length > 0 && !pokemon.Moves.All(string.IsNullOrEmpty))
+        if (pokemon.Moves is { Length: > 0 } && !pokemon.Moves.All(string.IsNullOrEmpty))
         {
             var validMoves = pokemon.Moves.Where(m => !string.IsNullOrEmpty(m)).Take(4);
             if (validMoves.Any())
@@ -365,7 +375,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         }
 
         // Add tags if any
-        if (pokemon.Tags != null && pokemon.Tags.Length > 0 && !pokemon.Tags.All(string.IsNullOrEmpty))
+        if (pokemon.Tags is { Length: > 0 } && !pokemon.Tags.All(string.IsNullOrEmpty))
         {
             var validTags = pokemon.Tags.Where(t => !string.IsNullOrEmpty(t));
             if (validTags.Any())
@@ -503,13 +513,12 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     {
         try
         {
-            Database.Models.PostgreSQL.Pokemon.Pokemon? ownedPokemon = null;
             var totalPokemonCount = await Service.GetUserPokemonCount(ctx.User.Id);
-
+            Database.Linq.Models.Pokemon.Pokemon? ownedPokemon;
             // Case 1: No parameter - get selected Pokemon
             if (string.IsNullOrWhiteSpace(poke))
             {
-                ownedPokemon = await Service.GetSelectedPokemon(ctx.User.Id);
+                ownedPokemon = await Service.GetSelectedPokemonAsync(ctx.User.Id);
                 if (ownedPokemon == null)
                 {
                     await ctx.Interaction.SendErrorAsync(
@@ -518,26 +527,18 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 }
 
                 var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
+                await DisplayPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
                 return;
             }
 
-            // Case 2: "new", "newest", "latest" - get newest Pokemon
+            // Case 2: "new", "newest", "latest" - get newest Pokemon with navigation
             if (poke.ToLower() is "newest" or "latest" or "atest" or "ewest" or "new")
             {
-                ownedPokemon = await Service.GetNewestPokemon(ctx.User.Id);
-                if (ownedPokemon == null)
-                {
-                    await ctx.Interaction.SendErrorAsync("You have not started!\nStart with `/start` first.");
-                    return;
-                }
-
-                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
+                await DisplayPokemonWithNavigation(totalPokemonCount, null, true);
                 return;
             }
 
-            // Case 3: Numeric input - get Pokemon by number from user's list
+            // Case 3: Numeric input - get Pokemon by number with navigation
             if (int.TryParse(poke, out var pokeNumber))
             {
                 if (pokeNumber < 1)
@@ -552,16 +553,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                     return;
                 }
 
-                ownedPokemon = await Service.GetPokemonByNumber(ctx.User.Id, pokeNumber);
-                if (ownedPokemon == null)
-                {
-                    await ctx.Interaction.SendErrorAsync(
-                        "You do not have that many pokemon. Go catch some more first!");
-                    return;
-                }
-
-                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayOwnedPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
+                await DisplayPokemonWithNavigation(totalPokemonCount, (ulong)pokeNumber);
                 return;
             }
 
@@ -606,8 +598,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             var finalName = string.Join("-", pokemonName);
             var val = finalName.ToTitleCase();
             var pokemon = await Service.GetPokemonInfo(finalName);
-            var (form, imageUrl) = await Service.GetPokemonFormInfo(pokemon.Name,
-                pokemon.Name.ToLower().Contains("shiny"));
+            var (form, imagePath) = await Service.GetPokemonFormInfo(pokemon.Name, shiny, radiant, skin);
 
             // Get forms
             var forms = await Service.GetPokemonForms(val);
@@ -647,14 +638,24 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             infoField.Append(statsStr);
 
             embed.AddField("Pokemon Information", infoField.ToString());
-            if (!string.IsNullOrEmpty(imageUrl)) embed.WithImageUrl(imageUrl);
 
             // Create and add the More Information button
             var components = new ComponentBuilder()
                 .WithButton("More Information", $"pokeinfo:more,{pokemonInfo.Id}", ButtonStyle.Primary, new Emoji("ℹ️"))
                 .Build();
 
-            await ctx.Interaction.RespondAsync(embed: embed.Build(), components: components);
+            // Check if image exists and send with attachment
+            if (File.Exists(imagePath))
+            {
+                embed.WithImageUrl($"attachment://pokemon.png");
+                await using var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                var fileAttachment = new FileAttachment(fileStream, "pokemon.png");
+                await ctx.Interaction.RespondWithFileAsync(embed: embed.Build(), components: components, attachment: fileAttachment);
+            }
+            else
+            {
+                await ctx.Interaction.RespondAsync(embed: embed.Build(), components: components);
+            }
         }
         catch (Exception ex)
         {
@@ -839,7 +840,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     {
         try
         {
-            var pokemon = await Service.GetPokemonByNumber(ctx.User.Id, pokemonNumber);
+            var pokemon = await Service.GetPokemonByNumberAsync(ctx.User.Id, (ulong)pokemonNumber);
             if (pokemon == null)
             {
                 await ctx.Interaction.SendErrorAsync("That pokemon does not exist!");
@@ -884,7 +885,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     {
         try
         {
-            var pokemon = await Service.GetPokemonByNumber(ctx.User.Id, pokemonNumber);
+            var pokemon = await Service.GetPokemonByNumberAsync(ctx.User.Id, (ulong)pokemonNumber);
             if (pokemon == null)
             {
                 await ctx.Interaction.SendErrorAsync("That pokemon does not exist!");
@@ -1113,44 +1114,139 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             _ => eggGroup
         };
     }
+    
 
     /// <summary>
-    ///     Formats the title of a Pokemon with its variant indicators.
-    ///     Adds prefixes like ✨ for shiny, 🌟 for radiant, etc.
+    ///     Displays Pokemon with left/right navigation using Fergun.Interactive lazy loading.
     /// </summary>
-    /// <param name="name">The name of the Pokemon.</param>
-    /// <param name="shiny">Whether the Pokemon is shiny.</param>
-    /// <param name="radiant">Whether the Pokemon is radiant.</param>
-    /// <param name="skin">The skin of the Pokemon, if any.</param>
-    /// <returns>The formatted title of the Pokemon.</returns>
-    private static string GetPokemonTitle(string name, bool? shiny, bool? radiant, string skin)
+    /// <param name="totalPokemonCount">The total number of Pokemon the user has.</param>
+    /// <param name="startingPosition">The position to start from (null for newest).</param>
+    /// <param name="recentMode">Whether to show recent Pokemon mode.</param>
+    /// <returns>A Task representing the asynchronous operation.</returns>
+    private async Task DisplayPokemonWithNavigation(ulong totalPokemonCount, ulong? startingPosition = null, bool recentMode = false)
     {
-        if (shiny == true) name = "✨ " + name;
-        if (radiant == true) name = "🌟 " + name;
-        if (!string.IsNullOrEmpty(skin)) name = "💫 " + name;
-        return name;
+        ulong startPosition;
+        
+        if (recentMode)
+        {
+            // Start from the newest Pokemon (highest position)
+            startPosition = totalPokemonCount;
+        }
+        else
+        {
+            if (!startingPosition.HasValue)
+            {
+                await ctx.Interaction.SendErrorAsync("Starting position is required for position mode.");
+                return;
+            }
+            startPosition = startingPosition.Value;
+        }
+
+        // Validate the starting Pokemon exists
+        var startingPokemon = await Service.GetPokemonByNumberAsync(ctx.User.Id, startPosition);
+        if (startingPokemon == null)
+        {
+            await ctx.Interaction.SendErrorAsync("You do not have that many pokemon. Go catch some more first!");
+            return;
+        }
+
+        // Create component paginator with lazy loading using page factory
+        var paginator = new ComponentPaginatorBuilder()
+            .AddUser(ctx.User)
+            .WithPageFactory(GeneratePokemonInfoPage)
+            .WithPageCount((int)totalPokemonCount)
+            .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+            .WithActionOnTimeout(ActionOnStop.DisableInput)
+            .Build();
+
+        // Set starting page (convert to 0-indexed)
+        var startPageIndex = (int)startPosition - 1;
+        paginator.SetPage(startPageIndex);
+        
+        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
+
+        // Page factory method for lazy loading Pokemon info
+        IPage GeneratePokemonInfoPage(IComponentPaginator p)
+        {
+            try
+            {
+                // Convert 0-indexed page to 1-indexed Pokemon position
+                var pokemonPosition = (ulong)(p.CurrentPageIndex + 1);
+                
+                var pokemon = Service.GetPokemonByNumberAsync(ctx.User.Id, pokemonPosition).Result;
+                if (pokemon == null)
+                {
+                    return new PageBuilder()
+                        .WithTitle("Pokemon Not Found")
+                        .WithDescription($"No Pokemon found at position {pokemonPosition}")
+                        .WithColor(Color.Red)
+                        .Build();
+                }
+
+                var pokemonIndex = Service.GetPokemonIndex(ctx.User.Id, pokemon.Id).Result;
+                var embed = CreatePokemonInfoEmbed(pokemon, totalPokemonCount, pokemonIndex, 
+                    recentMode ? (int)pokemonPosition : null, recentMode ? (int)totalPokemonCount : null).Result;
+
+                // Add navigation buttons managed by the paginator
+                var components = new ComponentBuilder()
+                    .AddPreviousButton(p, style: ButtonStyle.Primary)
+                    .AddNextButton(p, style: ButtonStyle.Primary)
+                    .WithButton("More Information", $"pokeinfo:more,{pokemon.Id}", 
+                        ButtonStyle.Secondary, new Emoji("ℹ️"))
+                    .AddStopButton(p)
+                    .Build();
+
+                // Get image path for attachment
+                var (_, imagePath) = Service.GetPokemonFormInfo(pokemon.PokemonName, 
+                    pokemon.Shiny ?? false, pokemon.Radiant ?? false, pokemon.Skin ?? "").Result;
+
+                var pageBuilder = PageBuilder.FromEmbed(embed);
+                
+                // Add image if it exists
+                if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+                {
+                    pageBuilder.WithImageUrl($"attachment://pokemon.png");
+                }
+
+                pageBuilder.WithComponents(components);
+                return pageBuilder.Build();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error generating Pokemon info page for position {Position}", p.CurrentPageIndex + 1);
+                return new PageBuilder()
+                    .WithTitle("Error")
+                    .WithDescription($"Error loading Pokemon at position {p.CurrentPageIndex + 1}")
+                    .WithColor(Color.Red)
+                    .Build();
+            }
+        }
     }
 
     /// <summary>
-    ///     Displays detailed information about an owned Pokemon.
-    ///     Creates and sends an embed with comprehensive stats, moves, and other details about the Pokemon.
+    ///     Creates an embed for Pokemon information display.
+    ///     Used both for single Pokemon display and paginated recent Pokemon display.
     /// </summary>
     /// <param name="pokemon">The Pokemon to display information about.</param>
     /// <param name="pokeCount">The total number of Pokemon the user has.</param>
     /// <param name="selectedPoke">The index of the selected Pokemon.</param>
-    /// <returns>A Task representing the asynchronous operation.</returns>
-    private async Task DisplayOwnedPokemonInfo(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon, int pokeCount,
-        int selectedPoke)
+    /// <param name="currentIndex">Current position in recent Pokemon list (optional).</param>
+    /// <param name="totalRecent">Total number of recent Pokemon (optional).</param>
+    /// <returns>An Embed containing the Pokemon information.</returns>
+    private async Task<Embed> CreatePokemonInfoEmbed(Database.Linq.Models.Pokemon.Pokemon pokemon, ulong pokeCount, ulong selectedPoke, int? currentIndex = null, int? totalRecent = null)
     {
         var pokemonInfo = await Service.GetPokemonInfo(pokemon.PokemonName);
         if (pokemonInfo == null)
         {
-            await ctx.Interaction.SendErrorAsync("Error retrieving pokemon information.");
-            return;
+            return new EmbedBuilder()
+                .WithTitle("Error")
+                .WithDescription("Error retrieving pokemon information.")
+                .WithColor(Color.Red)
+                .Build();
         }
 
         // Calculate stats
-        var calculatedStats = await Service.CalculatePokemonStats(pokemon, pokemonInfo.Stats);
+        var calculatedStats = await Service.CalculateStats(pokemon, pokemonInfo.Stats);
         var friendship = Service.CalculateFriendship(pokemon);
 
         // Calculate IV percentage
@@ -1173,14 +1269,18 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             ? "<a:spec1:1036851754303770734><a:spec2:1036851753058062376><a:spec3:1036851751023812628>\n"
             : "";
 
-        // Create the embed with enhanced title
+        // Create footer text with navigation info if applicable
+        var footerText = currentIndex.HasValue && totalRecent.HasValue
+            ? $"Recent #{currentIndex}/{totalRecent} | Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.Id}"
+            : $"Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.Id}";
+
         var embed = new EmbedBuilder()
             .WithTitle(
                 $"{titlePrefix}{GetPokemonEmoji(pokemon.Shiny.GetValueOrDefault(), pokemon.Radiant.GetValueOrDefault(), pokemon.Skin)}{genderEmoji}{pokemon.PokemonName.Titleize()}")
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
-            .WithFooter($"Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.Id}");
+            .WithFooter(footerText);
 
-        // Basic information section
+        // Basic information section    
         var infoField = new StringBuilder();
         infoField.AppendLine($"**Level**: `{pokemon.Level}`");
 
@@ -1204,7 +1304,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             infoField.AppendLine($"**Friendship**: `{friendship}`");
 
         // Add original trainer if available
-        if (pokemon.CaughtBy.HasValue && pokemon.CaughtBy.Value > 0)
+        if (pokemon.CaughtBy is > 0)
         {
             var trainerName = await Service.GetTrainerName(pokemon.CaughtBy.Value);
             infoField.AppendLine($"**Original Trainer**: `{trainerName}`");
@@ -1225,7 +1325,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             infoField.AppendLine($"**Status**: `{string.Join(", ", statusFlags)}`");
 
         // Add tags if any exist
-        if (pokemon.Tags != null && pokemon.Tags.Length > 0 && !pokemon.Tags.All(string.IsNullOrEmpty))
+        if (pokemon.Tags is { Length: > 0 } && !pokemon.Tags.All(string.IsNullOrEmpty))
             infoField.AppendLine($"**Tags**: `{string.Join(", ", pokemon.Tags.Where(t => !string.IsNullOrEmpty(t)))}`");
 
         // Add special indicator animations if needed
@@ -1234,7 +1334,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         embed.AddField("Pokemon Information", infoField.ToString());
 
         // Show the Pokemon's moves in a separate field
-        if (pokemon.Moves != null && pokemon.Moves.Length > 0 && !pokemon.Moves.All(string.IsNullOrEmpty))
+        if (pokemon.Moves is { Length: > 0 } && !pokemon.Moves.All(string.IsNullOrEmpty))
         {
             var movesField = new StringBuilder();
             foreach (var move in pokemon.Moves.Where(m => !string.IsNullOrEmpty(m)))
@@ -1273,20 +1373,47 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 $"`{pokemon.Experience:N0}` / `{pokemon.ExperienceCap:N0}` " +
                 $"(`{(double)pokemon.Experience / pokemon.ExperienceCap * 100:F1}%` to next level)");
 
-        // Get image URL
-        var (form, imageUrl) = await Service.GetPokemonFormInfo(pokemon.PokemonName, pokemon.Shiny ?? false,
-            pokemon.Radiant ?? false, pokemon.Skin);
-        if (!string.IsNullOrEmpty(imageUrl)) embed.WithImageUrl(imageUrl);
-
         // Add usage statistics if counter exists
-        if (pokemon.Counter.HasValue && pokemon.Counter.Value > 0)
+        if (pokemon.Counter is > 0)
             embed.AddField("Usage Stats", $"This Pokemon has been used `{pokemon.Counter.Value}` times.");
+
+        return embed.Build();
+    }
+
+
+    /// <summary>
+    ///     Displays detailed information about an owned Pokemon.
+    ///     Creates and sends an embed with comprehensive stats, moves, and other details about the Pokemon.
+    /// </summary>
+    /// <param name="pokemon">The Pokemon to display information about.</param>
+    /// <param name="pokeCount">The total number of Pokemon the user has.</param>
+    /// <param name="selectedPoke">The index of the selected Pokemon.</param>
+    /// <returns>A Task representing the asynchronous operation.</returns>
+    private async Task DisplayPokemonInfo(Database.Linq.Models.Pokemon.Pokemon pokemon, ulong pokeCount, ulong selectedPoke)
+    {
+        // Create embed using the shared method
+        var embed = await CreatePokemonInfoEmbed(pokemon, pokeCount, selectedPoke);
+
+        // Get image path
+        var (form, imagePath) = await Service.GetPokemonFormInfo(pokemon.PokemonName, pokemon.Shiny ?? false,
+            pokemon.Radiant ?? false, pokemon.Skin);
 
         var components = new ComponentBuilder()
             .WithButton("More Information", $"pokeinfo:more,{pokemon.Id}", ButtonStyle.Primary, new Emoji("ℹ️"))
             .Build();
 
-        await ctx.Interaction.RespondAsync(embed: embed.Build(), components: components);
+        // Check if image exists and send with attachment
+        if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+        {
+            var embedBuilder = embed.ToEmbedBuilder().WithImageUrl($"attachment://pokemon.png");
+            await using var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+            var fileAttachment = new FileAttachment(fileStream, "pokemon.png");
+            await ctx.Interaction.RespondWithFileAsync(embed: embedBuilder.Build(), components: components, attachment: fileAttachment);
+        }
+        else
+        {
+            await ctx.Interaction.RespondAsync(embed: embed, components: components);
+        }
     }
 
     /// <summary>
@@ -1323,5 +1450,305 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             "-f" or "female" => "♀️ ",
             _ => ""
         };
+    }
+
+
+    /// <summary>
+    ///     Provides Discord slash commands for Pokemon form transformations.
+    ///     Handles form changes, mega evolution, fusion mechanics, and related operations.
+    /// </summary>
+    [Group("forms", "Pokemon form transformation commands")]
+    public class FormsCommands : EeveeCoreSlashSubmodule<FormsService>
+    {
+        /// <summary>
+        ///     Transform a Pokemon to a specified form.
+        /// </summary>
+        /// <param name="formName">The name of the form to transform to.</param>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("form", "Transform your selected Pokemon to a specific form")]
+        public async Task TransformForm(
+            [Summary("form", "The form to transform to")]
+            [Autocomplete(typeof(PokemonFormsAutocompleteHandler))]
+            string formName)
+        {
+            // Input validation
+            if (string.IsNullOrWhiteSpace(formName))
+            {
+                await ctx.Interaction.SendErrorAsync("Please specify a form name!");
+                return;
+            }
+
+            if (formName.Length > 50)
+            {
+                await ctx.Interaction.SendErrorAsync("Form name is too long! Please use a shorter name.");
+                return;
+            }
+
+            // Sanitize input
+            formName = formName.Trim().ToLower();
+            
+            var result = await Service.TransformToFormAsync(ctx.User.Id, formName);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Congratulations!!!")
+                    .WithDescription($"{ctx.User.Username}, {result.Message}")
+                    .WithColor(Color.Blue);
+                
+                await ctx.Interaction.RespondAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Reset a Pokemon to its base form.
+        /// </summary>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("deform", "Reset your selected Pokemon to its base form")]
+        public async Task DeformPokemon()
+        {
+            var result = await Service.DeformPokemonAsync(ctx.User.Id);
+            
+            if (result.Success)
+                await ctx.Interaction.SendConfirmAsync(result.Message);
+            else
+                await ctx.Interaction.SendErrorAsync(result.Message);
+        }
+
+        /// <summary>
+        ///     Fuse compatible Pokemon together.
+        /// </summary>
+        /// <param name="fusionType">The type of fusion.</param>
+        /// <param name="targetPokemonNumber">The number of the Pokemon to fuse with.</param>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("fuse", "Fuse compatible Pokemon together")]
+        public async Task FusePokemon(
+            [Summary("type", "Type of fusion")]
+            [Choice("White (Kyurem + Reshiram)", "white")]
+            [Choice("Black (Kyurem + Zekrom)", "black")]
+            [Choice("Ice (Calyrex + Glastrier)", "ice")]
+            [Choice("Shadow (Calyrex + Spectrier)", "shadow")]
+            string fusionType, 
+            [Summary("pokemon", "Number of the Pokemon to fuse with")]
+            [Autocomplete(typeof(AllPokemonAutocompleteHandler))]
+            string targetPokemonNumber)
+        {
+            await DeferAsync();
+            
+            // Input validation and parsing
+            if (string.IsNullOrWhiteSpace(targetPokemonNumber) || !int.TryParse(targetPokemonNumber, out var pokemonNum) || pokemonNum < 1)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("Please provide a valid Pokemon number!");
+                return;
+            }
+
+            if (pokemonNum > 1000000)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("That's way too many Pokemon! Please use a reasonable number.");
+                return;
+            }
+            
+            var result = await Service.FusePokemonAsync(ctx.User.Id, fusionType, (ulong)pokemonNum);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Fusion Complete!")
+                    .WithDescription(result.Message)
+                    .WithColor(Color.Purple);
+                
+                await ctx.Interaction.FollowupAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorFollowupAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Fuse Necrozma with Lunala to create Necrozma-Dawn Wings form.
+        /// </summary>
+        /// <param name="lunalaNumber">The number of the Lunala to fuse with.</param>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("lunarize", "Fuse Necrozma with Lunala to create Dawn Wings form")]
+        public async Task LunarizePokemon(
+            [Summary("lunala", "The number of the Lunala in your collection")]
+            [Autocomplete(typeof(AllPokemonAutocompleteHandler))]
+            string lunalaNumber)
+        {
+            await DeferAsync();
+            
+            // Input validation and parsing
+            if (string.IsNullOrWhiteSpace(lunalaNumber) || !int.TryParse(lunalaNumber, out var pokemonNum) || pokemonNum < 1)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("Please provide a valid Pokemon number!");
+                return;
+            }
+
+            if (pokemonNum > 1000000)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("That's way too many Pokemon! Please use a reasonable number.");
+                return;
+            }
+            
+            var result = await Service.LunarizePokemonAsync(ctx.User.Id, (ulong)pokemonNum);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Fusion Complete!")
+                    .WithDescription(result.Message)
+                    .WithColor(Color.Gold);
+                
+                await ctx.Interaction.FollowupAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorFollowupAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Fuse Necrozma with Solgaleo to create Necrozma-Dusk Mane form.
+        /// </summary>
+        /// <param name="solgaleoNumber">The number of the Solgaleo to fuse with.</param>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("solarize", "Fuse Necrozma with Solgaleo to create Dusk Mane form")]
+        public async Task SolarizePokemon(
+            [Summary("solgaleo", "The number of the Solgaleo in your collection")]
+            [Autocomplete(typeof(AllPokemonAutocompleteHandler))]
+            string solgaleoNumber)
+        {
+            await DeferAsync();
+            
+            // Input validation and parsing
+            if (string.IsNullOrWhiteSpace(solgaleoNumber) || !int.TryParse(solgaleoNumber, out var pokemonNum) || pokemonNum < 1)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("Please provide a valid Pokemon number!");
+                return;
+            }
+
+            if (pokemonNum > 1000000)
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("That's way too many Pokemon! Please use a reasonable number.");
+                return;
+            }
+            
+            var result = await Service.SolarizePokemonAsync(ctx.User.Id, (ulong)pokemonNum);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Fusion Complete!")
+                    .WithDescription(result.Message)
+                    .WithColor(Color.Orange);
+                
+                await ctx.Interaction.FollowupAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorFollowupAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Mega evolve your selected Pokemon.
+        /// </summary>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("mega", "Mega evolve your selected Pokemon")]
+        public async Task MegaEvolve()
+        {
+            var result = await Service.MegaEvolveAsync(ctx.User.Id);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Congratulations!!!")
+                    .WithDescription($"{ctx.User.Username}, {result.Message}")
+                    .WithColor(Color.Red);
+                
+                await ctx.Interaction.RespondAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Mega evolve your selected Pokemon to its X form.
+        /// </summary>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("megax", "Mega evolve your selected Pokemon to X form")]
+        public async Task MegaEvolveX()
+        {
+            var result = await Service.MegaEvolveXAsync(ctx.User.Id);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Congratulations!!!")
+                    .WithDescription($"{ctx.User.Username}, {result.Message}")
+                    .WithColor(Color.Red);
+                
+                await ctx.Interaction.RespondAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Mega evolve your selected Pokemon to its Y form.
+        /// </summary>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("megay", "Mega evolve your selected Pokemon to Y form")]
+        public async Task MegaEvolveY()
+        {
+            var result = await Service.MegaEvolveYAsync(ctx.User.Id);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Congratulations!!!")
+                    .WithDescription($"{ctx.User.Username}, {result.Message}")
+                    .WithColor(Color.Red);
+                
+                await ctx.Interaction.RespondAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorAsync(result.Message);
+            }
+        }
+
+        /// <summary>
+        ///     Devolve your mega Pokemon back to its base form.
+        /// </summary>
+        /// <returns>A Task representing the asynchronous operation.</returns>
+        [SlashCommand("unmega", "Devolve your mega Pokemon back to base form")]
+        public async Task MegaDevolve()
+        {
+            var result = await Service.MegaDevolveAsync(ctx.User.Id);
+            
+            if (result.Success)
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle("Devolution Complete!")
+                    .WithDescription($"{ctx.User.Username}, {result.Message}")
+                    .WithColor(Color.Green);
+                
+                await ctx.Interaction.RespondAsync(embed: embed.Build());
+            }
+            else
+            {
+                await ctx.Interaction.SendErrorAsync(result.Message);
+            }
+        }
     }
 }

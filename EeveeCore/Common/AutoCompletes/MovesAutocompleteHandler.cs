@@ -1,8 +1,8 @@
 using Discord.Interactions;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Services.Impl;
-using LinqToDB.EntityFrameworkCore;
+using LinqToDB;
 using MongoDB.Driver;
+using Serilog;
 
 namespace EeveeCore.Common.AutoCompletes;
 
@@ -14,17 +14,17 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
 {
     // Cache for Pokémon moves to reduce database queries
     private static readonly ConcurrentDictionary<string, List<string>> MoveCache = new();
-    private readonly DbContextProvider _dbContextProvider;
+    private readonly LinqToDbConnectionProvider _dbProvider;
     private readonly IMongoService _mongoService;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="MovesAutocompleteHandler" /> class.
     /// </summary>
-    /// <param name="dbContextProvider">The database context provider.</param>
+    /// <param name="dbProvider">The database connection provider.</param>
     /// <param name="mongoService">The MongoDB service for accessing collection data.</param>
-    public MovesAutoCompleteHandler(DbContextProvider dbContextProvider, IMongoService mongoService)
+    public MovesAutoCompleteHandler(LinqToDbConnectionProvider dbProvider, IMongoService mongoService)
     {
-        _dbContextProvider = dbContextProvider;
+        _dbProvider = dbProvider;
         _mongoService = mongoService;
     }
 
@@ -51,14 +51,14 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
         try
         {
             // Get the selected Pokémon for the user
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbProvider.GetConnectionAsync();
             var selectedPokemon = await db.UserPokemon
                 .Where(p => p.Id == db.Users
                     .Where(u => u.UserId == context.User.Id)
                     .Select(u => u.Selected)
                     .FirstOrDefault())
                 .Select(p => p.PokemonName!.ToLower())
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (string.IsNullOrEmpty(selectedPokemon))
                 return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
@@ -82,7 +82,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
         catch (Exception ex)
         {
             // Log the error and return an empty result
-            Console.WriteLine($"Error in MovesAutocompleteHandler: {ex.Message}");
+            Log.Information($"Error in MovesAutocompleteHandler: {ex.Message}");
             return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
         }
     }

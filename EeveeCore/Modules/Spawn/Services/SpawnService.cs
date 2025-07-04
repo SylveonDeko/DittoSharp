@@ -1,32 +1,26 @@
 using System.Text;
 using System.Text.Json;
 using EeveeCore.Common.Constants;
-using EeveeCore.Database.DbContextStuff;
+using EeveeCore.Common.ModuleBehaviors;
+using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Database.Models.Mongo.Discord;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Spawn.Constants;
 using EeveeCore.Services.Impl;
-using LinqToDB.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using MongoDB.Driver;
 using Serilog;
 using StackExchange.Redis;
-using Bot_User = EeveeCore.Database.Models.PostgreSQL.Bot.User;
+using User = EeveeCore.Database.Linq.Models.Bot.User;
+using ActiveSpawn = EeveeCore.Database.Linq.Models.Game.ActiveSpawn;
 
 namespace EeveeCore.Modules.Spawn.Services;
 
 /// <summary>
 ///     Provides functionality for spawning Pokemon in Discord channels.
 ///     Handles the spawn mechanics, user catches, rewards, and guild configuration for the Pokemon spawn system.
-/// </summary>
-/// <param name="client">The Discord client used for interactions.</param>
-/// <param name="mongoDb">The MongoDB service for data storage.</param>
-/// <param name="handler">Event handler for Discord events.</param>
-/// <param name="pokemonService">Service for Pokemon-related functionality.</param>
-/// <param name="dbContextProvider">Provider for database contexts.</param>
-/// <param name="cache">Cache service for temporary data storage.</param>
-public class SpawnService : INService
+/// </summary> 
+public class SpawnService : INService, IReadyExecutor
 {
     // Constants from Python code
     /// <summary>
@@ -62,7 +56,7 @@ public class SpawnService : INService
     /// <summary>
     ///     Provider for database contexts.
     /// </summary>
-    private readonly DbContextProvider _dbContextProvider;
+    private readonly LinqToDbConnectionProvider _dbContextProvider;
 
     /// <summary>
     ///     MongoDB service for data storage.
@@ -107,7 +101,7 @@ public class SpawnService : INService
         IMongoService mongoDb,
         EventHandler handler,
         PokemonService pokemonService,
-        DbContextProvider dbContextProvider,
+        LinqToDbConnectionProvider dbContextProvider,
         IDataCache cache)
     {
         _client = client;
@@ -190,11 +184,14 @@ public class SpawnService : INService
     ///     Handles incoming Discord messages to determine if a Pokemon should spawn.
     ///     Checks against cooldowns, spawn chances, and guild configurations.
     /// </summary>
-    /// <param name="message">The received message.</param>
+    /// <param name="msg">The received message.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private async Task HandleMessageAsync(SocketMessage message)
+    private async Task HandleMessageAsync(SocketMessage msg)
     {
-        if (message.Author.IsBot || message.Channel is not SocketGuildChannel channel)
+        if (msg.Author.IsBot || msg.Channel is not ITextChannel channel)
+            return;
+        
+        if (msg is not IUserMessage message)
             return;
 
         var guildId = channel.Guild.Id;
@@ -203,6 +200,9 @@ public class SpawnService : INService
 
         try
         {
+            // Check for mention-based catching first
+            if (await HandleMentionCatch(message, channel))
+                return;
             var guildConfig = await GetGuildConfig(guildId);
             if (guildConfig == null) return;
 
@@ -227,7 +227,7 @@ public class SpawnService : INService
             var spawnChannel = await GetSpawnChannel(channel, guildConfig);
             if (spawnChannel == null) return;
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
             var (shiny, honey) = await GetSpawnModifiers(message.Author.Id, channel.Id, db);
             var (overrideWithGhost, overrideWithIce) = ProcessHoneyEffect(honey);
 
@@ -281,7 +281,7 @@ public class SpawnService : INService
     /// <param name="dbContext">The database context for queries.</param>
     /// <returns>A tuple containing shiny status and honey effect.</returns>
     private async Task<(bool IsShiny, Honey? Honey)> GetSpawnModifiers(ulong userId, ulong channelId,
-        EeveeCoreContext db)
+        DittoDataConnection db)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         if (user == null) return (false, null);
@@ -368,6 +368,161 @@ public class SpawnService : INService
     }
 
     /// <summary>
+    ///     Handles mention-based Pokemon catching.
+    ///     Checks if a user mentioned the bot with a Pokemon name to catch a spawned Pokemon.
+    /// </summary>
+    /// <param name="message">The Discord message to check.</param>
+    /// <param name="channel">The channel where the message was sent.</param>
+    /// <returns>True if the message was a catch attempt, false otherwise.</returns>
+    private async Task<bool> HandleMentionCatch(IUserMessage message, ITextChannel channel)
+    {
+        // Check if the message mentions the bot
+        if (message.MentionedUserIds.All(u => u != _client.CurrentUser.Id))
+            return false;
+
+        // Extract Pokemon name from the message (everything after the mention)
+        var content = message.Content;
+        var mentionPattern = $"<@{_client.CurrentUser.Id}>";
+        var mentionIndex = content.IndexOf(mentionPattern, StringComparison.OrdinalIgnoreCase);
+        
+        if (mentionIndex == -1)
+        {
+            // Try alternative mention format
+            mentionPattern = $"<@!{_client.CurrentUser.Id}>";
+            mentionIndex = content.IndexOf(mentionPattern, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (mentionIndex == -1)
+            return false;
+
+        // Extract the potential Pokemon name after the mention
+        var afterMention = content[(mentionIndex + mentionPattern.Length)..].Trim();
+        if (string.IsNullOrEmpty(afterMention))
+            return false;
+
+        // Get active spawns in this channel from the new tracking system
+        var activeSpawnIds = await GetActiveSpawnsInChannel(channel.Id);
+        
+        foreach (var spawnMessageId in activeSpawnIds)
+        {
+            // Get spawn info from tracking system
+            var spawnInfo = await GetActiveSpawn(spawnMessageId);
+            if (spawnInfo == null)
+                continue;
+
+            var pokemonName = spawnInfo.Value.PokemonName;
+            var isShiny = spawnInfo.Value.IsShiny;
+            var legChance = spawnInfo.Value.LegendaryChance;
+            var ubChance = spawnInfo.Value.UltraBeastChance;
+
+            // Check if the mentioned Pokemon name matches
+            var validNames = GetCatchOptions(pokemonName);
+            var guessedName = afterMention.ToLower().Replace(" ", "-");
+            
+            if (!validNames.Contains(guessedName))
+                continue;
+
+            // Try to get the actual message to modify it later
+            IUserMessage? spawnMessage = null;
+            try
+            {
+                spawnMessage = await channel.GetMessageAsync(spawnMessageId) as IUserMessage;
+            }
+            catch
+            {
+                // Message might have been deleted, continue with the catch anyway
+            }
+
+            // Attempt to catch the Pokemon using the same logic as modal catching
+            var result = await HandleCatchWithMessageCheck(
+                message.Author.Id,
+                channel.Guild.Id,
+                pokemonName,
+                isShiny,
+                legChance,
+                ubChance,
+                spawnMessageId);
+
+            // If successful, also mark in the new spawn tracking system
+            if (result.Success)
+            {
+                await MarkSpawnAsCaught(spawnMessageId, message.Author.Id);
+            }
+
+            // Send the catch result
+            if (result.Success)
+            {
+                if (result.ResponseEmbed != null)
+                {
+                    await message.Channel.SendMessageAsync(embed: result.ResponseEmbed);
+                }
+                else if (!string.IsNullOrEmpty(result.Message))
+                {
+                    await message.Channel.SendMessageAsync(result.Message);
+                }
+                
+                // Add reaction to the original catch message
+                try
+                {
+                    await message.AddReactionAsync(new Emoji("✅"));
+                }
+                catch
+                {
+                    // Ignore reaction errors
+                }
+
+                // Handle the spawn message if we found it
+                if (spawnMessage != null)
+                {
+                    if (result.ShouldDeleteSpawn)
+                    {
+                        await spawnMessage.DeleteAsync();
+                    }
+                    else
+                    {
+                        var originalEmbed = spawnMessage.Embeds.First().ToEmbedBuilder();
+                        originalEmbed.Title = "Caught!";
+                        await spawnMessage.ModifyAsync(m =>
+                        {
+                            m.Embed = originalEmbed.Build();
+                            m.Components = new ComponentBuilder().Build();
+                            m.Attachments = null;
+                        });
+
+                        if (result.ShouldPinSpawn)
+                        {
+                            var curUser = await channel.Guild.GetCurrentUserAsync();
+                            var perms = curUser.GetPermissions(channel);
+                            if (perms.ManageMessages)
+                                await spawnMessage.PinAsync();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Send error message as reply
+                if (result.ResponseEmbed != null)
+                {
+                    await message.ReplyAsync(embed: result.ResponseEmbed);
+                }
+                else if (!string.IsNullOrEmpty(result.Message))
+                {
+                    await message.ReplyAsync(result.Message);
+                }
+                else
+                {
+                    await message.ReplyAsync("Something went wrong with the catch attempt.");
+                }
+            }
+
+            return true; // We processed a catch attempt
+        }
+
+        return false; // No matching spawn found
+    }
+
+    /// <summary>
     ///     Handles the spawning of a vault event.
     ///     Vaults are special events that contain rewards and use an encoded message.
     /// </summary>
@@ -388,10 +543,32 @@ public class SpawnService : INService
             .WithTitle("🔒 A locked EeveeCore vault has been spotted!")
             .WithDescription(
                 $"`Decoding key:` ||{shiftInverted}||!\n# {giftWord}\n**Reply to the bots message with the pokemon name.**\nShift each letter up or down by the decoding key!\nBe the first decode and say the name to unlock the vault and see what its hiding!\n\n||`A B C D E F G H I J K L M N O P Q R S T U V W X Y Z`||")
-            .WithColor(Color.Red)
-            .WithImageUrl("https://images.mewdeko.tech/EeveeCore_vault.png");
+            .WithColor(Color.Red);
 
-        var message = await channel.SendMessageAsync(embed: embed.Build());
+        // Check if vault image exists locally
+        var vaultImagePath = Path.Combine("data", "images", "EeveeCore_vault.png");
+        IUserMessage message;
+        FileStream vaultStream = null;
+        
+        try
+        {
+            if (File.Exists(vaultImagePath))
+            {
+                embed.WithImageUrl("attachment://vault.png");
+                vaultStream = new FileStream(vaultImagePath, FileMode.Open, FileAccess.Read);
+                var fileAttachment = new FileAttachment(vaultStream, "vault.png");
+                message = await channel.SendFileAsync(fileAttachment, embed: embed.Build());
+            }
+            else
+            {
+                message = await channel.SendMessageAsync(embed: embed.Build());
+            }
+        }
+        finally
+        {
+            // Dispose the stream after sending
+            vaultStream?.Dispose();
+        }
         _activeVaults.Add(channel.Id);
 
         try
@@ -424,7 +601,7 @@ public class SpawnService : INService
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleVaultReward(IMessage message, ITextChannel channel)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
         var rewardType = _random.NextDouble() switch
         {
             < 0.2 => "shadow",
@@ -504,7 +681,7 @@ public class SpawnService : INService
     /// <param name="user">The user receiving the reward.</param>
     /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
-    private async Task<string> HandleShadowReward(Bot_User user, EeveeCoreContext db)
+    private async Task<string> HandleShadowReward(User user, DittoDataConnection db)
     {
         if (string.IsNullOrEmpty(user.Hunt))
             return "You don't have a shadow hunt set! Here's some credits instead.";
@@ -519,8 +696,10 @@ public class SpawnService : INService
             return $"Shadows pour from the vault and circle around you! You got a shadow {user.Hunt}!";
         }
 
-        user.Chain += shadowChainUp;
-        await db.SaveChangesAsync();
+        await db.Users
+            .Where(u => u.UserId == user.UserId)
+            .Set(u => u.Chain, u => u.Chain + shadowChainUp)
+            .UpdateAsync();
         return $"Shadows pour from the vault and circle around you! Your chain has increased by {shadowChainUp}!";
     }
 
@@ -531,7 +710,7 @@ public class SpawnService : INService
     /// <param name="user">The user receiving the reward.</param>
     /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
-    private async Task<string> HandleChestReward(Bot_User user, EeveeCoreContext db)
+    private async Task<string> HandleChestReward(User user, DittoDataConnection db)
     {
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ??
                         new Dictionary<string, int>();
@@ -554,8 +733,10 @@ public class SpawnService : INService
             inventory["common chest"] = inventory.GetValueOrDefault("common chest", 0) + 1;
         }
 
-        user.Inventory = JsonSerializer.Serialize(inventory);
-        await db.SaveChangesAsync();
+        await db.Users
+            .Where(u => u.UserId == user.UserId)
+            .Set(u => u.Inventory, JsonSerializer.Serialize(inventory))
+            .UpdateAsync();
         return $"> The vault contained a **{chestType}**!";
     }
 
@@ -566,7 +747,7 @@ public class SpawnService : INService
     /// <param name="user">The user receiving the reward.</param>
     /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
-    private async Task<string> HandleGiftReward(Bot_User user, EeveeCoreContext db)
+    private async Task<string> HandleGiftReward(User user, DittoDataConnection db)
     {
         // Implement gift creation logic
         return
@@ -580,11 +761,13 @@ public class SpawnService : INService
     /// <param name="user">The user receiving the reward.</param>
     /// <param name="dbContext">The database context.</param>
     /// <returns>A string describing the reward.</returns>
-    private async Task<string> HandleRedeemReward(Bot_User user, EeveeCoreContext db)
+    private async Task<string> HandleRedeemReward(User user, DittoDataConnection db)
     {
         var redeems = _random.Next(1, 3) + 1;
-        user.Redeems += redeems;
-        await db.SaveChangesAsync();
+        await db.Users
+            .Where(u => u.UserId == user.UserId)
+            .Set(u => u.Redeems, u => u.Redeems + (ulong?)redeems)
+            .UpdateAsync();
         return $"The vault contained {redeems} Redeems! Yay!";
     }
 
@@ -608,14 +791,14 @@ public class SpawnService : INService
     /// <param name="channel">The original channel where the spawn was triggered.</param>
     /// <param name="config">The guild configuration.</param>
     /// <returns>The text channel where the Pokemon should spawn.</returns>
-    private async Task<ITextChannel?> GetSpawnChannel(SocketGuildChannel channel, Guild config)
+    private async Task<ITextChannel?> GetSpawnChannel(ITextChannel channel, Guild config)
     {
         if (config.Redirects?.Any() != true) return channel as ITextChannel;
         var redirectId = config.Redirects[_random.Next(config.Redirects.Count)];
-        if (channel.Guild.GetChannel(redirectId) is not ITextChannel redirectChannel)
+        if (await channel.Guild.GetChannelAsync(redirectId) is not ITextChannel redirectChannel)
             return null;
 
-        var user = channel.Guild.GetUser(_client.CurrentUser.Id);
+        var user = await channel.Guild.GetUserAsync(_client.CurrentUser.Id);
         var perms = user.GetPermissions(redirectChannel);
         if (!perms.SendMessages || !perms.EmbedLinks)
             return null;
@@ -630,7 +813,7 @@ public class SpawnService : INService
     /// <param name="channel">The channel to check.</param>
     /// <param name="config">The guild configuration.</param>
     /// <returns>True if spawns are allowed in the channel, false otherwise.</returns>
-    private static async Task<bool> ValidateChannel(SocketGuildChannel channel, Guild config)
+    private static async Task<bool> ValidateChannel(ITextChannel channel, Guild config)
     {
         if (!config.EnableSpawnsAll && !config.EnabledChannels.Contains(channel.Id))
             return false;
@@ -667,7 +850,7 @@ public class SpawnService : INService
     /// <returns>True if a shadow Pokemon should spawn, false otherwise.</returns>
     private async Task<bool> ShadowHuntCheck(ulong userId, string? pokemon)
     {
-        await using var dbContext = await _dbContextProvider.GetContextAsync();
+        await using var dbContext = await _dbContextProvider.GetConnectionAsync();
         var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
 
         if (user?.Hunt != pokemon.Capitalize())
@@ -676,11 +859,15 @@ public class SpawnService : INService
         var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user.Chain / 1000.0);
 
         if (makeShadow)
-            user.Chain = 0;
+            await dbContext.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Chain, 0)
+                .UpdateAsync();
         else
-            user.Chain++;
-
-        await dbContext.SaveChangesAsync();
+            await dbContext.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Chain, u => u.Chain + 1)
+                .UpdateAsync();
         return makeShadow;
     }
 
@@ -706,9 +893,9 @@ public class SpawnService : INService
             return;
         }
 
-        // Get the image URL
-        var (_, imageUrl) = await _pokemonService.GetPokemonFormInfo(pokemonName, isShiny);
-        if (string.IsNullOrEmpty(imageUrl)) return;
+        // Get the image path
+        var (_, imagePath) = await _pokemonService.GetPokemonFormInfo(pokemonName, isShiny);
+        if (string.IsNullOrEmpty(imagePath)) return;
 
         var shinyEmote = isShiny ? "<a:shiny:1057764628349853786>" : "";
         var spawnMessage = SpawnMessages.Messages[_random.Next(SpawnMessages.Messages.Count)];
@@ -723,29 +910,79 @@ public class SpawnService : INService
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
             .WithFooter("/explain spawns for basic info");
 
-        if (config.SmallImages)
-            embed.WithThumbnailUrl(imageUrl);
-        else
-            embed.WithImageUrl(imageUrl);
-
-        // Create spawn message with or without button
-        IUserMessage spawnMsg;
-        if (config.ModalView)
+        // Check if the image file exists
+        if (!File.Exists(imagePath))
         {
-            var button = new ButtonBuilder()
-                .WithLabel("Catch This Pokemon!")
-                .WithCustomId($"catch:{pokemonName},{isShiny},{legChance},{ubChance}")
-                .WithStyle(ButtonStyle.Primary);
-
-            var component = new ComponentBuilder().WithButton(button);
-
-            spawnMsg = await channel.SendMessageAsync(embed: embed.Build(), components: component.Build());
+            Log.Warning("Pokemon image not found at path: {ImagePath}", imagePath);
+            embed.WithDescription($"{embed.Description}\n\n*[Image not available]*");
         }
         else
         {
-            spawnMsg = await channel.SendMessageAsync(embed: embed.Build());
-            _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
-                ubChance); // Pass the chances here too
+            // Set image attachment filename - use generic name to avoid revealing Pokemon identity
+            var imageFileName = "spawn.png";
+            if (config.SmallImages)
+                embed.WithThumbnailUrl($"attachment://{imageFileName}");
+            else
+                embed.WithImageUrl($"attachment://{imageFileName}");
+        }
+
+        // Create spawn message with or without button
+        IUserMessage spawnMsg;
+        FileStream fileStream = null;
+        
+        try
+        {
+            if (File.Exists(imagePath))
+            {
+                fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                // Use generic filename to not reveal Pokemon identity
+                var imageFileName = "spawn.png";
+                var fileAttachment = new FileAttachment(fileStream, imageFileName);
+
+                if (config.ModalView)
+                {
+                    var button = new ButtonBuilder()
+                        .WithLabel("Catch This Pokemon!")
+                        .WithCustomId($"catch:{pokemonName},{isShiny},{legChance},{ubChance}")
+                        .WithStyle(ButtonStyle.Primary);
+
+                    var component = new ComponentBuilder().WithButton(button);
+                    spawnMsg = await channel.SendFileAsync(fileAttachment, embed: embed.Build(), components: component.Build());
+                }
+                else
+                {
+                    spawnMsg = await channel.SendFileAsync(fileAttachment, embed: embed.Build());
+                    _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
+                        ubChance); // Pass the chances here too
+                }
+            }
+            else
+            {
+                if (config.ModalView)
+                {
+                    var button = new ButtonBuilder()
+                        .WithLabel("Catch This Pokemon!")
+                        .WithCustomId($"catch:{pokemonName},{isShiny},{legChance},{ubChance}")
+                        .WithStyle(ButtonStyle.Primary);
+
+                    var component = new ComponentBuilder().WithButton(button);
+                    spawnMsg = await channel.SendMessageAsync(embed: embed.Build(), components: component.Build());
+                }
+                else
+                {
+                    spawnMsg = await channel.SendMessageAsync(embed: embed.Build());
+                    _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
+                        ubChance); // Pass the chances here too
+                }
+            }
+            
+            // Register the active spawn for tracking
+            _ = RegisterActiveSpawn(spawnMsg.Id, channel.Id, channel.Guild.Id, pokemonName, isShiny, legChance, ubChance);
+        }
+        finally
+        {
+            // Dispose the stream after sending
+            fileStream?.Dispose();
         }
     }
 
@@ -780,24 +1017,28 @@ public class SpawnService : INService
                     var content = message.Content.ToLower().Replace(" ", "-");
                     if (!catchOptions.Contains(content)) continue;
 
-                    // Check if this Pokemon has already been caught
-                    if (await IsPokemonAlreadyCaught(spawnMsg.Id))
-                        // Someone already caught it since we started processing
+                    // Get spawn info from new tracking system
+                    var spawnInfo = await GetActiveSpawn(spawnMsg.Id);
+                    if (spawnInfo == null)
+                        // Spawn no longer active (already caught or expired)
                         break;
 
-                    // Try to mark as caught - this is atomic thanks to Redis
+                    // Try to mark as caught - this is atomic using the old Redis system for backward compatibility
                     if (!await TryMarkPokemonAsCaught(spawnMsg.Id, message.Author.Id))
                         // Another thread marked it as caught before we could
                         break;
 
-                    // Process catch
+                    // Mark spawn as caught in the new system
+                    await MarkSpawnAsCaught(spawnMsg.Id, message.Author.Id);
+
+                    // Process catch using info from spawn tracking
                     var result = await HandleCatch(
                         message.Author.Id,
                         channel.Guild.Id,
-                        pokemonName,
-                        isShiny,
-                        legChance,
-                        ubChance);
+                        spawnInfo.Value.PokemonName,
+                        spawnInfo.Value.IsShiny,
+                        spawnInfo.Value.LegendaryChance,
+                        spawnInfo.Value.UltraBeastChance);
 
                     if (!result.Success) continue;
 
@@ -824,6 +1065,7 @@ public class SpawnService : INService
                         {
                             m.Embed = originalEmbed.Build();
                             m.Components = new ComponentBuilder().Build();
+                            m.Attachments = null;
                         });
 
                         if (result.ShouldPinSpawn)
@@ -835,7 +1077,14 @@ public class SpawnService : INService
                         }
                     }
 
-                    await channel.SendMessageAsync(embed: result.ResponseEmbed);
+                    if (result.ResponseEmbed != null)
+                    {
+                        await channel.SendMessageAsync(embed: result.ResponseEmbed);
+                    }
+                    else if (!string.IsNullOrEmpty(result.Message))
+                    {
+                        await channel.SendMessageAsync(result.Message);
+                    }
                 }
 
                 if (hasCaught) break;
@@ -964,7 +1213,7 @@ public class SpawnService : INService
             .Where(name => PokemonConstants.TotalList.Contains(name))
             .ToList();
 
-        return validForms[_random.Next(validForms.Count)];
+        return validForms.Any() ? validForms[_random.Next(validForms.Count)] : null;
     }
 
     /// <summary>
@@ -986,8 +1235,8 @@ public class SpawnService : INService
         int legendChance,
         int ubChance)
     {
-        await using var dbContext = await _dbContextProvider.GetContextAsync();
-        var user = await dbContext.Users.FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        await using var dbContext = await _dbContextProvider.GetConnectionAsync();
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         var conf = await _mongoDb.Guilds.Find(x => x.GuildId == guildId).FirstOrDefaultAsync();
 
         if (user == null)
@@ -1023,8 +1272,10 @@ public class SpawnService : INService
         if (berryResult.Message != null)
         {
             rewardMessages.Add(berryResult.Message);
-            user.Items = JsonSerializer.Serialize(berryResult.Items);
-            await dbContext.SaveChangesAsync();
+            await dbContext.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Items, JsonSerializer.Serialize(berryResult.Items))
+                .UpdateAsync();
         }
 
         // Handle chest drops
@@ -1032,8 +1283,10 @@ public class SpawnService : INService
         {
             inventory ??= new Dictionary<string, int>();
             inventory["common chest"] = inventory.GetValueOrDefault("common chest", 0) + 1;
-            user.Inventory = JsonSerializer.Serialize(inventory);
-            await dbContext.SaveChangesAsync();
+            await dbContext.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Inventory, JsonSerializer.Serialize(inventory))
+                .UpdateAsync();
             rewardMessages.Add("It also dropped a Common Chest!");
         }
 
@@ -1042,8 +1295,10 @@ public class SpawnService : INService
         if (isPremium)
         {
             var credits = (ulong)_random.NextInt64(100, 251);
-            user.MewCoins += credits;
-            await dbContext.SaveChangesAsync();
+            await dbContext.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.MewCoins, u => u.MewCoins + credits)
+                .UpdateAsync();
             rewardMessages.Add($"[BONUS] You also found {credits} credits!");
         }
 
@@ -1068,7 +1323,7 @@ public class SpawnService : INService
     /// </summary>
     /// <param name="user">The user who caught the Pokemon.</param>
     /// <returns>A tuple containing the message about the berry drop and the updated items dictionary.</returns>
-    private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(Bot_User user)
+    private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(User user)
     {
         var berryChance = _random.Next(1, 101);
         var expensiveChance = _random.Next(1, 26);
@@ -1082,25 +1337,22 @@ public class SpawnService : INService
         string? berry;
         if (berryChance == 1)
         {
-            var cheapItems = await _mongoDb.Shop
-                .Find(i => i.Price <= 8000 && !i.Item.EndsWith("key"))
-                .ToListAsync();
-            berry = cheapItems[_random.Next(cheapItems.Count)].Item;
+            var cheapItems = await GetCachedCheapShopItemsAsync();
+            berry = cheapItems.Count > 0 ? cheapItems[_random.Next(cheapItems.Count)] : null;
         }
         else if (berryChance == expensiveChance)
         {
-            var expensiveItems = await _mongoDb.Shop
-                .Find(i => i.Price >= 8000 && i.Price <= 20000 && !i.Item.EndsWith("key"))
-                .ToListAsync();
-            berry = expensiveItems[_random.Next(expensiveItems.Count)].Item;
+            var expensiveItems = await GetCachedExpensiveShopItemsAsync();
+            berry = expensiveItems.Count > 0 ? expensiveItems[_random.Next(expensiveItems.Count)] : null;
         }
         else
         {
-            var berryList = await _mongoDb.Items
-                .Find(i => i.Identifier.EndsWith("-berry"))
-                .ToListAsync();
-            berry = berryList[_random.Next(berryList.Count)].Identifier;
+            var berryList = await GetCachedBerryItemsAsync();
+            berry = berryList.Count > 0 ? berryList[_random.Next(berryList.Count)] : null;
         }
+
+        if (berry == null)
+            return (null, null);
 
         items[berry] = items.GetValueOrDefault(berry, 0) + 1;
         return ($"It also dropped a {berry}!", items);
@@ -1156,7 +1408,7 @@ public class SpawnService : INService
     /// <param name="gender">The gender of the Pokemon, or null for random.</param>
     /// <param name="level">The level of the Pokemon.</param>
     /// <returns>The created Pokemon object.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon> CreatePokemon(
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> CreatePokemon(
         ulong userId,
         string? pokemonName,
         bool shiny = false,
@@ -1166,33 +1418,23 @@ public class SpawnService : INService
         string gender = null,
         int level = 1)
     {
-        // Get form info from MongoDB
-        var formInfo = await _mongoDb.Forms
-            .Find(f => f.Identifier.Equals(pokemonName.ToLower()))
-            .FirstOrDefaultAsync();
-
+        var pokemonNameLower = pokemonName.ToLower();
+        
+        // Get form info using cached lookup
+        var formInfo = await GetCachedFormInfoAsync(pokemonNameLower);
         if (formInfo == null) return null;
 
-        // Get pokemon info
-        var pokemonInfo = await _mongoDb.PFile
-            .Find(p => p.PokemonId == formInfo.PokemonId)
-            .FirstOrDefaultAsync();
+        // Get pokemon info and abilities using cached data in parallel
+        var pokemonInfoTask = GetCachedPokemonInfoAsync(formInfo.Value.PokemonId, pokemonNameLower);
+        var abilityTask = GetCachedAbilityIdsAsync(formInfo.Value.PokemonId);
+        var natureTask = GetRandomNatureAsync();
 
-        if (pokemonInfo == null && pokemonName.Contains("alola"))
-        {
-            var pokemonNameWithoutSuffix = pokemonName.ToLower().Split("-")[0];
-            pokemonInfo = await _mongoDb.PFile
-                .Find(p => p.Identifier == pokemonNameWithoutSuffix)
-                .FirstOrDefaultAsync();
-        }
+        await Task.WhenAll(pokemonInfoTask, abilityTask, natureTask);
+        var pokemonInfo = await pokemonInfoTask;
+        var abilityIds = await abilityTask;
+        var selectedNature = await natureTask;
 
         if (pokemonInfo == null) return null;
-
-        // Get ability ids
-        var abilityDocs = await _mongoDb.PokeAbilities
-            .Find(a => a.PokemonId == formInfo.PokemonId)
-            .ToListAsync();
-        var abilityIds = abilityDocs.Select(doc => doc.AbilityId).ToList();
 
         // Determine base stats
         var minIv = boosted ? 12 : 1;
@@ -1206,35 +1448,19 @@ public class SpawnService : INService
         var spdIv = _random.Next(minIv, maxIv + 1);
         var speIv = _random.Next(minIv, maxIv + 1);
 
-        // Random nature
-        var nature = await _mongoDb.Natures
-            .Find(_ => true)
-            .ToListAsync();
-        var selectedNature = nature[_random.Next(nature.Count)].Identifier;
-
-        // Determine gender if not provided
+        // Determine gender if not provided (optimized)
         if (string.IsNullOrEmpty(gender))
         {
-            if (pokemonName.ToLower().Contains("nidoran-"))
-                gender = pokemonName.ToLower().EndsWith("f") ? "-f" : "-m";
+            if (pokemonNameLower.Contains("nidoran-"))
+                gender = pokemonNameLower.EndsWith("f") ? "-f" : "-m";
             else
-                switch (pokemonName.ToLower())
+                gender = pokemonNameLower switch
                 {
-                    case "illumise":
-                        gender = "-f";
-                        break;
-                    case "volbeat":
-                        gender = "-m";
-                        break;
-                    default:
-                    {
-                        if (pokemonInfo.GenderRate == -1)
-                            gender = "-x";
-                        else
-                            gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
-                        break;
-                    }
-                }
+                    "illumise" => "-f",
+                    "volbeat" => "-m", 
+                    _ => pokemonInfo.Value.GenderRate == -1 ? "-x" 
+                        : _random.Next(8) < pokemonInfo.Value.GenderRate ? "-f" : "-m"
+                };
         }
 
         // Check for shadow override if no skin is specified
@@ -1251,8 +1477,7 @@ public class SpawnService : INService
         }
 
         // Create the Pokemon
-        var pokemon = new Database.Models.PostgreSQL.Pokemon.Pokemon
-        {
+        var pokemon = new Database.Linq.Models.Pokemon.Pokemon{
             PokemonName = pokemonName.Capitalize(),
             Nickname = "None",
             Gender = gender,
@@ -1287,51 +1512,62 @@ public class SpawnService : INService
             Tradable = true,
             Breedable = true,
             Temporary = false,
-            Happiness = pokemonInfo.BaseHappiness ?? 70,
+            Happiness = pokemonInfo.Value.BaseHappiness,
             Timestamp = DateTime.UtcNow
         };
 
-        // Start a transaction to ensure consistency
-        await using var dbContext = await _dbContextProvider.GetContextAsync();
-        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        await using var dbContext = await _dbContextProvider.GetConnectionAsync();
 
         try
         {
-            // Add and save the Pokemon to get its ID
-            await dbContext.UserPokemon.AddAsync(pokemon);
-            await dbContext.SaveChangesAsync();
+            // Insert Pokemon first and get its ID
+            pokemon.Id = (ulong)await dbContext.InsertWithInt64IdentityAsync(pokemon);
 
-            // Find the highest current position for this user
-            var highestPosition = await dbContext.UserPokemonOwnerships
-                .Where(o => o.UserId == userId)
-                .OrderByDescending(o => o.Position)
-                .Select(o => (int?)o.Position)
-                .FirstOrDefaultAsync() ?? -1;
-
-            // Create a new ownership record with the next position
-            var ownership = new UserPokemonOwnership
+            // Retry logic for handling concurrent position conflicts
+            UserPokemonOwnership? ownership = null;
+            var maxRetries = 5;
+            
+            for (var attempt = 0; attempt < maxRetries; attempt++)
             {
-                UserId = userId,
-                PokemonId = pokemon.Id,
-                Position = highestPosition + 1 // Use the next available position
-            };
+                try
+                {
+                    var highestPosition = await dbContext.UserPokemonOwnerships
+                        .Where(o => o.UserId == userId)
+                        .OrderByDescending(o => o.Position)
+                        .Select(o => (int?)o.Position)
+                        .FirstOrDefaultAsync() ?? -1;
 
-            await dbContext.UserPokemonOwnerships.AddAsync(ownership);
+                    ownership = new UserPokemonOwnership
+                    {
+                        UserId = userId,
+                        PokemonId = pokemon.Id,
+                        Position = (ulong)(highestPosition + 1)
+                    };
 
-            // Update achievements
+                    await dbContext.InsertAsync(ownership);
+                    break; // Success
+                }
+                catch (Exception ex) when (ex.Message.Contains("duplicate key") && attempt < maxRetries - 1)
+                {
+                    // Small random delay to reduce collision probability
+                    await Task.Delay(_random.Next(10, 50));
+                }
+            }
+
+            // Update achievements (keep this separate to avoid connection conflicts)
             if (shiny)
-                await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                    $"UPDATE achievements SET shiny_caught = shiny_caught + 1 WHERE u_id = {userId}");
+                await dbContext.Achievements
+                    .Where(a => a.UserId == userId)
+                    .Set(a => a.ShinyCaught, a => a.ShinyCaught + 1)
+                    .UpdateAsync();
             else
-                await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                    $"UPDATE achievements SET pokemon_caught = pokemon_caught + 1 WHERE u_id = {userId}");
-
-            await dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await dbContext.Achievements
+                    .Where(a => a.UserId == userId)
+                    .Set(a => a.PokemonCaught, a => a.PokemonCaught + 1)
+                    .UpdateAsync();
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
             Log.Error(ex, "Error creating Pokemon {Name} for user {UserId}", pokemonName, userId);
             return null;
         }
@@ -1562,6 +1798,487 @@ public class SpawnService : INService
 
         return embed.Build();
     }
+
+    #region Spawn Tracking
+
+    /// <summary>
+    ///     Initializes the spawn tracking system by loading active spawns from database to cache.
+    ///     Called on bot startup to restore spawn state.
+    /// </summary>
+    public async Task InitializeSpawnTracking()
+    {
+        try
+        {
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            
+            // Get all active spawns from database (not caught and created within last 24 hours)
+            var cutoffTime = DateTime.UtcNow.AddHours(-24);
+            var activeSpawns = await db.ActiveSpawns
+                .Where(s => !s.IsCaught && s.CreatedAt > cutoffTime)
+                .ToListAsync();
+
+            var redis = _cache.Redis.GetDatabase();
+            
+            foreach (var spawn in activeSpawns)
+            {
+                // Check if spawn still exists in cache
+                var cacheKey = $"spawn:active:{spawn.MessageId}";
+                var exists = await redis.KeyExistsAsync(cacheKey);
+                
+                if (!exists)
+                {
+                    // Add to cache with remaining TTL (24 hours from creation)
+                    var remainingTime = spawn.CreatedAt.AddHours(24) - DateTime.UtcNow;
+                    if (remainingTime.TotalMinutes > 0)
+                    {
+                        var spawnData = new
+                        {
+                            spawn.MessageId,
+                            spawn.ChannelId,
+                            spawn.GuildId,
+                            spawn.PokemonName,
+                            spawn.IsShiny,
+                            spawn.LegendaryChance,
+                            spawn.UltraBeastChance,
+                            spawn.CreatedAt
+                        };
+                        
+                        await redis.StringSetAsync(cacheKey, 
+                            JsonSerializer.Serialize(spawnData),
+                            remainingTime);
+                    }
+                    else
+                    {
+                        // Spawn is too old, mark as expired
+                        spawn.IsCaught = true;
+                        spawn.CaughtAt = DateTime.UtcNow;
+                    }
+                }
+            }
+            
+            Log.Information("Initialized spawn tracking with {Count} active spawns", activeSpawns.Count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error initializing spawn tracking");
+        }
+    }
+
+    /// <summary>
+    ///     Registers a new active spawn in both cache and database.
+    /// </summary>
+    /// <param name="messageId">The Discord message ID of the spawn.</param>
+    /// <param name="channelId">The Discord channel ID.</param>
+    /// <param name="guildId">The Discord guild ID.</param>
+    /// <param name="pokemonName">The name of the spawned Pokemon.</param>
+    /// <param name="isShiny">Whether the Pokemon is shiny.</param>
+    /// <param name="legendaryChance">The legendary spawn chance value.</param>
+    /// <param name="ultraBeastChance">The Ultra Beast spawn chance value.</param>
+    public async Task RegisterActiveSpawn(ulong messageId, ulong channelId, ulong guildId, 
+        string pokemonName, bool isShiny, int legendaryChance, int ultraBeastChance)
+    {
+        try
+        {
+            var redis = _cache.Redis.GetDatabase();
+            var cacheKey = $"spawn:active:{messageId}";
+            
+            var spawnData = new
+            {
+                MessageId = messageId,
+                ChannelId = channelId,
+                GuildId = guildId,
+                PokemonName = pokemonName,
+                IsShiny = isShiny,
+                LegendaryChance = legendaryChance,
+                UltraBeastChance = ultraBeastChance,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            // Cache for 24 hours
+            await redis.StringSetAsync(cacheKey, 
+                JsonSerializer.Serialize(spawnData),
+                TimeSpan.FromHours(24));
+            
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            var activeSpawn = new ActiveSpawn
+            {
+                MessageId = messageId,
+                ChannelId = channelId,
+                GuildId = guildId,
+                PokemonName = pokemonName,
+                IsShiny = isShiny,
+                LegendaryChance = legendaryChance,
+                UltraBeastChance = ultraBeastChance,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            await db.InsertAsync(activeSpawn);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error registering active spawn {MessageId}", messageId);
+        }
+    }
+
+    /// <summary>
+    ///     Gets an active spawn by message ID from cache, falling back to database.
+    /// </summary>
+    /// <param name="messageId">The Discord message ID of the spawn.</param>
+    /// <returns>The spawn data if found, null otherwise.</returns>
+    public async Task<(string PokemonName, bool IsShiny, int LegendaryChance, int UltraBeastChance)?> GetActiveSpawn(ulong messageId)
+    {
+        try
+        {
+            var redis = _cache.Redis.GetDatabase();
+            var cacheKey = $"spawn:active:{messageId}";
+            
+            // Try cache first
+            var cachedData = await redis.StringGetAsync(cacheKey);
+            if (cachedData.HasValue)
+            {
+                var spawnData = JsonSerializer.Deserialize<dynamic>(cachedData);
+                return (
+                    spawnData.GetProperty("PokemonName").GetString(),
+                    spawnData.GetProperty("IsShiny").GetBoolean(),
+                    spawnData.GetProperty("LegendaryChance").GetInt32(),
+                    spawnData.GetProperty("UltraBeastChance").GetInt32()
+                );
+            }
+            
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            var spawn = await db.GetTable<ActiveSpawn>()
+                .FirstOrDefaultAsync(s => s.MessageId == messageId && !s.IsCaught);
+                
+            if (spawn != null)
+            {
+                // Re-cache if found in database
+                var spawnData = new
+                {
+                    spawn.MessageId,
+                    spawn.ChannelId,
+                    spawn.GuildId,
+                    spawn.PokemonName,
+                    spawn.IsShiny,
+                    spawn.LegendaryChance,
+                    spawn.UltraBeastChance,
+                    spawn.CreatedAt
+                };
+                
+                var remainingTime = spawn.CreatedAt.AddHours(24) - DateTime.UtcNow;
+                if (remainingTime.TotalMinutes > 0)
+                {
+                    await redis.StringSetAsync(cacheKey, 
+                        JsonSerializer.Serialize(spawnData),
+                        remainingTime);
+                }
+                
+                return (spawn.PokemonName, spawn.IsShiny, spawn.LegendaryChance, spawn.UltraBeastChance);
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error getting active spawn {MessageId}", messageId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Marks a spawn as caught in both cache and database.
+    /// </summary>
+    /// <param name="messageId">The Discord message ID of the spawn.</param>
+    /// <param name="userId">The user ID who caught the Pokemon.</param>
+    public async Task MarkSpawnAsCaught(ulong messageId, ulong userId)
+    {
+        try
+        {
+            var redis = _cache.Redis.GetDatabase();
+            var cacheKey = $"spawn:active:{messageId}";
+            
+            // Remove from cache
+            await redis.KeyDeleteAsync(cacheKey);
+            
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            await db.GetTable<ActiveSpawn>()
+                .Where(s => s.MessageId == messageId)
+                .Set(s => s.IsCaught, true)
+                .Set(s => s.CaughtAt, DateTime.UtcNow)
+                .Set(s => s.CaughtByUserId, userId)
+                .UpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error marking spawn as caught {MessageId}", messageId);
+        }
+    }
+
+    /// <summary>
+    ///     Gets all active spawns for a channel.
+    /// </summary>
+    /// <param name="channelId">The Discord channel ID.</param>
+    /// <returns>List of active spawn message IDs in the channel.</returns>
+    public async Task<List<ulong>> GetActiveSpawnsInChannel(ulong channelId)
+    {
+        try
+        {
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+            var cutoffTime = DateTime.UtcNow.AddHours(-24);
+            
+            return await db.GetTable<ActiveSpawn>()
+                .Where(s => s.ChannelId == channelId && !s.IsCaught && s.CreatedAt > cutoffTime)
+                .Select(s => s.MessageId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error getting active spawns for channel {ChannelId}", channelId);
+            return new List<ulong>();
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    ///     Called when the bot is ready. Initializes spawn tracking system.
+    /// </summary>
+    public async Task OnReadyAsync()
+    {
+        await InitializeSpawnTracking();
+    }
+
+    #region Cached Data Methods
+
+    private static List<string>? _cachedNatures;
+    private static DateTime _naturesLastCached = DateTime.MinValue;
+    private static Dictionary<int, List<string>>? _cachedFormsByPokemonId;
+    private static DateTime _formsLastCached = DateTime.MinValue;
+    private static Dictionary<string, (int PokemonId, int GenderRate, int BaseHappiness)>? _cachedPokemonInfo;
+    private static DateTime _pokemonInfoLastCached = DateTime.MinValue;
+    private static Dictionary<int, List<int>>? _cachedAbilitiesByPokemonId;
+    private static DateTime _abilitiesLastCached = DateTime.MinValue;
+    private static Dictionary<int, List<string>>? _cachedPokemonByType;
+    private static DateTime _pokemonByTypeLastCached = DateTime.MinValue;
+    private static List<string>? _cachedCheapShopItems;
+    private static DateTime _cheapShopItemsLastCached = DateTime.MinValue;
+    private static List<string>? _cachedExpensiveShopItems;
+    private static DateTime _expensiveShopItemsLastCached = DateTime.MinValue;
+    private static List<string>? _cachedBerryItems;
+    private static DateTime _berryItemsLastCached = DateTime.MinValue;
+    private static readonly TimeSpan CacheExpiry = TimeSpan.FromHours(1);
+
+    /// <summary>
+    ///     Gets a random nature using cached data for performance.
+    /// </summary>
+    private async Task<string> GetRandomNatureAsync()
+    {
+        if (_cachedNatures == null || DateTime.UtcNow - _naturesLastCached > CacheExpiry)
+        {
+            var natures = await _mongoDb.Natures
+                .Find(_ => true)
+                .Project(n => n.Identifier)
+                .ToListAsync();
+            
+            _cachedNatures = natures;
+            _naturesLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedNatures[_random.Next(_cachedNatures.Count)];
+    }
+
+    /// <summary>
+    ///     Gets cached Pokemon form information for fast lookups.
+    /// </summary>
+    private async Task<(int PokemonId, string Identifier)?> GetCachedFormInfoAsync(string pokemonNameLower)
+    {
+        if (_cachedFormsByPokemonId == null || DateTime.UtcNow - _formsLastCached > CacheExpiry)
+        {
+            var forms = await _mongoDb.Forms
+                .Find(_ => true)
+                .Project(f => new { f.PokemonId, f.Identifier })
+                .ToListAsync();
+            
+            _cachedFormsByPokemonId = forms
+                .GroupBy(f => f.PokemonId)
+                .ToDictionary(g => g.Key, g => g.Select(f => f.Identifier).ToList());
+            
+            _formsLastCached = DateTime.UtcNow;
+        }
+
+        var form = await _mongoDb.Forms
+            .Find(f => f.Identifier.Equals(pokemonNameLower))
+            .Project(f => new { f.PokemonId, f.Identifier })
+            .FirstOrDefaultAsync();
+
+        return form != null ? (form.PokemonId, form.Identifier) : null;
+    }
+
+    /// <summary>
+    ///     Gets cached Pokemon info for fast lookups.
+    /// </summary>
+    private async Task<(int GenderRate, int BaseHappiness)?> GetCachedPokemonInfoAsync(int pokemonId, string pokemonNameLower)
+    {
+        if (_cachedPokemonInfo == null || DateTime.UtcNow - _pokemonInfoLastCached > CacheExpiry)
+        {
+            var pokemonInfos = await _mongoDb.PFile
+                .Find(_ => true)
+                .Project(p => new { p.PokemonId, p.Identifier, p.GenderRate, p.BaseHappiness })
+                .ToListAsync();
+            
+            _cachedPokemonInfo = pokemonInfos.ToDictionary(
+                p => p.Identifier, 
+                p => (p.PokemonId ?? 0, p.GenderRate ?? 0, p.BaseHappiness ?? 70)
+            );
+            
+            _pokemonInfoLastCached = DateTime.UtcNow;
+        }
+
+        // Try direct lookup first
+        if (_cachedPokemonInfo.TryGetValue(pokemonNameLower, out var info))
+            return (info.GenderRate, info.BaseHappiness);
+
+        // Handle Alola variant fallback
+        if (pokemonNameLower.Contains("alola"))
+        {
+            var pokemonNameWithoutSuffix = pokemonNameLower.Split("-")[0];
+            if (_cachedPokemonInfo.TryGetValue(pokemonNameWithoutSuffix, out var alolaInfo))
+                return (alolaInfo.GenderRate, alolaInfo.BaseHappiness);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Gets cached ability IDs for a Pokemon.
+    /// </summary>
+    private async Task<List<int>> GetCachedAbilityIdsAsync(int pokemonId)
+    {
+        if (_cachedAbilitiesByPokemonId == null || DateTime.UtcNow - _abilitiesLastCached > CacheExpiry)
+        {
+            var abilities = await _mongoDb.PokeAbilities
+                .Find(_ => true)
+                .Project(a => new { a.PokemonId, a.AbilityId })
+                .ToListAsync();
+            
+            _cachedAbilitiesByPokemonId = abilities
+                .GroupBy(a => a.PokemonId)
+                .ToDictionary(g => g.Key, g => g.Select(a => a.AbilityId).ToList());
+            
+            _abilitiesLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedAbilitiesByPokemonId.GetValueOrDefault(pokemonId, new List<int>());
+    }
+
+    /// <summary>
+    ///     Gets cached Pokemon names by type for fast lookups.
+    /// </summary>
+    private async Task<List<string>> GetCachedPokemonByTypeAsync(int typeId)
+    {
+        if (_cachedPokemonByType == null || DateTime.UtcNow - _pokemonByTypeLastCached > CacheExpiry)
+        {
+            // Load all Pokemon types and forms in parallel
+            var pokemonTypesTask = _mongoDb.PokemonTypes
+                .Find(_ => true)
+                .Project(p => new { p.PokemonId, p.Types })
+                .ToListAsync();
+
+            var formsTask = _mongoDb.Forms
+                .Find(_ => true)
+                .Project(f => new { f.PokemonId, f.Identifier })
+                .ToListAsync();
+
+            await Task.WhenAll(pokemonTypesTask, formsTask);
+            var pokemonTypes = await pokemonTypesTask;
+            var forms = await formsTask;
+
+            // Create Pokemon ID to form name mapping
+            var pokemonIdToForms = forms
+                .GroupBy(f => f.PokemonId)
+                .ToDictionary(g => g.Key, g => g.Select(f => f.Identifier.ToTitleCase()).ToList());
+
+            // Build type to Pokemon mapping
+            _cachedPokemonByType = new Dictionary<int, List<string>>();
+            
+            foreach (var pokemonType in pokemonTypes)
+            {
+                foreach (var type in pokemonType.Types)
+                {
+                    if (!_cachedPokemonByType.ContainsKey(type))
+                        _cachedPokemonByType[type] = new List<string>();
+
+                    if (pokemonIdToForms.TryGetValue(pokemonType.PokemonId, out var formNames))
+                    {
+                        var validForms = formNames.Where(name => PokemonConstants.TotalList.Contains(name));
+                        _cachedPokemonByType[type].AddRange(validForms);
+                    }
+                }
+            }
+
+            _pokemonByTypeLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedPokemonByType.GetValueOrDefault(typeId, new List<string>());
+    }
+
+    /// <summary>
+    ///     Gets cached cheap shop items for berry drop rewards.
+    /// </summary>
+    private async Task<List<string>> GetCachedCheapShopItemsAsync()
+    {
+        if (_cachedCheapShopItems == null || DateTime.UtcNow - _cheapShopItemsLastCached > CacheExpiry)
+        {
+            var cheapItems = await _mongoDb.Shop
+                .Find(i => i.Price <= 8000 && !i.Item.EndsWith("key"))
+                .Project(i => i.Item)
+                .ToListAsync();
+            
+            _cachedCheapShopItems = cheapItems;
+            _cheapShopItemsLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedCheapShopItems;
+    }
+
+    /// <summary>
+    ///     Gets cached expensive shop items for berry drop rewards.
+    /// </summary>
+    private async Task<List<string>> GetCachedExpensiveShopItemsAsync()
+    {
+        if (_cachedExpensiveShopItems == null || DateTime.UtcNow - _expensiveShopItemsLastCached > CacheExpiry)
+        {
+            var expensiveItems = await _mongoDb.Shop
+                .Find(i => i.Price >= 8000 && i.Price <= 20000 && !i.Item.EndsWith("key"))
+                .Project(i => i.Item)
+                .ToListAsync();
+            
+            _cachedExpensiveShopItems = expensiveItems;
+            _expensiveShopItemsLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedExpensiveShopItems;
+    }
+
+    /// <summary>
+    ///     Gets cached berry items for berry drop rewards.
+    /// </summary>
+    private async Task<List<string>> GetCachedBerryItemsAsync()
+    {
+        if (_cachedBerryItems == null || DateTime.UtcNow - _berryItemsLastCached > CacheExpiry)
+        {
+            var berryItems = await _mongoDb.Items
+                .Find(i => i.Identifier.EndsWith("-berry"))
+                .Project(i => i.Identifier)
+                .ToListAsync();
+            
+            _cachedBerryItems = berryItems;
+            _berryItemsLastCached = DateTime.UtcNow;
+        }
+
+        return _cachedBerryItems;
+    }
+
+    #endregion
 
     /// <summary>
     ///     Represents the result of a Pokemon catch attempt.

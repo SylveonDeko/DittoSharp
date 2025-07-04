@@ -1,11 +1,10 @@
 using System.Text.Json;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Modules.Duels.Services;
 using EeveeCore.Services.Impl;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using Serilog;
 
 namespace EeveeCore.Modules.Duels;
@@ -24,18 +23,18 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     private const string DATE_FORMAT = "MM/dd/yyyy, HH:mm:ss";
 
     /// <summary>
-    ///     Collection of GIFs to display during battle loading screens.
+    ///     Collection of local GIF files to display during battle loading screens.
     /// </summary>
     private static readonly string[] PregameGifs =
     [
-        "https://skylarr1227.github.io/images/duel1.gif",
-        "https://skylarr1227.github.io/images/duel2.gif",
-        "https://skylarr1227.github.io/images/duel3.gif",
-        "https://skylarr1227.github.io/images/duel4.gif"
+        Path.Combine("data", "images", "duel1.gif"),
+        Path.Combine("data", "images", "duel2.gif"),
+        Path.Combine("data", "images", "duel3.gif"),
+        Path.Combine("data", "images", "duel4.gif")
     ];
 
     private readonly DiscordShardedClient _client;
-    private readonly DbContextProvider _db;
+    private readonly LinqToDbConnectionProvider _db;
     private readonly IMongoService _mongoService;
     private readonly RedisCache _redis;
 
@@ -48,7 +47,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     /// <param name="redis">The Redis cache for cooldown management.</param>
     public PokemonBattleModule(
         IMongoService mongoService,
-        DbContextProvider db,
+        LinqToDbConnectionProvider db,
         DiscordShardedClient client,
         RedisCache redis)
     {
@@ -227,7 +226,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             }
 
             // Retrieve the user's data and selected Pokemon
-            await using var dbContext = await _db.GetContextAsync();
+            await using var dbContext = await _db.GetConnectionAsync();
 
             // Check if user exists and has energy
             var userData = await dbContext.Users
@@ -278,23 +277,32 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             if (!energyImmune)
             {
                 userData.Energy -= 1;
-                await dbContext.SaveChangesAsync();
+                await dbContext.UpdateAsync(userData);
             }
 
-            // Create loading embed
+            // Create loading embed with local GIF attachment
+            var selectedGifPath = PregameGifs[new Random().Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle loading...")
                 .WithDescription("Preparing your battle against an NPC trainer!")
-                .WithColor(new Color(255, 182, 193))
-                .WithImageUrl(PregameGifs[new Random().Next(PregameGifs.Length)]);
+                .WithColor(new Color(255, 182, 193));
 
-            await FollowupAsync(embed: loadingEmbed.Build());
+            if (File.Exists(selectedGifPath))
+            {
+                loadingEmbed.WithImageUrl("attachment://duel.gif");
+                await using var fileStream = new FileStream(selectedGifPath, FileMode.Open, FileAccess.Read);
+                var fileAttachment = new FileAttachment(fileStream, "duel.gif");
+                await FollowupWithFileAsync(embed: loadingEmbed.Build(), attachment: fileAttachment);
+            }
+            else
+            {
+                await FollowupAsync(embed: loadingEmbed.Build());
+            }
 
-            // Find an NPC Pokemon of similar level
+            // Find an NPC Pokemon of similar level (remove complex array operations)
             var npcPokemonList = await dbContext.UserPokemon
                 .Where(p => p.Level >= selectedPokemon.Level - 10 &&
                             p.Level <= selectedPokemon.Level + 10 &&
-                            !p.Moves.Contains("tackle") &&
                             p.AttackIv <= 31 &&
                             p.DefenseIv <= 31 &&
                             p.SpecialAttackIv <= 31 &&
@@ -304,6 +312,14 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 .OrderByDescending(p => p.Id)
                 .Take(1000)
                 .ToListAsync();
+
+            // Filter out Pokemon with "tackle" moves in memory (avoid LinqToDB translation issues)
+            if (npcPokemonList.Count > 0)
+            {
+                npcPokemonList = npcPokemonList
+                    .Where(p => p.Moves == null || !p.Moves.Any(m => m != null && m.Equals("tackle", StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+            }
 
             if (npcPokemonList.Count == 0)
             {
@@ -369,7 +385,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     {
         try
         {
-            await using var dbContext = await _db.GetContextAsync();
+            await using var db = await _db.GetConnectionAsync();
 
             decimal battleMulti = 1;
 
@@ -430,23 +446,23 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             var desc = $"You received {creds} credits for winning the duel!\n\n";
 
             // Update achievements
-            await dbContext.Achievements
+            await db.Achievements
                 .Where(a => a.UserId == userId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(a => a.DuelsTotal, a => a.DuelsTotal + 1)
-                    .SetProperty(a => a.NpcWins, a => a.NpcWins + 1));
+                .Set(a => a.DuelsTotal, a => a.DuelsTotal + 1)
+                .Set(a => a.NpcWins, a => a.NpcWins + 1)
+                .UpdateAsync();
 
             // Add credits to user
-            await dbContext.Users
+            await db.Users
                 .Where(u => u.UserId == userId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(u => u.MewCoins, u => u.MewCoins + Convert.ToUInt64(creds)));
+                .Set(u => u.MewCoins, u => u.MewCoins + Convert.ToUInt64(creds))
+                .UpdateAsync();
 
             // Grant XP to winning Pokemon
-            foreach (var poke in winner.Party.Where(p => p.Hp > 0 && p.EverSentOut))
+            foreach (var poke in winner.Party.Where(p => p is { Hp: > 0, EverSentOut: true }))
             {
                 // Get Pokemon data
-                var pokeData = await dbContext.UserPokemon
+                var pokeData = await db.UserPokemon
                     .FirstOrDefaultAsync(p => p.Id == poke.Id);
 
                 if (pokeData == null)
@@ -470,11 +486,11 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 desc += $"{poke.Name} got {exp} exp from winning.\n";
 
                 // Update Pokemon
-                await dbContext.UserPokemon
+                await db.UserPokemon
                     .Where(p => p.Id == poke.Id)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(p => p.Happiness, p => p.Happiness + 1)
-                        .SetProperty(p => p.Experience, p => p.Experience + exp));
+                    .Set(p => p.Happiness, p => p.Happiness + 1)
+                    .Set(p => p.Experience, p => p.Experience + exp)
+                    .UpdateAsync();
             }
 
             // Add advertisement

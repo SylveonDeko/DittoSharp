@@ -1,7 +1,6 @@
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Services.Impl;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using Serilog;
 using StackExchange.Redis;
 
@@ -23,7 +22,7 @@ public class DuelService : INService
     private readonly Dictionary<(ulong, ulong), Battle> _activeBattles = new();
 
     private readonly DiscordShardedClient _client;
-    private readonly DbContextProvider _db;
+    private readonly LinqToDbConnectionProvider _db;
     private readonly IMongoService _mongoService;
     private readonly RedisCache _redis;
     private DateTime? _duelResetTime;
@@ -38,7 +37,7 @@ public class DuelService : INService
     /// <param name="redis">The Redis cache for cooldown and battle state persistence.</param>
     public DuelService(
         IMongoService mongoService,
-        DbContextProvider db,
+        LinqToDbConnectionProvider db,
         DiscordShardedClient client,
         RedisCache redis)
     {
@@ -103,9 +102,9 @@ public class DuelService : INService
 
         try
         {
-            await using var dbContext = await _db.GetContextAsync();
+            await using var db = await _db.GetConnectionAsync();
             // Get the user's party array directly
-            var user = await dbContext.Users
+            var user = await db.Users
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null || user.Party == null) return duelPokemon; // Return empty list
@@ -115,7 +114,7 @@ public class DuelService : INService
             if (!partyIds.Any()) return duelPokemon;
 
             // Fetch all Pokémon data for the party in a single query
-            var partyPokemon = await dbContext.UserPokemon
+            var partyPokemon = await db.UserPokemon
                 .Where(x => x.Owner.HasValue)
                 .Where(p => partyIds.Contains(p.Id))
                 .ToListAsync();

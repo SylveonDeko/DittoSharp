@@ -4,13 +4,11 @@ using System.Text.RegularExpressions;
 using Discord.Interactions;
 using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
-using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
+using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Modules.Extras.Services;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Services.Impl;
-using LinqToDB.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
+using LinqToDB;
 using MongoDB.Driver;
 using Serilog;
 
@@ -130,7 +128,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
     // List of all Pokémon
     private static readonly List<string> TotalList = [];
-    private readonly DbContextProvider _dbContextProvider;
+    private readonly LinqToDbConnectionProvider _dbContextProvider;
     private readonly GuildSettingsService _guildSettingsService;
     private readonly IMongoService _mongoService;
     private readonly PokemonService _pokemonService;
@@ -146,7 +144,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     /// <param name="pokemonService">The Pokémon service for evolution and other related operations.</param>
     public ExtrasModule(
         IMongoService mongoService,
-        DbContextProvider dbContextProvider,
+        LinqToDbConnectionProvider dbContextProvider,
         GuildSettingsService guildSettingsService,
         PokemonService pokemonService)
     {
@@ -212,13 +210,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [SlashCommand("region", "Set your region, affects your pokemon's regional evolutions")]
     public async Task Region(Regions location)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Region, location.ToString().ToLower()));
+            .Set(x => x.Region, location.ToString().ToLower())
+            .UpdateAsync();
 
-        await db.SaveChangesAsync();
+        
 
         await RespondAsync($"Your region has been set to **{location.ToString().Capitalize()}**.", ephemeral: true);
     }
@@ -255,12 +253,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             return;
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var userNick = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => u.TrainerNickname)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (userNick != null)
         {
@@ -271,7 +269,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var existingUser = await db.Users
             .Where(u => u.TrainerNickname == name)
             .Select(u => u.UserId)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (existingUser != 0)
         {
@@ -280,10 +278,10 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         }
 
         await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.TrainerNickname, name));
+            .Set(x => x.TrainerNickname, name)
+            .UpdateAsync();
 
-        await db.SaveChangesAsync();
+        
 
         await RespondAsync("Successfully Changed Trainer Nick");
     }
@@ -304,12 +302,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             return;
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var userData = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => new { u.Hunt, u.Chain })
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (userData == null)
         {
@@ -345,11 +343,11 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         }
 
         await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.Hunt, pokemon)
-                .SetProperty(x => x.Chain, addChain));
+            .Set(x => x.Hunt, pokemon)
+            .Set(x => x.Chain, addChain)
+            .UpdateAsync();
 
-        await db.SaveChangesAsync();
+        
 
         var embed = new EmbedBuilder()
             .WithTitle("Shadow Hunt")
@@ -384,9 +382,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             return;
         }
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == ctx.User.Id);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == ctx.User.Id);
         if (user == null)
         {
             await RespondAsync("You have not Started!\nStart with `/start` first!", ephemeral: true);
@@ -423,10 +421,10 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         }
 
         await db.Users.Where(u => u.UserId == ctx.User.Id)
-            .ExecuteUpdateAsync(u => u
-                .SetProperty(x => x.HeldItem, normalizedItem));
+            .Set(u => u.HeldItem, normalizedItem)
+            .UpdateAsync();
 
-        await db.SaveChangesAsync();
+        
 
         await RespondAsync($"You have successfully equipped {fishingRod.ToString()} rod.", ephemeral: true);
     }
@@ -443,9 +441,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         user ??= ctx.User;
         _hidden = hidden;
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
         if (details == null)
         {
             await RespondAsync($"{user.Username} has not started!");
@@ -504,7 +502,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             embed.WithFooter(
                 $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
+                $"attachment://di.webp"
             );
 
             embed.WithAuthor(
@@ -529,6 +527,19 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
             .Build();
 
+        // Check if we need to send di.webp attachment for staff members
+        if (staffRank.ToLower() != "user" && staffRank.ToLower() != "gym")
+        {
+            var diImagePath = Path.Combine("data", "images", "di.webp");
+            if (File.Exists(diImagePath))
+            {
+                await using var fileStream = new FileStream(diImagePath, FileMode.Open, FileAccess.Read);
+                var fileAttachment = new FileAttachment(fileStream, "di.webp");
+                await RespondWithFileAsync(embed: embed.Build(), components: components, ephemeral: hidden, attachment: fileAttachment);
+                return;
+            }
+        }
+        
         await RespondAsync(embed: embed.Build(), components: components, ephemeral: hidden);
     }
 
@@ -543,9 +554,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     /// </remarks>
     public async Task BalanceChests(IUser user)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
         if (details == null)
         {
             await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
@@ -587,7 +598,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             embed.WithFooter(
                 $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
+                $"attachment://di.webp"
             );
 
             embed.WithAuthor(
@@ -625,9 +636,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     /// </remarks>
     public async Task BalanceTokens(IUser user)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var details = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == user.Id);
+        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
         if (details == null)
         {
             await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
@@ -678,7 +689,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             embed.WithFooter(
                 $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
+                $"attachment://di.webp"
             );
 
             embed.WithAuthor(
@@ -720,7 +731,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     {
         StringBuilder desc = new();
 
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
         if (details == null)
@@ -828,7 +839,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             embed.WithFooter(
                 $"DittoBOT {staffRank}",
-                "https://images.mewdeko.tech/images/di.webp"
+                $"attachment://di.webp"
             );
 
             embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
@@ -856,12 +867,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [SlashCommand("bag", "Lists your items.")]
     public async Task Bag(bool hidden = true)
     {
-        await using var db = await _dbContextProvider.GetContextAsync();
+        await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var items = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => u.Items)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (items == null)
         {
@@ -902,13 +913,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [Group("spread", "Commands for spreading Honey")]
     public class SpreadCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        private readonly DbContextProvider _dbContextProvider;
+        private readonly LinqToDbConnectionProvider _dbContextProvider;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SpreadCommands" /> class.
         /// </summary>
         /// <param name="dbContextProvider">The database context provider.</param>
-        public SpreadCommands(DbContextProvider dbContextProvider)
+        public SpreadCommands(LinqToDbConnectionProvider dbContextProvider)
         {
             _dbContextProvider = dbContextProvider;
         }
@@ -920,7 +931,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("honey", "Spread honey in the current channel to increase legendary and rare spawn rates")]
         public async Task SpreadHoney()
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var inventory = await db.Users
                 .FirstOrDefaultAsync(u => u.UserId == ctx.User.Id);
@@ -932,7 +943,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             }
 
             var honey = await db.Honey
-                .FirstOrDefaultAsyncEF(h => h.ChannelId == ctx.Channel.Id);
+                .FirstOrDefaultAsync(h => h.ChannelId == ctx.Channel.Id);
 
             if (honey != null)
             {
@@ -952,7 +963,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             inventoryDict["honey"]--;
             var expires = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
 
-            await db.Honey.AddAsync(new Honey
+            await db.InsertAsync(new Honey
             {
                 ChannelId = ctx.Channel.Id,
                 Expires = (int)expires,
@@ -961,9 +972,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             });
 
             inventory.Inventory = JsonSerializer.Serialize(inventoryDict);
-            db.Users.Update(inventory);
+            await db.UpdateAsync(inventory);
 
-            await db.SaveChangesAsync();
+            
 
             await RespondAsync(
                 $"You have successfully spread some of your honey!\n> 🕐**Lasts for:** <t:{expires}:R> 🕐");
@@ -981,11 +992,11 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 .WithColor(0xFFBC61)
                 .AddField("Official Server", "[Join the Official Server](https://discord.gg/ditto)");
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
             var channelIds = (await ctx.Guild.GetTextChannelsAsync()).Select(c => c.Id).ToList();
             var honeyLocations = await db.Honey
                 .Where(h => channelIds.Contains(h.ChannelId))
-                .ToListAsyncEF();
+                .ToListAsync();
 
             StringBuilder desc = new();
             foreach (var honey in honeyLocations)
@@ -1024,13 +1035,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             "Calm", "Gentle", "Sassy", "Careful", "Quirky"
         ];
 
-        private readonly DbContextProvider _dbContextProvider;
+        private readonly LinqToDbConnectionProvider _dbContextProvider;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SetCommands" /> class.
         /// </summary>
         /// <param name="dbContextProvider">The database context provider.</param>
-        public SetCommands(DbContextProvider dbContextProvider)
+        public SetCommands(LinqToDbConnectionProvider dbContextProvider)
         {
             _dbContextProvider = dbContextProvider;
         }
@@ -1050,9 +1061,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             }
 
             nature = nature.Capitalize();
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
-            var user = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == ctx.User.Id);
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == ctx.User.Id);
             if (user == null)
             {
                 await RespondAsync("You have not Started!\nStart with `/start` first!");
@@ -1070,7 +1081,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             inventory["nature-capsules"]--;
 
-            var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == user.Selected);
+            var selectedPokemon = await db.UserPokemon.FirstOrDefaultAsync(p => p.Id == user.Selected);
             if (selectedPokemon == null)
             {
                 await RespondAsync("You don't have a Pokémon selected!");
@@ -1078,14 +1089,14 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             }
 
             user.Inventory = JsonSerializer.Serialize(inventory);
-            db.Users.Update(user);
+            await db.UpdateAsync(user);
 
             await db.UserPokemon
                 .Where(p => p.Id == user.Selected)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.Nature, nature));
+                .Set(p => p.Nature, nature)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             await RespondAsync($"You have successfully changed your selected Pokemon's nature to {nature}");
         }
@@ -1120,11 +1131,11 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
             var selectedId = await db.Users
                 .Where(u => u.UserId == ctx.User.Id)
                 .Select(u => u.Selected)
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (selectedId == null)
             {
@@ -1133,10 +1144,10 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             }
 
             await db.UserPokemon.Where(p => p.Id == selectedId)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.Nickname, nick));
+                .Set(p => p.Nickname, nick)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             if (nick == "None")
                 await RespondAsync("Successfully reset Pokemon nickname.");
@@ -1151,13 +1162,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [Group("visible", "Toggle visibility settings")]
     public class VisibleCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        private readonly DbContextProvider _dbContextProvider;
+        private readonly LinqToDbConnectionProvider _dbContextProvider;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="VisibleCommands" /> class.
         /// </summary>
         /// <param name="dbContextProvider">The database context provider.</param>
-        public VisibleCommands(DbContextProvider dbContextProvider)
+        public VisibleCommands(LinqToDbConnectionProvider dbContextProvider)
         {
             _dbContextProvider = dbContextProvider;
         }
@@ -1169,13 +1180,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("bal", "Toggle your balance being visible to other users")]
         public async Task VisibleBalance()
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             await db.Users.Where(u => u.UserId == ctx.User.Id)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.Visible, x => !x.Visible));
+                .Set(u => u.Visible, u => !u.Visible)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             await RespondAsync("Toggled trainer card visibility!");
         }
@@ -1188,13 +1199,13 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("donations", "Toggle your donation total being shown on your balance statement")]
         public async Task VisibleDonations(bool toggle = false)
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             await db.Users.Where(u => u.UserId == ctx.User.Id)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.ShowDonations, toggle));
+                .Set(u => u.ShowDonations, toggle)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             if (toggle)
                 await RespondAsync("Your donations total will now show on your balance.");
@@ -1508,7 +1519,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             Four = 4
         }
 
-        private readonly DbContextProvider _dbContextProvider;
+        private readonly LinqToDbConnectionProvider _dbContextProvider;
         private readonly IMongoService _mongoService;
         private readonly PokemonService _pokemonService;
 
@@ -1520,7 +1531,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         /// <param name="pokemonService">The Pokémon service for evolution and other related operations.</param>
         public PokemonCommands(
             IMongoService mongoService,
-            DbContextProvider dbContextProvider,
+            LinqToDbConnectionProvider dbContextProvider,
             PokemonService pokemonService)
         {
             _mongoService = mongoService;
@@ -1536,14 +1547,14 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         /// <returns>A list of move choices.</returns>
         public async Task<IEnumerable<AutocompleteResult>> MovesAutoComplete(IInteractionContext context, string move)
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var selectedPokemon = await (
                 from pokemon in db.UserPokemon
                 join user in db.Users on pokemon.Id equals user.Selected
                 where user.UserId == context.User.Id
                 select pokemon
-            ).FirstOrDefaultAsyncEF();
+            ).FirstOrDefaultAsync();
 
             if (selectedPokemon == null)
                 return Array.Empty<AutocompleteResult>();
@@ -1583,14 +1594,14 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             third = third.Replace(" ", "-").ToLower();
             fourth = fourth.Replace(" ", "-").ToLower();
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var selectedPokemon = await (
                 from pokemon in db.UserPokemon
                 join user in db.Users on pokemon.Id equals user.Selected
                 where user.UserId == ctx.User.Id
                 select pokemon
-            ).FirstOrDefaultAsyncEF();
+            ).FirstOrDefaultAsync();
 
             if (selectedPokemon == null)
             {
@@ -1646,10 +1657,10 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             string[] newMoves = [first.ToLower(), second.ToLower(), third.ToLower(), fourth.ToLower()];
 
             await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.Moves, newMoves));
+                .Set(p => p.Moves, newMoves)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             var displayName = nickname == "None" ? "" : nickname;
             var emote = "";
@@ -1683,14 +1694,14 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             move = move.Replace(" ", "-").ToLower();
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var selectedPokemon = await (
                 from pokemon in db.UserPokemon
                 join user in db.Users on pokemon.Id equals user.Selected
                 where user.UserId == ctx.User.Id
                 select pokemon
-            ).FirstOrDefaultAsyncEF();
+            ).FirstOrDefaultAsync();
 
             if (selectedPokemon == null)
             {
@@ -1720,10 +1731,10 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             currentMoves[(int)slot - 1] = move.ToLower();
 
             await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.Moves, currentMoves));
+                .Set(p => p.Moves, currentMoves)
+                .UpdateAsync();
 
-            await db.SaveChangesAsync();
+            
 
             await RespondAsync($"You have successfully learned {move} as your slot {(int)slot} move", ephemeral: true);
 
@@ -1737,14 +1748,14 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("moves", "Show moves your pokemon has learned")]
         public async Task Moves()
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var selectedPokemon = await (
                 from pokemon in db.UserPokemon
                 join user in db.Users on pokemon.Id equals user.Selected
                 where user.UserId == ctx.User.Id
                 select pokemon
-            ).FirstOrDefaultAsyncEF();
+            ).FirstOrDefaultAsync();
 
             if (selectedPokemon == null)
             {
@@ -1777,7 +1788,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("moveset", "Show moves your selected Pokemon can learn")]
         public async Task Moveset()
         {
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var pokemonName = await db.UserPokemon
                 .Where(p => p.Id == db.Users
@@ -1785,7 +1796,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                     .Select(u => u.Selected)
                     .FirstOrDefault())
                 .Select(p => p.PokemonName)
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (pokemonName == null)
             {
@@ -1894,12 +1905,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            await using var db = await _dbContextProvider.GetContextAsync();
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
             var selectedId = await db.Users
                 .Where(u => u.UserId == ctx.User.Id)
                 .Select(u => u.Selected)
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (selectedId == null)
             {
@@ -1910,7 +1921,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             var evPoints = await db.Users
                 .Where(u => u.UserId == ctx.User.Id)
                 .Select(u => u.EvPoints)
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (evPoints == null)
             {
@@ -1931,42 +1942,42 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 {
                     case "attack":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.AttackEv, x => x.AttackEv + amount));
+                            .Set(p => p.AttackEv, p => p.AttackEv + amount)
+                            .UpdateAsync();
                         break;
                     case "defense":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.DefenseEv, x => x.DefenseEv + amount));
+                            .Set(p => p.DefenseEv, p => p.DefenseEv + amount)
+                            .UpdateAsync();
                         break;
                     case "hp":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.HpEv, x => x.HpEv + amount));
+                            .Set(p => p.HpEv, p => p.HpEv + amount)
+                            .UpdateAsync();
                         break;
                     case "special attack":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.SpecialAttackEv, x => x.SpecialAttackEv + amount));
+                            .Set(p => p.SpecialAttackEv, p => p.SpecialAttackEv + amount)
+                            .UpdateAsync();
                         break;
                     case "special defense":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.SpecialDefenseEv, x => x.SpecialDefenseEv + amount));
+                            .Set(p => p.SpecialDefenseEv, p => p.SpecialDefenseEv + amount)
+                            .UpdateAsync();
                         break;
                     case "speed":
                         await db.UserPokemon.Where(p => p.Id == selectedId)
-                            .ExecuteUpdateAsync(p => p
-                                .SetProperty(x => x.SpeedEv, x => x.SpeedEv + amount));
+                            .Set(p => p.SpeedEv, p => p.SpeedEv + amount)
+                            .UpdateAsync();
                         break;
                 }
 
                 // Deduct the EV points from the user
                 await db.Users.Where(u => u.UserId == ctx.User.Id)
-                    .ExecuteUpdateAsync(u => u
-                        .SetProperty(x => x.EvPoints, x => x.EvPoints - amount));
+                    .Set(u => u.EvPoints, u => u.EvPoints - amount)
+                    .UpdateAsync();
 
-                await db.SaveChangesAsync();
+                
 
                 await RespondAsync(
                     $"You have successfully added {amount} EVs to the {stat} Stat of your Selected Pokemon!");

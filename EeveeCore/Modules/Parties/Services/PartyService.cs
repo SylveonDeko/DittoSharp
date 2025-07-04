@@ -1,7 +1,6 @@
 using System.Text;
-using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
-using Microsoft.EntityFrameworkCore;
+using EeveeCore.Database.Linq.Models.Pokemon;
+using LinqToDB;
 
 namespace EeveeCore.Modules.Parties.Services;
 
@@ -10,9 +9,9 @@ namespace EeveeCore.Modules.Parties.Services;
 ///     Handles operations for creating, viewing, and modifying parties,
 ///     with support for saving multiple party configurations.
 /// </summary>
-/// <param name="dbContext">The database context for accessing party and user data.</param>
+/// <param name="dbProvider">The LinqToDB connection provider for accessing party and user data.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class PartyService(DbContextProvider dbContext, DiscordShardedClient client) : INService
+public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedClient client) : INService
 {
     /// <summary>
     ///     Dictionary storing paged results for users viewing party data.
@@ -86,7 +85,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         Task<(string Description, ulong[] Party, ulong[] PartyPokeIds, int[] PokemonIndices, string[] PokemonNames)>
         GetPartySetupData(ulong userId, string partyName)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Initialize arrays for pokemon data
         var pokemonNames = new string?[6] { "None", "None", "None", "None", "None", "None" };
@@ -118,8 +117,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
                 Slot6 = firstUser.Party[5]
             };
 
-            db.Parties.Add(party);
-            await db.SaveChangesAsync();
+            await db.InsertAsync(party);
         }
 
         // Extract party Pokemon IDs into array
@@ -153,7 +151,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
                     .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemon.Id);
 
                 if (ownership != null)
-                    pokemonIndices[i] = ownership.Position + 1; // Add 1 for user-friendly indexing
+                    pokemonIndices[i] = (int)(ownership.Position + 1); // Add 1 for user-friendly indexing
             }
         }
 
@@ -187,7 +185,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<EmbedBuilder> GetPartyViewEmbed(ulong userId, string partyName = null)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         var embed = new EmbedBuilder()
             .WithTitle($"Party Info: {partyName}")
@@ -221,7 +219,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
                             .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
 
                         if (ownership != null)
-                            pokemonIndex = ownership.Position + 1; // Convert to 1-based indexing
+                            pokemonIndex = (int)(ownership.Position + 1); // Convert to 1-based indexing
                     }
                 }
 
@@ -255,7 +253,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
                 var pokemonName = "None";
                 int? pokemonIndex = null;
 
-                if (pokemonId.HasValue && pokemonId.Value > 0)
+                if (pokemonId is > 0)
                 {
                     var pokemon = await db.UserPokemon
                         .FirstOrDefaultAsync(p => p.Id == pokemonId.Value);
@@ -269,7 +267,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
                             .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId.Value);
 
                         if (ownership != null)
-                            pokemonIndex = ownership.Position + 1; // Convert to 1-based indexing
+                            pokemonIndex = (int)(ownership.Position + 1); // Convert to 1-based indexing
                     }
                 }
 
@@ -302,7 +300,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         // Adjust slot for zero-based indexing
         var slotIndex = slot - 1;
 
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Check if user exists
         var user = await db.Users
@@ -319,7 +317,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
 
             // Find the Pokemon using the ownership table
             var ownership = await db.UserPokemonOwnerships
-                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == (ulong)position);
 
             if (ownership == null)
                 return (false, "Invalid Pokemon ID. You don't have that many Pokemon.");
@@ -349,9 +347,10 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         // Update party array
         var updatedParty = user.Party.ToArray();
         updatedParty[slotIndex] = pokemonId;
-        user.Party = updatedParty;
 
-        await db.SaveChangesAsync();
+        await db.Users.Where(u => u.UserId == userId)
+            .Set(u => u.Party, updatedParty)
+            .UpdateAsync();
 
         return (true, $"Your {pokemon.PokemonName} is now on your party, Slot number {slot}");
     }
@@ -371,7 +370,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         // Adjust slot for zero-based indexing
         var slotIndex = slot - 1;
 
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
 
         // Check if user exists and has started
@@ -388,9 +387,10 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         // Update party array
         var updatedParty = user.Party.ToArray();
         updatedParty[slotIndex] = 0;
-        user.Party = updatedParty;
 
-        await db.SaveChangesAsync();
+        await db.Users.Where(u => u.UserId == userId)
+            .Set(u => u.Party, updatedParty)
+            .UpdateAsync();
 
         if (pokemon == null) return (false, "No Pokemon in that slot.");
 
@@ -409,7 +409,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<(bool Success, string Message)> RegisterParty(ulong userId, string partyName)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Check if user exists
         var user = await db.Users
@@ -424,14 +424,14 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         if (existingParty != null)
         {
             // Update existing party
-            existingParty.Slot1 = user.Party[0];
-            existingParty.Slot2 = user.Party[1];
-            existingParty.Slot3 = user.Party[2];
-            existingParty.Slot4 = user.Party[3];
-            existingParty.Slot5 = user.Party[4];
-            existingParty.Slot6 = user.Party[5];
-
-            await db.SaveChangesAsync();
+            await db.Parties.Where(p => p.UserId == userId && p.Name == partyName)
+                .Set(p => p.Slot1, user.Party[0])
+                .Set(p => p.Slot2, user.Party[1])
+                .Set(p => p.Slot3, user.Party[2])
+                .Set(p => p.Slot4, user.Party[3])
+                .Set(p => p.Slot5, user.Party[4])
+                .Set(p => p.Slot6, user.Party[5])
+                .UpdateAsync();
             return (true, $"Successfully updated party save {partyName}");
         }
 
@@ -448,8 +448,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
             Slot6 = user.Party[5]
         };
 
-        db.Parties.Add(newParty);
-        await db.SaveChangesAsync();
+        await db.InsertAsync(newParty);
         return (true, "Successfully created a new party save.");
     }
 
@@ -464,7 +463,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<bool> DoesPartyExist(ulong userId, string partyName)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         return await db.Parties
             .AnyAsync(p => p.UserId == userId && p.Name == partyName);
@@ -482,7 +481,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<(bool Success, string Message)> DeregisterParty(ulong userId, string partyName)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Find the party
         var party = await db.Parties
@@ -491,8 +490,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
         if (party == null) return (false, $"You do not have a party with the name `{partyName}`.");
 
         // Remove the party
-        db.Parties.Remove(party);
-        await db.SaveChangesAsync();
+        await db.DeleteAsync(party);
 
         return (true, $"Successfully deregistered party `{partyName}`.");
     }
@@ -509,7 +507,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<(bool Success, string Message)> LoadParty(ulong userId, string partyName)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Find the party
         var party = await db.Parties
@@ -534,8 +532,9 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
             party.Slot6 ?? 0
         };
 
-        user.Party = updatedParty;
-        await db.SaveChangesAsync();
+        await db.Users.Where(u => u.UserId == userId)
+            .Set(u => u.Party, updatedParty)
+            .UpdateAsync();
 
         return (true, "Successfully, updated current party from saved data.");
     }
@@ -550,7 +549,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     /// </returns>
     public async Task<List<string>> GetUserParties(ulong userId)
     {
-        await using var db = await dbContext.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         var parties = await db.Parties
             .Where(p => p.UserId == userId)
@@ -577,7 +576,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
     {
         try
         {
-            await using var db = await dbContext.GetContextAsync();
+            await using var db = await dbProvider.GetConnectionAsync();
 
             // Check if the user exists
             var user = await db.Users
@@ -590,7 +589,7 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
             var position = pokeIndex - 1; // Convert from 1-based to 0-based
 
             var ownership = await db.UserPokemonOwnerships
-                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == (ulong)position);
 
             if (ownership == null)
                 return (false, "Invalid ID Provided\nPlease try again.");
@@ -631,32 +630,32 @@ public class PartyService(DbContextProvider dbContext, DiscordShardedClient clie
             if (partySlots.Any(s => s.HasValue && s.Value == pokemonId))
                 return (false, "This pokemon already occupies a slot in your party!");
 
-            // Update the slot
+            // Update the slot using LinqToDB
+            var updateQuery = db.Parties.Where(p => p.UserId == userId && p.Name == partyName);
+            
             switch (slot)
             {
                 case 1:
-                    party.Slot1 = pokemonId;
+                    await updateQuery.Set(p => p.Slot1, pokemonId).UpdateAsync();
                     break;
                 case 2:
-                    party.Slot2 = pokemonId;
+                    await updateQuery.Set(p => p.Slot2, pokemonId).UpdateAsync();
                     break;
                 case 3:
-                    party.Slot3 = pokemonId;
+                    await updateQuery.Set(p => p.Slot3, pokemonId).UpdateAsync();
                     break;
                 case 4:
-                    party.Slot4 = pokemonId;
+                    await updateQuery.Set(p => p.Slot4, pokemonId).UpdateAsync();
                     break;
                 case 5:
-                    party.Slot5 = pokemonId;
+                    await updateQuery.Set(p => p.Slot5, pokemonId).UpdateAsync();
                     break;
                 case 6:
-                    party.Slot6 = pokemonId;
+                    await updateQuery.Set(p => p.Slot6, pokemonId).UpdateAsync();
                     break;
                 default:
                     return (false, "Invalid slot number.");
             }
-
-            await db.SaveChangesAsync();
             return (true, $"Successfully added {pokemon.PokemonName} to slot {slot} in party {partyName}");
         }
         catch (Exception ex)

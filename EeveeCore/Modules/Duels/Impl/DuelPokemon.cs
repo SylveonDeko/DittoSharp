@@ -1,3 +1,4 @@
+using EeveeCore.Modules.Duels.Utils;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
 
@@ -2755,8 +2756,8 @@ public class DuelPokemon
             }
 
             var key = (attackerType, defenderType);
-            if (!battle.TypeEffectiveness.ContainsKey(key)) continue;
-            var e = battle.TypeEffectiveness[key] / 100.0;
+            if (!battle.TypeEffectiveness.TryGetValue(key, out var value)) continue;
+            var e = value / 100.0;
             if (defenderType == ElementType.FLYING && e > 1 && move != null && battle.Weather.Get() == "h-wind") e = 1;
             if (battle.InverseBattle)
                 switch (e)
@@ -2912,11 +2913,11 @@ public class DuelPokemon
         return moves.Count == 0 ? null : moves[new Random().Next(moves.Count)];
     }
 
+
     /// <summary>
     ///     Creates a new DuelPokemon object asynchronously using the raw data provided.
     /// </summary>
-    public static async Task<DuelPokemon> Create(IInteractionContext ctx,
-        Database.Models.PostgreSQL.Pokemon.Pokemon pokemon, IMongoService mongoService)
+    public static async Task<DuelPokemon> Create(IInteractionContext ctx, Database.Linq.Models.Pokemon.Pokemon pokemon, IMongoService mongoService)
     {
         // Initialize local variables from pokemon object
         var pn = pokemon.PokemonName;
@@ -2932,6 +2933,12 @@ public class DuelPokemon
         var plevel = pokemon.Level;
         var id = pokemon.Id;
         var gender = pokemon.Gender;
+
+        // Sanitize the nickname to remove Discord emotes and formatting
+        // Store the original nickname and create a sanitized version for battle display
+        var sanitizedNick = string.IsNullOrWhiteSpace(nick)
+            ? PokemonNameSanitizer.SanitizeDisplayName(pn) // Use species name if no nickname
+            : PokemonNameSanitizer.SanitizeDisplayName(nick); // Sanitize the nickname
 
         // Validate IVs
         var totalIvs = hpiv + atkiv + defiv + spatkiv + spdefiv + speediv;
@@ -3100,7 +3107,7 @@ public class DuelPokemon
             pid,
             pn,
             pokemon.PokemonName,
-            nick,
+            sanitizedNick, // Use the sanitized nickname instead of the original
             baseStats,
             pokemonHp,
             hpiv,

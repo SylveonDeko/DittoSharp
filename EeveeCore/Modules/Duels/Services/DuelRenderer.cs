@@ -1,4 +1,5 @@
 using EeveeCore.Modules.Duels.Impl;
+using EeveeCore.Modules.Duels.Utils;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
 using SkiaSharp;
@@ -24,7 +25,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <returns>
     ///     A task representing the asynchronous operation that returns the sent Discord message.
     /// </returns>
-    public async Task GenerateTeamPreview(Battle? battle)
+    public async Task GenerateTeamPreview(Battle battle)
     {
         // Create embed for team preview
         var embed = new EmbedBuilder()
@@ -60,10 +61,10 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <returns>
     ///     A task representing the asynchronous operation that returns the generated SKImage.
     /// </returns>
-    private async Task<SKImage> GenerateTeamPreviewImage(Battle? battle)
+    private async Task<SKImage> GenerateTeamPreviewImage(Battle battle)
     {
-        var width = 800;
-        var height = 400;
+        const int width = 800;
+        const int height = 400;
 
         using var surface = SKSurface.Create(new SKImageInfo(width, height));
         var canvas = surface.Canvas;
@@ -72,43 +73,41 @@ public class DuelRenderer(IMongoService mongoService) : INService
         DrawPokemonStyleBackground(canvas, width, height);
 
         // Draw header
-        using var titlePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 32,
-            IsAntialias = true,
-            TextAlign = SKTextAlign.Center,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-        canvas.DrawText("Team Preview", width / 2, 40, titlePaint);
+        using var titleFont = new SKFont();
+        titleFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        titleFont.Size = 32;
+        using var titlePaint = new SKPaint();
+        titlePaint.Color = SKColors.Black;
+        titlePaint.IsAntialias = true;
+
+        const string titleText = "Team Preview";
+        var titleWidth = UnicodeTextRenderer.MeasureText(titleText, titleFont);
+        UnicodeTextRenderer.DrawText(canvas, width / 2 - titleWidth / 2, 40, titleText, titleFont, titlePaint);
 
         // Draw trainer names
-        using var trainerPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 24,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        using var trainerFont = new SKFont();
+        trainerFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        trainerFont.Size = 24;
+        using var trainerPaint = new SKPaint();
+        trainerPaint.IsAntialias = true;
 
         // Draw trainer 1 name in red
         trainerPaint.Color = new SKColor(255, 0, 0);
-        canvas.DrawText(battle.Trainer1.Name, 150, 80, trainerPaint);
+        UnicodeTextRenderer.DrawText(canvas, 150, 80, battle.Trainer1.Name, trainerFont, trainerPaint);
 
         // Draw trainer 2 name in blue
         trainerPaint.Color = new SKColor(0, 0, 255);
-        canvas.DrawText(battle.Trainer2.Name, width - 150, 80, trainerPaint);
+        var trainer2Width = UnicodeTextRenderer.MeasureText(battle.Trainer2.Name, trainerFont);
+        UnicodeTextRenderer.DrawText(canvas, width - 150 - trainer2Width, 80, battle.Trainer2.Name, trainerFont, trainerPaint);
 
         // Draw dividing line
-        using var linePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            StrokeWidth = 2,
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke
-        };
+        using var linePaint = new SKPaint();
+        linePaint.Color = SKColors.Black;
+        linePaint.StrokeWidth = 2;
+        linePaint.IsAntialias = true;
+        linePaint.Style = SKPaintStyle.Stroke;
         canvas.DrawLine(width / 2, 60, width / 2, height - 20, linePaint);
 
         // Draw trainer 1's Pokémon
@@ -127,26 +126,22 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="canvas">The canvas to draw on.</param>
     /// <param name="width">The width of the canvas.</param>
     /// <param name="height">The height of the canvas.</param>
-    private void DrawPokemonStyleBackground(SKCanvas canvas, int width, int height)
+    private static void DrawPokemonStyleBackground(SKCanvas canvas, int width, int height)
     {
         // Draw gradient background similar to Pokémon games
-        using var bgPaint = new SKPaint
-        {
-            Shader = SKShader.CreateLinearGradient(
-                new SKPoint(0, 0),
-                new SKPoint(0, height),
-                [new SKColor(226, 246, 255), new SKColor(187, 227, 255)],
-                null,
-                SKShaderTileMode.Clamp)
-        };
+        using var bgPaint = new SKPaint();
+        bgPaint.Shader = SKShader.CreateLinearGradient(
+            new SKPoint(0, 0),
+            new SKPoint(0, height),
+            [new SKColor(226, 246, 255), new SKColor(187, 227, 255)],
+            null,
+            SKShaderTileMode.Clamp);
         canvas.DrawRect(0, 0, width, height, bgPaint);
 
         // Draw a subtle pattern overlay
-        using var patternPaint = new SKPaint
-        {
-            Color = new SKColor(255, 255, 255, 20),
-            IsAntialias = true
-        };
+        using var patternPaint = new SKPaint();
+        patternPaint.Color = new SKColor(255, 255, 255, 20);
+        patternPaint.IsAntialias = true;
 
         for (var i = 0; i < width; i += 20)
         for (var j = 0; j < height; j += 20)
@@ -166,29 +161,27 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawTrainerTeam(SKCanvas canvas, Trainer? trainer, int x, int y, int width, int height)
     {
-        var pokemonPerRow = 2;
+        const int pokemonPerRow = 2;
         var pokemonWidth = width / pokemonPerRow;
         var pokemonHeight = height / 3;
 
-        using var namePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        using var nameFont = new SKFont();
+        nameFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        nameFont.Size = 18;
+        using var namePaint = new SKPaint();
+        namePaint.Color = SKColors.Black;
+        namePaint.IsAntialias = true;
 
-        using var levelPaint = new SKPaint
-        {
-            Color = SKColors.DarkGray,
-            TextSize = 14,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        using var levelFont = new SKFont();
+        levelFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        levelFont.Size = 14;
+        using var levelPaint = new SKPaint();
+        levelPaint.Color = SKColors.DarkGray;
+        levelPaint.IsAntialias = true;
 
-        for (var i = 0; i < trainer.Party.Count; i++)
+        for (var i = 0; i < trainer?.Party.Count; i++)
         {
             var pokemon = trainer.Party[i];
             var row = i / pokemonPerRow;
@@ -202,11 +195,15 @@ public class DuelRenderer(IMongoService mongoService) : INService
             var sprite = await LoadPokemonBitmap($"pixel_sprites/{fileName}");
 
             if (sprite == null) continue;
+
             // Draw Pokémon sprite with shadow
             DrawPokemonWithShadow(canvas, sprite, pokemonX + 10, pokemonY + 5, 64, 64);
 
+            // Sanitize the Pokémon name before drawing
+            var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 15);
+
             // Draw Pokémon name and level in Pokémon style box
-            DrawPokemonInfoBox(canvas, pokemon.Name, pokemon.Level, pokemonX + 80, pokemonY + 20, 180, 50);
+            DrawPokemonInfoBox(canvas, sanitizedName, pokemon.Level, pokemonX + 80, pokemonY + 20, 180, 50);
         }
     }
 
@@ -224,12 +221,10 @@ public class DuelRenderer(IMongoService mongoService) : INService
         float height)
     {
         // Draw shadow
-        using var shadowPaint = new SKPaint
-        {
-            Color = new SKColor(0, 0, 0, 70),
-            IsAntialias = true,
-            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 3)
-        };
+        using var shadowPaint = new SKPaint();
+        shadowPaint.Color = new SKColor(0, 0, 0, 70);
+        shadowPaint.IsAntialias = true;
+        shadowPaint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 3);
         canvas.DrawOval(new SKRect(x + 5, y + height - 10, x + width - 5, y + height), shadowPaint);
 
         // Draw Pokémon sprite
@@ -252,45 +247,39 @@ public class DuelRenderer(IMongoService mongoService) : INService
         float height)
     {
         // Draw box background
-        using var boxBgPaint = new SKPaint
-        {
-            Color = new SKColor(248, 248, 248),
-            IsAntialias = true
-        };
+        using var boxBgPaint = new SKPaint();
+        boxBgPaint.Color = new SKColor(248, 248, 248);
+        boxBgPaint.IsAntialias = true;
 
-        using var boxBorderPaint = new SKPaint
-        {
-            Color = new SKColor(80, 80, 80),
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 2
-        };
+        using var boxBorderPaint = new SKPaint();
+        boxBorderPaint.Color = new SKColor(80, 80, 80);
+        boxBorderPaint.IsAntialias = true;
+        boxBorderPaint.Style = SKPaintStyle.Stroke;
+        boxBorderPaint.StrokeWidth = 2;
 
         var boxRect = new SKRoundRect(new SKRect(x, y, x + width, y + height), 10, 10);
         canvas.DrawRoundRect(boxRect, boxBgPaint);
         canvas.DrawRoundRect(boxRect, boxBorderPaint);
 
         // Draw Pokémon name
-        using var namePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-        canvas.DrawText(name, x + 10, y + 25, namePaint);
+        using var nameFont = new SKFont();
+        nameFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        nameFont.Size = 18;
+        using var namePaint = new SKPaint();
+        namePaint.Color = SKColors.Black;
+        namePaint.IsAntialias = true;
+        UnicodeTextRenderer.DrawText(canvas, x + 10, y + 25, name, nameFont, namePaint);
 
         // Draw level
-        using var levelPaint = new SKPaint
-        {
-            Color = SKColors.DarkGray,
-            TextSize = 14,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-        canvas.DrawText($"Lv. {level}", x + 10, y + 45, levelPaint);
+        using var levelFont = new SKFont();
+        levelFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        levelFont.Size = 14;
+        using var levelPaint = new SKPaint();
+        levelPaint.Color = SKColors.DarkGray;
+        levelPaint.IsAntialias = true;
+        UnicodeTextRenderer.DrawText(canvas, x + 10, y + 45, $"Lv. {level}", levelFont, levelPaint);
     }
 
 
@@ -351,15 +340,13 @@ public class DuelRenderer(IMongoService mongoService) : INService
         else
         {
             // Fallback to a gradient background
-            using var paint = new SKPaint
-            {
-                Shader = SKShader.CreateLinearGradient(
-                    new SKPoint(0, 0),
-                    new SKPoint(0, height),
-                    [new SKColor(135, 206, 235), new SKColor(34, 139, 34)],
-                    null,
-                    SKShaderTileMode.Clamp)
-            };
+            using var paint = new SKPaint();
+            paint.Shader = SKShader.CreateLinearGradient(
+                new SKPoint(0, 0),
+                new SKPoint(0, height),
+                [new SKColor(135, 206, 235), new SKColor(34, 139, 34)],
+                null,
+                SKShaderTileMode.Clamp);
             canvas.DrawRect(0, 0, width, height, paint);
         }
     }
@@ -373,7 +360,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="width">The width of the canvas.</param>
     /// <param name="height">The height of the canvas.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private async Task DrawWeatherEffect(SKCanvas canvas, string? weatherType, int width, int height)
+    private static async Task DrawWeatherEffect(SKCanvas canvas, string? weatherType, int width, int height)
     {
         switch (weatherType)
         {
@@ -407,13 +394,11 @@ public class DuelRenderer(IMongoService mongoService) : INService
         var random = new Random();
 
         // Draw rain drops
-        using var rainPaint = new SKPaint
-        {
-            Color = new SKColor(150, 200, 255, 180),
-            IsAntialias = true,
-            StrokeWidth = 2,
-            Style = SKPaintStyle.Stroke
-        };
+        using var rainPaint = new SKPaint();
+        rainPaint.Color = new SKColor(150, 200, 255, 180);
+        rainPaint.IsAntialias = true;
+        rainPaint.StrokeWidth = 2;
+        rainPaint.Style = SKPaintStyle.Stroke;
 
         for (var i = 0; i < 100; i++)
         {
@@ -426,10 +411,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
 
         // Add a blue overlay
-        using var overlayPaint = new SKPaint
-        {
-            Color = new SKColor(0, 0, 150, 30)
-        };
+        using var overlayPaint = new SKPaint();
+        overlayPaint.Color = new SKColor(0, 0, 150, 30);
         canvas.DrawRect(0, 0, width, height, overlayPaint);
     }
 
@@ -450,12 +433,10 @@ public class DuelRenderer(IMongoService mongoService) : INService
         canvas.DrawCircle(width / 2, height / 4, 60, sunPaint);
 
         // Draw sun rays
-        using var rayPaint = new SKPaint
-        {
-            Color = new SKColor(255, 200, 0, 100),
-            IsAntialias = true,
-            StrokeWidth = 5
-        };
+        using var rayPaint = new SKPaint();
+        rayPaint.Color = new SKColor(255, 200, 0, 100);
+        rayPaint.IsAntialias = true;
+        rayPaint.StrokeWidth = 5;
 
         for (var i = 0; i < 12; i++)
         {
@@ -469,10 +450,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
 
         // Add a yellow overlay
-        using var overlayPaint = new SKPaint
-        {
-            Color = new SKColor(255, 200, 0, 30)
-        };
+        using var overlayPaint = new SKPaint();
+        overlayPaint.Color = new SKColor(255, 200, 0, 30);
         canvas.DrawRect(0, 0, width, height, overlayPaint);
     }
 
@@ -488,11 +467,9 @@ public class DuelRenderer(IMongoService mongoService) : INService
         var random = new Random();
 
         // Draw sand particles
-        using var sandPaint = new SKPaint
-        {
-            Color = new SKColor(210, 180, 140, 150),
-            IsAntialias = true
-        };
+        using var sandPaint = new SKPaint();
+        sandPaint.Color = new SKColor(210, 180, 140, 150);
+        sandPaint.IsAntialias = true;
 
         for (var i = 0; i < 200; i++)
         {
@@ -504,10 +481,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
 
         // Add a sand-colored overlay
-        using var overlayPaint = new SKPaint
-        {
-            Color = new SKColor(210, 180, 140, 50)
-        };
+        using var overlayPaint = new SKPaint();
+        overlayPaint.Color = new SKColor(210, 180, 140, 50);
         canvas.DrawRect(0, 0, width, height, overlayPaint);
     }
 
@@ -523,11 +498,9 @@ public class DuelRenderer(IMongoService mongoService) : INService
         var random = new Random();
 
         // Draw hail particles
-        using var hailPaint = new SKPaint
-        {
-            Color = new SKColor(220, 240, 255, 200),
-            IsAntialias = true
-        };
+        using var hailPaint = new SKPaint();
+        hailPaint.Color = new SKColor(220, 240, 255, 200);
+        hailPaint.IsAntialias = true;
 
         for (var i = 0; i < 80; i++)
         {
@@ -539,10 +512,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
         }
 
         // Add a blue-white overlay
-        using var overlayPaint = new SKPaint
-        {
-            Color = new SKColor(200, 220, 255, 30)
-        };
+        using var overlayPaint = new SKPaint();
+        overlayPaint.Color = new SKColor(200, 220, 255, 30);
         canvas.DrawRect(0, 0, width, height, overlayPaint);
     }
 
@@ -556,20 +527,16 @@ public class DuelRenderer(IMongoService mongoService) : INService
     private static void DrawFogEffect(SKCanvas canvas, int width, int height)
     {
         // Draw fog overlay
-        using var fogPaint = new SKPaint
-        {
-            Color = new SKColor(255, 255, 255, 100)
-        };
+        using var fogPaint = new SKPaint();
+        fogPaint.Color = new SKColor(255, 255, 255, 100);
         canvas.DrawRect(0, 0, width, height, fogPaint);
 
         // Draw fog patches
         var random = new Random();
-        using var patchPaint = new SKPaint
-        {
-            Color = new SKColor(255, 255, 255, 70),
-            IsAntialias = true,
-            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 20)
-        };
+        using var patchPaint = new SKPaint();
+        patchPaint.Color = new SKColor(255, 255, 255, 70);
+        patchPaint.IsAntialias = true;
+        patchPaint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 20);
 
         for (var i = 0; i < 15; i++)
         {
@@ -592,13 +559,11 @@ public class DuelRenderer(IMongoService mongoService) : INService
     private static void DrawTrickRoomEffect(SKCanvas canvas, int width, int height)
     {
         // Draw grid pattern
-        using var gridPaint = new SKPaint
-        {
-            Color = new SKColor(180, 100, 220, 100),
-            IsAntialias = true,
-            StrokeWidth = 1,
-            Style = SKPaintStyle.Stroke
-        };
+        using var gridPaint = new SKPaint();
+        gridPaint.Color = new SKColor(180, 100, 220, 100);
+        gridPaint.IsAntialias = true;
+        gridPaint.StrokeWidth = 1;
+        gridPaint.Style = SKPaintStyle.Stroke;
 
         // Horizontal lines
         for (var y = 0; y < height; y += 30) canvas.DrawLine(0, y, width, y, gridPaint);
@@ -607,10 +572,8 @@ public class DuelRenderer(IMongoService mongoService) : INService
         for (var x = 0; x < width; x += 30) canvas.DrawLine(x, 0, x, height, gridPaint);
 
         // Add a purple tint
-        using var tintPaint = new SKPaint
-        {
-            Color = new SKColor(180, 100, 220, 20)
-        };
+        using var tintPaint = new SKPaint();
+        tintPaint.Color = new SKColor(180, 100, 220, 20);
         canvas.DrawRect(0, 0, width, height, tintPaint);
     }
 
@@ -739,64 +702,60 @@ public class DuelRenderer(IMongoService mongoService) : INService
         boxPath.LineTo(x, y + 70);
         boxPath.Close();
 
-        using var boxBgPaint = new SKPaint
-        {
-            Color = new SKColor(220, 220, 220),
-            IsAntialias = true
-        };
+        using var boxBgPaint = new SKPaint();
+        boxBgPaint.Color = new SKColor(220, 220, 220);
+        boxBgPaint.IsAntialias = true;
 
-        using var boxBorderPaint = new SKPaint
-        {
-            Color = new SKColor(60, 60, 60),
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 2
-        };
+        using var boxBorderPaint = new SKPaint();
+        boxBorderPaint.Color = new SKColor(60, 60, 60);
+        boxBorderPaint.IsAntialias = true;
+        boxBorderPaint.Style = SKPaintStyle.Stroke;
+        boxBorderPaint.StrokeWidth = 2;
 
         canvas.DrawPath(boxPath, boxBgPaint);
         canvas.DrawPath(boxPath, boxBorderPaint);
 
-        // Draw name and gender symbol
-        using var namePaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 22,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        // Sanitize the Pokémon name before drawing
+        var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 18);
 
-        canvas.DrawText(pokemon.Name, x + 15, y + 25, namePaint);
+        // Draw name and gender symbol
+        using var nameFont = new SKFont();
+        nameFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        nameFont.Size = 22;
+        using var namePaint = new SKPaint();
+        namePaint.Color = SKColors.Black;
+        namePaint.IsAntialias = true;
+
+        UnicodeTextRenderer.DrawText(canvas, x + 15, y + 25, sanitizedName, nameFont, namePaint);
 
         var genderSymbol = pokemon.Gender == "male" ? "♂" : pokemon.Gender == "female" ? "♀" : "";
-        using var levelPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true
-        };
+        using var levelFont = new SKFont();
+        levelFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        levelFont.Size = 18;
+        using var levelPaint = new SKPaint();
+        levelPaint.Color = SKColors.Black;
+        levelPaint.IsAntialias = true;
 
         var levelText = $"{genderSymbol}Lv.{pokemon.Level}";
-        canvas.DrawText(levelText, x + width - 70, y + 25, levelPaint);
+        UnicodeTextRenderer.DrawText(canvas, x + width - 70, y + 25, levelText, levelFont, levelPaint);
 
         // Draw HP label
-        using var hpLabelPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        using var hpLabelFont = new SKFont();
+        hpLabelFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        hpLabelFont.Size = 18;
+        using var hpLabelPaint = new SKPaint();
+        hpLabelPaint.Color = SKColors.Black;
+        hpLabelPaint.IsAntialias = true;
 
-        canvas.DrawText("HP", x + 15, y + 50, hpLabelPaint);
+        UnicodeTextRenderer.DrawText(canvas, x + 15, y + 50, "HP", hpLabelFont, hpLabelPaint);
 
         // Draw HP bar with proper spacing for numbers
-        using var barBgPaint = new SKPaint
-        {
-            Color = new SKColor(180, 180, 180),
-            IsAntialias = true
-        };
+        using var barBgPaint = new SKPaint();
+        barBgPaint.Color = new SKColor(180, 180, 180);
+        barBgPaint.IsAntialias = true;
 
         var barRect = new SKRect(x + 55, y + 42, x + width - 15, y + 54);
         canvas.DrawRect(barRect, barBgPaint);
@@ -813,30 +772,27 @@ public class DuelRenderer(IMongoService mongoService) : INService
             _ => new SKColor(240, 80, 48) // Red
         };
 
-        using var hpPaint = new SKPaint
-        {
-            Color = hpColor,
-            IsAntialias = true
-        };
+        using var hpPaint = new SKPaint();
+        hpPaint.Color = hpColor;
+        hpPaint.IsAntialias = true;
 
         // Draw the actual HP bar
         var hpRect = new SKRect(x + 55, y + 42, x + 55 + hpBarWidth, y + 54);
         canvas.DrawRect(hpRect, hpPaint);
 
         // Draw HP numbers with proper spacing
-        if (isPlayer)
-        {
-            using var hpTextPaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = 16,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Right
-            };
+        if (!isPlayer) return;
+        using var hpTextFont = new SKFont();
+        hpTextFont.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        hpTextFont.Size = 16;
+        using var hpTextPaint = new SKPaint();
+        hpTextPaint.Color = SKColors.Black;
+        hpTextPaint.IsAntialias = true;
 
-            var hpText = $"{pokemon.Hp}/{pokemon.StartingHp}";
-            canvas.DrawText(hpText, x + width - 15, y + 67, hpTextPaint);
-        }
+        var hpText = $"{pokemon.Hp}/{pokemon.StartingHp}";
+        var hpTextWidth = UnicodeTextRenderer.MeasureText(hpText, hpTextFont);
+        UnicodeTextRenderer.DrawText(canvas, x + width - 15 - hpTextWidth, y + 67, hpText, hpTextFont, hpTextPaint);
     }
 
     /// <summary>
@@ -885,7 +841,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
 
         var fileType = "png";
         var skinPath = "";
-        if (!string.IsNullOrEmpty(pokemon.Skin))
+        if (!string.IsNullOrEmpty(pokemon.Skin) && pokemon.Skin != "NULL")
         {
             if (pokemon.Skin.EndsWith("_gif"))
                 fileType = "gif";
@@ -971,15 +927,17 @@ public class DuelRenderer(IMongoService mongoService) : INService
         // Fill with question mark
         canvas.Clear(SKColors.LightGray);
 
-        using var paint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 48,
-            TextAlign = SKTextAlign.Center,
-            IsAntialias = true
-        };
+        using var font = new SKFont();
+        font.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        font.Size = 48;
+        using var paint = new SKPaint();
+        paint.Color = SKColors.Black;
+        paint.IsAntialias = true;
 
-        canvas.DrawText("?", 32, 48, paint);
+        const string questionText = "?";
+        var textWidth = UnicodeTextRenderer.MeasureText(questionText, font);
+        UnicodeTextRenderer.DrawText(canvas, 32 - textWidth / 2, 48, questionText, font, paint);
 
         return bitmap;
     }

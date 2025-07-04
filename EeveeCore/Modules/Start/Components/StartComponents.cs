@@ -1,6 +1,7 @@
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Start.Services;
+using Serilog;
 
 namespace EeveeCore.Modules.Start.Components;
 
@@ -52,7 +53,7 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            Log.Information("{Exception}", e);
             throw;
         }
     }

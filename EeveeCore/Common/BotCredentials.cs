@@ -47,7 +47,6 @@ public class BotCredentials : IBotCredentials
             ConnectionString = config["PostgresConnectionString"]
                                ?? throw new ArgumentNullException("PostgresConnectionString",
                                    "Postgres connection string must be provided"),
-            Name = "PostgreSQL"
         };
 
         MongoConfig = new DbConfig
@@ -65,8 +64,30 @@ public class BotCredentials : IBotCredentials
                                    "Redis connection string must be provided"),
             Name = "Redis"
         };
+
+        // Web API Configuration
+        IsApiEnabled = bool.Parse(config[nameof(IsApiEnabled)] ?? "false");
+        ApiPort = int.Parse(config[nameof(ApiPort)] ?? "5000");
+        JwtSecret = config[nameof(JwtSecret)] ?? "DefaultJwtSecret";
+        DiscordClientId = config[nameof(DiscordClientId)] ?? "DefaultDiscordClientId";
+        DiscordClientSecret = config[nameof(DiscordClientSecret)] ?? "DefaultDiscordClientSecret";
     }
 
+    /// <summary>
+    ///     Gets the JWT secret key for token signing and validation.
+    /// </summary>
+    public string JwtSecret { get; private set; } = null!;
+    
+    /// <summary>
+    ///     Gets the Discord client ID for OAuth authentication.
+    /// </summary>
+    public string DiscordClientId { get; private set; } = null!;
+    
+    /// <summary>
+    ///     Gets the Discord client secret for OAuth authentication.
+    /// </summary>
+    public string DiscordClientSecret { get; private set; } = null!;
+    
     /// <summary>
     ///     Gets the Discord bot token used for authentication.
     /// </summary>
@@ -93,7 +114,6 @@ public class BotCredentials : IBotCredentials
     public string DefaultPrefix { get; }
 
     /// <summary>
-    ///     Gets the configuration for PostgreSQL database connection.
     /// </summary>
     public DbConfig PostgresConfig { get; }
 
@@ -106,6 +126,21 @@ public class BotCredentials : IBotCredentials
     ///     Gets the configuration for Redis database connection.
     /// </summary>
     public DbConfig RedisConfig { get; }
+
+    /// <summary>
+    ///     Gets a value indicating whether the web API is enabled.
+    /// </summary>
+    public bool IsApiEnabled { get; }
+
+    /// <summary>
+    ///     Gets the port for the web API server.
+    /// </summary>
+    public int ApiPort { get; }
+
+    /// <summary>
+    ///     Gets the API key for authentication.
+    /// </summary>
+    public string ApiKey { get; }
 
     /// <summary>
     ///     Gets or sets the collection of user IDs that have owner privileges.
@@ -159,7 +194,6 @@ public interface IBotCredentials
     bool IsDebug { get; }
 
     /// <summary>
-    ///     Gets the configuration for PostgreSQL database connection.
     /// </summary>
     DbConfig PostgresConfig { get; }
 
@@ -172,6 +206,21 @@ public interface IBotCredentials
     ///     Gets the configuration for Redis database connection.
     /// </summary>
     DbConfig RedisConfig { get; }
+
+    /// <summary>
+    ///     Gets a value indicating whether the web API is enabled.
+    /// </summary>
+    bool IsApiEnabled { get; }
+
+    /// <summary>
+    ///     Gets the port for the web API server.
+    /// </summary>
+    int ApiPort { get; }
+
+    /// <summary>
+    ///     Gets the API key for authentication.
+    /// </summary>
+    string ApiKey { get; }
 
     /// <summary>
     ///     Determines whether a user has owner privileges.

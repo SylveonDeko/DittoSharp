@@ -3,8 +3,6 @@ using System.Reflection;
 using Discord.Commands;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBehaviors;
-using EeveeCore.Database;
-using EeveeCore.Database.DbContextStuff;
 using EeveeCore.Database.Models.Mongo.Discord;
 using Serilog;
 using TypeReader = Discord.Commands.TypeReader;
@@ -226,8 +224,8 @@ public class EeveeCore
             // Small delay to ensure migration connections are fully disposed
             await Task.Delay(100);
 
-            var dbProvider = Services.GetRequiredService<DbContextProvider>();
-            await using var context = await dbProvider.GetContextAsync();
+            var dbProvider = Services.GetRequiredService<LinqToDbConnectionProvider>();
+            await using var context = await dbProvider.GetConnectionAsync();
         }
         catch (Exception ex)
         {

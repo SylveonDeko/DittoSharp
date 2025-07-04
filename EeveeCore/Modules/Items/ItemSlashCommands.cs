@@ -163,7 +163,7 @@ public class ItemSlashCommands : EeveeCoreSlashModuleBase<ItemsService>
         [SlashCommand("redeems", "Buy redeems for credits")]
         public async Task Redeems(int? amount = null)
         {
-            var result = await Service.BuyRedeems(ctx.User.Id, amount);
+            var result = await Service.BuyRedeems(ctx.User.Id, (ulong?)amount);
             if (result.Embed != null)
                 await RespondAsync(embed: result.Embed);
             else

@@ -1,19 +1,17 @@
 using System.Reflection;
 using EeveeCore.Common.Logic;
-using EeveeCore.Database.DbContextStuff;
-using EeveeCore.Database.Linq.Models;
+using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Database.Models.Mongo.Pokemon;
-using EeveeCore.Database.Models.PostgreSQL.Pokemon;
 using EeveeCore.Modules.Spawn.Constants;
 using EeveeCore.Services.Impl;
 using Humanizer;
 using LinqToDB;
 using LinqToDB.Data;
-using LinqToDB.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Serilog;
+using InvalidPokemonReference = EeveeCore.Database.Linq.Models.Bot.InvalidPokemonReference;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace EeveeCore.Modules.Pokemon.Services;
 
@@ -22,25 +20,27 @@ namespace EeveeCore.Modules.Pokemon.Services;
 /// </summary>
 public class PokemonService(
     DiscordShardedClient client,
-    DbContextProvider dbProvider,
+    LinqToDbConnectionProvider dbProvider,
     IMongoService mongo,
     RedisCache redis)
     : INService
 {
+    private readonly Random _random = new();
+
     /// <summary>
     ///     Gets all Pokemon belonging to a specific user.
     /// </summary>
     /// <param name="userId">The ID of the user.</param>
     /// <returns>A list of Pokemon owned by the user.</returns>
-    public async Task<List<Database.Models.PostgreSQL.Pokemon.Pokemon>> GetUserPokemons(ulong userId)
+    public async Task<List<Database.Linq.Models.Pokemon.Pokemon>> GetUserPokemons(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
-        var pokeIds = dbContext.UserPokemon.Where(x => x.Owner == userId);
+        await using var db = await dbProvider.GetConnectionAsync();
+        var pokeIds = db.UserPokemon.Where(x => x.Owner == userId);
 
-        if (!pokeIds.Any())
+        if (!await pokeIds.AnyAsync())
             return [];
 
-        return await pokeIds.ToListAsyncEF();
+        return await pokeIds.ToListAsync();
     }
 
     /// <summary>
@@ -48,13 +48,13 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokemonId">The ID of the Pokemon.</param>
     /// <returns>The Pokemon with the specified ID, or null if not found.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetPokemonById(ulong pokemonId)
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> GetPokemonById(ulong pokemonId)
     {
         try
         {
-            await using var dbContext = await dbProvider.GetContextAsync();
-            return await dbContext.UserPokemon
-                .FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+            await using var db = await dbProvider.GetConnectionAsync();
+            return await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == pokemonId);
         }
         catch (Exception e)
         {
@@ -292,12 +292,12 @@ public class PokemonService(
     /// <param name="userId">The ID of the user.</param>
     /// <param name="pokeNumber">The number of the Pokemon to select.</param>
     /// <returns>A tuple indicating success and a message.</returns>
-    public async Task<(bool Success, string Message)> SelectPokemon(ulong userId, int pokeNumber)
+    public async Task<(bool Success, string Message)> SelectPokemon(ulong userId, ulong pokeNumber)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        var user = await db.Users
+            .FirstOrDefaultAsync(u => u.UserId == userId);
 
         if (user == null)
             return (false, "You have not started! Use /start first.");
@@ -307,21 +307,23 @@ public class PokemonService(
 
         // Find the Pokemon in the join table using position
         var position = pokeNumber - 1;
-        var ownership = await dbContext.UserPokemonOwnerships
+        var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.Position == position)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (ownership == null)
             return (false, "You don't have that many Pokemon.");
 
-        var pokemon = await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == ownership.PokemonId);
+        var pokemon = await db.UserPokemon
+            .FirstOrDefaultAsync(p => p.Id == ownership.PokemonId);
 
         if (pokemon == null)
             return (false, "That pokemon does not exist!");
 
-        user.Selected = pokemon.Id;
-        await dbContext.SaveChangesAsync();
+        await db.Users
+            .Where(u => u.UserId == userId)
+            .Set(u => u.Selected, (ulong?)pokemon.Id)
+            .UpdateAsync();
 
         return (true, $"You have selected your {pokemon.PokemonName}");
     }
@@ -331,22 +333,22 @@ public class PokemonService(
     /// </summary>
     /// <param name="userId">The ID of the user.</param>
     /// <returns>The selected Pokemon, or null if none is selected.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetSelectedPokemon(ulong userId)
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> GetSelectedPokemonAsync(ulong userId)
     {
         try
         {
-            await using var dbContext = await dbProvider.GetContextAsync();
+            await using var db = await dbProvider.GetConnectionAsync();
 
-            var selectedId = await dbContext.Users
+            var selectedId = await db.Users
                 .Where(u => u.UserId == userId)
                 .Select(u => u.Selected)
-                .FirstOrDefaultAsyncEF();
+                .FirstOrDefaultAsync();
 
             if (selectedId == 0)
                 return null;
 
-            return await dbContext.UserPokemon
-                .FirstOrDefaultAsyncEF(p => p.Id == selectedId);
+            return await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == selectedId);
         }
         catch (Exception e)
         {
@@ -360,22 +362,22 @@ public class PokemonService(
     /// </summary>
     /// <param name="userId">The ID of the user.</param>
     /// <returns>The newest Pokemon, or null if the user has no Pokemon.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetNewestPokemon(ulong userId)
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> GetNewestPokemonAsync(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Find the ownership record with the highest position (newest Pokemon)
-        var newestOwnership = await dbContext.UserPokemonOwnerships
+        var newestOwnership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId)
             .OrderByDescending(o => o.Position)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (newestOwnership == null)
             return null;
 
         // Get the Pokemon using the ID from the ownership record
-        return await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == newestOwnership.PokemonId);
+        return await db.UserPokemon
+            .FirstOrDefaultAsync(p => p.Id == newestOwnership.PokemonId);
     }
 
     /// <summary>
@@ -395,24 +397,24 @@ public class PokemonService(
     /// <param name="userId">The ID of the user.</param>
     /// <param name="number">The number of the Pokemon.</param>
     /// <returns>The Pokemon with the specified number, or null if not found.</returns>
-    public async Task<Database.Models.PostgreSQL.Pokemon.Pokemon?> GetPokemonByNumber(ulong userId, int number)
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> GetPokemonByNumberAsync(ulong userId, ulong number)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Convert from 1-based user interface numbering to 0-based database position
         var position = number - 1;
 
         // Find the Pokemon ID in the ownership table using position
-        var ownership = await dbContext.UserPokemonOwnerships
+        var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.Position == position)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (ownership == null)
             return null;
 
         // Get the actual Pokemon from the Pokemon table
-        return (await dbContext.UserPokemon
-            .FirstOrDefaultAsyncEF(p => p.Id == ownership.PokemonId))!;
+        return (await db.UserPokemon
+            .FirstOrDefaultAsync(p => p.Id == ownership.PokemonId))!;
     }
 
     /// <summary>
@@ -424,15 +426,15 @@ public class PokemonService(
     /// <returns>A Task representing the asynchronous operation.</returns>
     public async Task RemoveUserPokemon(ulong userId, ulong pokemonId, bool releasePokemon = false)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Begin transaction to ensure consistency
-        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        await using var transaction = await db.BeginTransactionAsync();
 
         try
         {
-            var pokemon = await dbContext.UserPokemon
-                .FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+            var pokemon = await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == pokemonId);
 
             if (pokemon == null)
                 throw new Exception("Pokemon not found");
@@ -441,8 +443,8 @@ public class PokemonService(
                 throw new Exception("Cannot remove favorited Pokemon");
 
             // Find the ownership record
-            var ownership = await dbContext.UserPokemonOwnerships
-                .FirstOrDefaultAsyncEF(o => o.UserId == userId && o.PokemonId == pokemonId);
+            var ownership = await db.UserPokemonOwnerships
+                .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
 
             if (ownership == null)
                 throw new Exception("Pokemon not found in user's collection");
@@ -451,28 +453,33 @@ public class PokemonService(
             var position = ownership.Position;
 
             // Remove the ownership record
-            dbContext.UserPokemonOwnerships.Remove(ownership);
+            await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId && o.PokemonId == pokemonId)
+                .DeleteAsync();
 
             // Update all higher positions to maintain order
-            await dbContext.UserPokemonOwnerships
+            await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId && o.Position > position)
-                .ForEachAsyncEF(o => o.Position--);
+                .Set(o => o.Position, o => o.Position - 1)
+                .UpdateAsync();
 
-            // Check if this was the selected Pokemon
-            var user = await dbContext.Users
-                .FirstOrDefaultAsyncEF(u => u.UserId == userId);
-
-            if (user != null && user.Selected == pokemonId)
-                user.Selected = 0;
+            // Check if this was the selected Pokemon and update if needed
+            await db.Users
+                .Where(u => u.UserId == userId && u.Selected == pokemonId)
+                .Set(u => u.Selected, (ulong?)0)
+                .UpdateAsync();
 
             if (releasePokemon)
                 // Actually delete the Pokemon for release
-                dbContext.UserPokemon.Remove(pokemon);
+                await db.UserPokemon
+                    .Where(p => p.Id == pokemonId)
+                    .DeleteAsync();
             else
                 // For sacrifice, just unlink it
-                pokemon.Owner = 0;
-
-            await dbContext.SaveChangesAsync();
+                await db.UserPokemon
+                    .Where(p => p.Id == pokemonId)
+                    .Set(p => p.Owner, (ulong)0)
+                    .UpdateAsync();
             await transaction.CommitAsync();
         }
         catch
@@ -490,7 +497,7 @@ public class PokemonService(
     public async Task<int> GetUserSoulGauge(ulong userId)
     {
         var value = await redis.Redis.GetDatabase().StringGetAsync($"soul_gauge:{userId}");
-        return value.HasValue ? (int)value : 0;
+        return value.HasValue ? JsonSerializer.Deserialize<int>(value) : 0;
     }
 
     /// <summary>
@@ -567,9 +574,9 @@ public class PokemonService(
     /// <returns>True if ancient Pokemon are unlocked, false otherwise.</returns>
     public async Task<bool> CheckUserHasAncientUnlock(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
-        var user = await dbContext.Users
-            .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+        await using var db = await dbProvider.GetConnectionAsync();
+        var user = await db.Users
+            .FirstOrDefaultAsync(u => u.UserId == userId);
 
         return user?.AncientUnlocked ?? false;
     }
@@ -582,7 +589,7 @@ public class PokemonService(
     /// <param name="radiant">Whether the Pokemon is radiant.</param>
     /// <param name="skin">The skin of the Pokemon, if any.</param>
     /// <returns>A tuple containing the form and image URL.</returns>
-    public async Task<(Form Form, string ImageUrl)> GetPokemonFormInfo(string? pokemonName, bool shiny = false,
+    public async Task<(Form Form, string ImagePath)> GetPokemonFormInfo(string? pokemonName, bool shiny = false,
         bool radiant = false, string skin = null)
     {
         var identifier = await mongo.Forms
@@ -598,7 +605,7 @@ public class PokemonService(
 
         if (!string.IsNullOrEmpty(suffix) && pokemonName.EndsWith(suffix))
         {
-            formId = (int)(identifier.FormOrder - 1)!;
+            formId = (identifier.FormOrder - 1).GetValueOrDefault();
             var formName = pokemonName[..^(suffix.Length + 1)];
 
             var pokemonIdentifier = await mongo.Forms
@@ -617,30 +624,34 @@ public class PokemonService(
 
         var fileType = "png";
         var skinPath = "";
-        if (!string.IsNullOrEmpty(skin))
+        if (!string.IsNullOrEmpty(skin) )
         {
             if (skin.EndsWith("_gif"))
                 fileType = "gif";
-            skinPath = $"{skin}/";
         }
 
-        // Assuming you have a radiant_placeholder_pokes collection
+        // Check for radiant placeholder
         var isPlaceholder = await mongo.RadiantPlaceholders
             .Find(p => p.Name.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
-        var radiantPath = radiant ? "radiant/" : "";
         if (radiant && isPlaceholder != null)
-            return (identifier, "placeholder.png");
+            return (identifier, Path.Combine("data", "images", "placeholder.png"));
 
-        var shinyPath = shiny ? "shiny/" : "";
-        var fileName = $"{radiantPath}{shinyPath}{skinPath}{pokemonId}-{formId}-.{fileType}";
+        // Build local file path
+        var pathSegments = new List<string> { "data", "images" };
 
-        var imageUrl = string.IsNullOrEmpty(skin)
-            ? $"https://images.mewdeko.tech/images/{fileName}"
-            : $"https://images.mewdeko.tech/skins/{fileName}";
+        if (radiant) pathSegments.Add("radiant");
+        if (shiny) pathSegments.Add("shiny");
+        // WHY. WHY IS THERE A LITERAL NULL ENTRY.
+        if (!string.IsNullOrEmpty(skin) && skin != "NULL") pathSegments.Add(skin.TrimEnd('/'));
 
-        return (identifier, imageUrl);
+        var fileName = $"{pokemonId}-{formId}-.{fileType}";
+        pathSegments.Add(fileName);
+
+        var imagePath = Path.Combine(pathSegments.ToArray());
+
+        return (identifier, imagePath);
     }
 
     /// <summary>
@@ -649,8 +660,7 @@ public class PokemonService(
     /// <param name="pokemon">The Pokemon to calculate stats for.</param>
     /// <param name="baseStats">The base stats of the Pokemon.</param>
     /// <returns>A CalculatedStats object containing the calculated stats.</returns>
-    public Task<CalculatedStats> CalculatePokemonStats(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon,
-        PokemonStats baseStats)
+    public Task<CalculatedStats> CalculateStats(Database.Linq.Models.Pokemon.Pokemon pokemon, PokemonStats baseStats)
     {
         var natureModifier = GetNatureModifier(pokemon.Nature);
 
@@ -659,22 +669,22 @@ public class PokemonService(
 
         return Task.FromResult(new CalculatedStats
         {
-            MaxHp = maxHp,
-            Attack = CalculateStat(baseStats.Attack, pokemon.Level, pokemon.AttackIv, pokemon.AttackEv,
+            MaxHp = (int)maxHp,
+            Attack = (int)CalculateStat(baseStats.Attack, pokemon.Level, pokemon.AttackIv, pokemon.AttackEv,
                 natureModifier.Item1 == "Attack" ? 1.1 :
                 natureModifier.Item2 == "Attack" ? 0.9 : 1.0),
-            Defense = CalculateStat(baseStats.Defense, pokemon.Level, pokemon.DefenseIv, pokemon.DefenseEv,
+            Defense = (int)CalculateStat(baseStats.Defense, pokemon.Level, pokemon.DefenseIv, pokemon.DefenseEv,
                 natureModifier.Item1 == "Defense" ? 1.1 :
                 natureModifier.Item2 == "Defense" ? 0.9 : 1.0),
-            SpecialAttack = CalculateStat(baseStats.SpecialAttack, pokemon.Level, pokemon.SpecialAttackIv,
+            SpecialAttack = (int)CalculateStat(baseStats.SpecialAttack, pokemon.Level, pokemon.SpecialAttackIv,
                 pokemon.SpecialAttackEv,
                 natureModifier.Item1 == "SpecialAttack" ? 1.1 :
                 natureModifier.Item2 == "SpecialAttack" ? 0.9 : 1.0),
-            SpecialDefense = CalculateStat(baseStats.SpecialDefense, pokemon.Level, pokemon.SpecialDefenseIv,
+            SpecialDefense = (int)CalculateStat(baseStats.SpecialDefense, pokemon.Level, pokemon.SpecialDefenseIv,
                 pokemon.SpecialDefenseEv,
                 natureModifier.Item1 == "SpecialDefense" ? 1.1 :
                 natureModifier.Item2 == "SpecialDefense" ? 0.9 : 1.0),
-            Speed = CalculateStat(baseStats.Speed, pokemon.Level, pokemon.SpeedIv, pokemon.SpeedEv,
+            Speed = (int)CalculateStat(baseStats.Speed, pokemon.Level, pokemon.SpeedIv, pokemon.SpeedEv,
                 natureModifier.Item1 == "Speed" ? 1.1 :
                 natureModifier.Item2 == "Speed" ? 0.9 : 1.0)
         });
@@ -687,25 +697,24 @@ public class PokemonService(
     /// <returns>A list of dead Pokemon for the user.</returns>
     public async Task<List<DeadPokemon>> GetDeadPokemon(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Check for special admin case
         var actualUserId = userId == 1081889316848017539 ? 946611594488602694UL : userId;
 
         // Get all Pokemon IDs owned by the user from the ownership table
-        var ownedPokemonIds = await dbContext.UserPokemonOwnerships
+        var ownedPokemonIds = await db.UserPokemonOwnerships
             .Where(o => o.UserId == actualUserId)
             .Select(o => o.PokemonId)
-            .ToListAsyncEF();
+            .ToListAsync();
 
         if (ownedPokemonIds.Count == 0)
             return new List<DeadPokemon>();
 
         // Get all dead Pokemon that match the user's owned Pokemon IDs
-        return await dbContext.DeadPokemon
-            .AsNoTracking()
+        return await db.DeadPokemon
             .Where(d => ownedPokemonIds.Contains(d.Id))
-            .ToListAsyncEF();
+            .ToListAsync();
     }
 
     /// <summary>
@@ -718,20 +727,20 @@ public class PokemonService(
             UnrecoverableReferences)>
         CheckInvalidReferencesAgainstDeadPokemon(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Get all invalid references for this user
-        var invalidReferences = await dbContext.InvalidPokemonReferences
+        var invalidReferences = await db.InvalidPokemonReferences
             .Where(r => r.UserId == userId)
-            .ToListAsyncEF();
+            .ToListAsync();
 
         if (invalidReferences.Count == 0)
             return (new List<InvalidPokemonReference>(), new List<InvalidPokemonReference>());
 
         // Get all dead Pokemon IDs
-        var deadPokemonIds = await dbContext.DeadPokemon
+        var deadPokemonIds = await db.DeadPokemon
             .Select(d => d.Id)
-            .ToListAsyncEF();
+            .ToListAsync();
 
         // Check which invalid references match dead Pokemon IDs
         var potentialDeadPokemon = invalidReferences
@@ -753,8 +762,8 @@ public class PokemonService(
     /// <returns>The number of dead Pokemon references that were recovered.</returns>
     public async Task<int> RecoverDeadPokemonReferences(ulong userId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
-        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
+        await using var transaction = await db.BeginTransactionAsync();
 
         try
         {
@@ -764,11 +773,11 @@ public class PokemonService(
                 return 0;
 
             // Find the highest position for this user
-            var highestPosition = await dbContext.UserPokemonOwnerships
+            var highestPosition = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.Position)
-                .Select(o => (int?)o.Position)
-                .FirstOrDefaultAsyncEF() ?? -1;
+                .Select(o => o.Position)
+                .FirstOrDefaultAsync();
 
             // Create ownership entries for the dead Pokemon
             var ownerships = new List<UserPokemonOwnership>();
@@ -785,15 +794,13 @@ public class PokemonService(
                 });
             }
 
-            await dbContext.UserPokemonOwnerships.AddRangeAsync(ownerships);
+            await db.BulkCopyAsync(ownerships);
 
             // Remove the recovered references from invalid references
             var referenceIds = potentialDeadPokemon.Select(r => r.PokemonId).ToList();
-            await dbContext.InvalidPokemonReferences
+            await db.InvalidPokemonReferences
                 .Where(r => r.UserId == userId && referenceIds.Contains(r.PokemonId))
-                .ExecuteDeleteAsync();
-
-            await dbContext.SaveChangesAsync();
+                .DeleteAsync();
             await transaction.CommitAsync();
 
             return potentialDeadPokemon.Count;
@@ -816,8 +823,8 @@ public class PokemonService(
         if (deadPokemon == null || !deadPokemon.Any())
             return;
 
-        await using var dbContext = await dbProvider.GetContextAsync();
-        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
+        await using var transaction = await db.BeginTransactionAsync();
 
         try
         {
@@ -825,18 +832,15 @@ public class PokemonService(
             var ids = deadPokemon.Select(d => d.Id).ToList();
 
             // Delete from dead Pokemon table
-            await dbContext.DeadPokemon
+            await db.DeadPokemon
                 .Where(d => ids.Contains(d.Id))
-                .ExecuteDeleteAsync();
+                .DeleteAsync();
 
             // Convert to live Pokemon
-            var livePokemon = deadPokemon.Select(MapDeadToLivePokemon).ToList();
+            var livePokemon = deadPokemon.Select(MapDeadToLive).ToList();
 
-            // Add in batches for better performance
-            foreach (var batch in livePokemon.Chunk(100))
-                await dbContext.UserPokemon.AddRangeAsync(batch);
-
-            await dbContext.SaveChangesAsync();
+            // Use bulk copy for better performance with large datasets
+            await db.BulkCopyAsync(livePokemon);
             await transaction.CommitAsync();
         }
         catch (Exception e)
@@ -852,9 +856,9 @@ public class PokemonService(
     /// </summary>
     /// <param name="dead">The dead Pokemon to map.</param>
     /// <returns>A live Pokemon mapped from the dead Pokemon.</returns>
-    private static Database.Models.PostgreSQL.Pokemon.Pokemon MapDeadToLivePokemon(DeadPokemon dead)
+    private Database.Linq.Models.Pokemon.Pokemon MapDeadToLive(DeadPokemon dead)
     {
-        return new Database.Models.PostgreSQL.Pokemon.Pokemon
+        return new Database.Linq.Models.Pokemon.Pokemon
         {
             PokemonName = dead.PokemonName,
             HpIv = dead.HpIv,
@@ -907,17 +911,17 @@ public class PokemonService(
     /// <param name="userId">The ID of the user.</param>
     /// <param name="pokemonId">The ID of the Pokemon.</param>
     /// <returns>The index of the Pokemon (1-based), or -1 if not found.</returns>
-    public async Task<int> GetPokemonIndex(ulong userId, ulong pokemonId)
+    public async Task<ulong> GetPokemonIndex(ulong userId, ulong pokemonId)
     {
-        await using var dbContext = await dbProvider.GetContextAsync();
+        await using var db = await dbProvider.GetConnectionAsync();
 
         // Directly query the position from the join table
-        var ownership = await dbContext.UserPokemonOwnerships
+        var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.PokemonId == pokemonId)
-            .FirstOrDefaultAsyncEF();
+            .FirstOrDefaultAsync();
 
         if (ownership == null)
-            return -1;
+            return 0;
 
         // Return 1-based index for user interface
         return ownership.Position + 1;
@@ -932,43 +936,53 @@ public class PokemonService(
     /// <param name="filter">Filter to apply (all, shiny, radiant, etc).</param>
     /// <param name="search">Optional search term.</param>
     /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
-    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<int> PartyPokemon,
+    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<ulong> PartyPokemon,
             ulong? SelectedPokemon)>
-        GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter,string gender, string search)
+        GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter, string gender, string search)
     {
         try
         {
-            await using var db = await dbProvider.GetContextAsync();
-            var conn = db.CreateLinqToDBConnection();
+            await using var db = await dbProvider.GetConnectionAsync();
 
             // Get user data for party and selected - using LinqToDB, not EF Core, EF Core is slow sometimes.
-            var userData = await conn.GetTable<User>()
+            var userData = await db.Users
                 .Where(u => u.UserId == userId)
                 .Select(u => new { u.Party, u.Selected })
-                .FirstOrDefaultAsyncLinqToDB();
+                .FirstOrDefaultAsync();
 
             if (userData == null)
             {
-                var userExists = await conn.GetTable<User>()
-                    .AnyAsyncLinqToDB(u => u.UserId == userId);
+                var userExists = await db.Users
+                    .AnyAsync(u => u.UserId == userId);
 
                 if (!userExists)
-                    return (new List<PokemonListEntry>(), null, new HashSet<int>(), null);
+                    return (new List<PokemonListEntry>(), null, new HashSet<ulong>(), null);
             }
 
             // Create lookup sets for efficient checking
             var partyLookup = userData?.Party != null
-                ? new HashSet<int>(userData.Party.Where(id => id != 0))
-                : new HashSet<int>();
+                ? new HashSet<ulong>(userData.Party.Where(id => id != 0))
+                : new HashSet<ulong>();
 
             // Get Pokemon from the ownership table using JOIN instead of separate queries
-            var query = from ownership in conn.GetTable<UserPokemonOwnership>()
-                join pokemon in conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
-                    on ownership.PokemonId equals pokemon.Id
-                where ownership.UserId == userId
-                select new { Pokemon = pokemon, ownership.Position };
+            var query = from ownership in db.GetTable<UserPokemonOwnership>()
+                        join pokemon in db.GetTable<Database.Linq.Models.Pokemon.Pokemon>() on ownership.PokemonId equals pokemon.Id
+                        where ownership.UserId == userId
+                        select new { Pokemon = pokemon, ownership.Position };
 
-            var totalCount = await query.CountAsyncLinqToDB();
+            // For market filter, we need a different query that gets Pokemon from market listings
+            if (filter == "market")
+            {
+                query = from market in db.GetTable<Database.Linq.Models.Game.Market>()
+                        join pokemon in db.GetTable<Database.Linq.Models.Pokemon.Pokemon>() on market.PokemonId equals pokemon.Id
+                        where market.OwnerId == userId && market.BuyerId == null
+                        select new
+                        {
+                            Pokemon = pokemon, Position = market.Id
+                        }; // Use market ID as position for market listings
+            }
+
+            var totalCount = await query.CountAsync();
 
             // Apply filter
             query = filter switch
@@ -979,7 +993,7 @@ public class PokemonService(
                 "legendary" => query.Where(p => PokemonList.LegendList.Contains(p.Pokemon.PokemonName)),
                 "favorite" => query.Where(p => p.Pokemon.Favorite),
                 "champion" => query.Where(p => p.Pokemon.Champion),
-                "party" => query.Where(p => partyLookup.Contains((int)p.Pokemon.Id)),
+                "party" => query.Where(p => partyLookup.Contains(p.Pokemon.Id)),
                 "market" => query.Where(p => p.Pokemon.MarketEnlist),
                 _ => query
             };
@@ -992,22 +1006,47 @@ public class PokemonService(
                 _ => query
             };
 
-            // Get collection stats before applying sort
-            var stats = new Dictionary<string, int> {
-                { "TotalCount", totalCount }
-            };
+            // Apply search filter at database level where possible
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(p => 
+                    p.Pokemon.PokemonName.Contains(search) ||
+                    (p.Pokemon.Nickname != null && p.Pokemon.Nickname.Contains(search)));
+            }
 
-            stats["Total"] = await query.CountAsyncLinqToDB();
-            stats["Shiny"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Shiny == true);
-            stats["Radiant"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Radiant == true);
-            stats["Shadow"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Skin == "shadow");
-            stats["Legendary"] = await query.CountAsyncLinqToDB(p => PokemonList.LegendList.Contains(p.Pokemon.PokemonName));
-            stats["Favorite"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Favorite);
-            stats["Champion"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Champion);
-            stats["Market"] = await query.CountAsyncLinqToDB(p => p.Pokemon.MarketEnlist);
-            stats["Male"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-m");
-            stats["Female"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-f");
-            stats["Genderless"] = await query.CountAsyncLinqToDB(p => p.Pokemon.Gender == "-x");
+            // Calculate all stats in a single query using conditional aggregation
+            var statsData = await query
+                .Select(p => new
+                {
+                    Total = 1,
+                    Shiny = p.Pokemon.Shiny == true ? 1 : 0,
+                    Radiant = p.Pokemon.Radiant == true ? 1 : 0,
+                    Shadow = p.Pokemon.Skin == "shadow" ? 1 : 0,
+                    Legendary = PokemonList.LegendList.Contains(p.Pokemon.PokemonName) ? 1 : 0,
+                    Favorite = p.Pokemon.Favorite ? 1 : 0,
+                    Champion = p.Pokemon.Champion ? 1 : 0,
+                    Market = p.Pokemon.MarketEnlist ? 1 : 0,
+                    Male = p.Pokemon.Gender == "-m" ? 1 : 0,
+                    Female = p.Pokemon.Gender == "-f" ? 1 : 0,
+                    Genderless = p.Pokemon.Gender == "-x" ? 1 : 0
+                })
+                .ToListAsync();
+
+            var stats = new Dictionary<string, int>
+            {
+                { "TotalCount", totalCount },
+                { "Total", statsData.Sum(s => s.Total) },
+                { "Shiny", statsData.Sum(s => s.Shiny) },
+                { "Radiant", statsData.Sum(s => s.Radiant) },
+                { "Shadow", statsData.Sum(s => s.Shadow) },
+                { "Legendary", statsData.Sum(s => s.Legendary) },
+                { "Favorite", statsData.Sum(s => s.Favorite) },
+                { "Champion", statsData.Sum(s => s.Champion) },
+                { "Market", statsData.Sum(s => s.Market) },
+                { "Male", statsData.Sum(s => s.Male) },
+                { "Female", statsData.Sum(s => s.Female) },
+                { "Genderless", statsData.Sum(s => s.Genderless) }
+            };
 
             // Apply sorting
             query = sortOrder switch
@@ -1019,7 +1058,7 @@ public class PokemonService(
                 SortOrder.Name => query.OrderBy(p => p.Pokemon.PokemonName),
                 SortOrder.Recent => query.OrderByDescending(p => p.Pokemon.Timestamp),
                 SortOrder.Favorite => query.OrderByDescending(p => p.Pokemon.Favorite),
-                SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains((int)p.Pokemon.Id)),
+                SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains(p.Pokemon.Id)),
                 SortOrder.Champion => query.OrderByDescending(p => p.Pokemon.Champion),
                 _ => query.OrderBy(p => p.Position) // Default sort by position (index in collection)
             };
@@ -1046,59 +1085,72 @@ public class PokemonService(
                 p.Pokemon.Tags,
                 p.Pokemon.Tradable,
                 p.Pokemon.Breedable,
+                p.Pokemon.Nature,
                 Position = p.Position + 1 // Convert to 1-based indexing for display
             });
 
             // Execute the query and get the results
-            var pokemonData = await projectedQuery.ToListAsyncLinqToDB();
+            var pokemonData = await projectedQuery.ToListAsync();
 
+            // Apply additional search filters for array fields that couldn't be done at DB level
             if (!string.IsNullOrEmpty(search))
             {
                 pokemonData = pokemonData.Where(p =>
                     p.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     (p.Nickname != null && p.Nickname.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
-                    (p.Tags != null && p.Tags.Any(t => t != null && t.Contains(search, StringComparison.OrdinalIgnoreCase))) ||
-                    (p.Moves != null && p.Moves.Any(m => m != null && m.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                    (p.Tags != null && p.Tags.Any(t =>
+                        t != null && t.Contains(search, StringComparison.OrdinalIgnoreCase))) ||
+                    (p.Moves != null && p.Moves.Any(m =>
+                        m != null && m.Contains(search, StringComparison.OrdinalIgnoreCase)))
                 ).ToList();
             }
 
-            // If we need to sort by type, we need to process the results further
+            // If we need to sort by type, batch fetch types from MongoDB
             if (sortOrder == SortOrder.Type)
             {
-                var typedPokemon = new List<(PokemonListEntry entry, string primaryType)>();
+                var uniqueNames = pokemonData.Select(p => p.PokemonName).Distinct().ToList();
+                
+                // Batch fetch types from MongoDB
+                var pokemonTypes = await mongo.PFile
+                    .Find(p => uniqueNames.Contains(p.Identifier))
+                    .Project(p => new { p.Identifier, p.Types })
+                    .ToListAsync();
+                
+                var typeMap = pokemonTypes.ToDictionary(
+                    pt => pt.Identifier, 
+                    pt => pt.Types.FirstOrDefault() ?? "Normal");
 
-                foreach (var p in pokemonData)
+                var typedPokemon = pokemonData.Select(p => new
                 {
-                    var entry = new PokemonListEntry(
-                        p.Id,
-                        p.PokemonName,
-                        p.Position,
-                        p.Level,
-                        p.IvTotal / 186.0,
-                        p.Shiny ?? false,
-                        p.Radiant ?? false,
-                        p.Skin,
-                        p.Gender,
-                        p.Nickname,
-                        p.Favorite,
-                        p.Champion,
-                        p.MarketEnlist,
-                        p.HeldItem,
-                        p.Moves ?? [],
-                        p.Tags ?? [],
-                        p.Tradable,
-                        p.Breedable,
-                        p.Timestamp
-                    );
-
-                    var primaryType = await GetPrimaryType(p.PokemonName);
-                    typedPokemon.Add((entry, primaryType));
-                }
+                    Pokemon = p,
+                    PrimaryType = typeMap.GetValueOrDefault(p.PokemonName, "Normal")
+                }).ToList();
 
                 var sortedList = typedPokemon
-                    .OrderBy(tp => tp.primaryType)
-                    .ThenBy(tp => tp.entry.Name)
-                    .Select(tp => tp.entry)
+                    .OrderBy(tp => tp.PrimaryType)
+                    .ThenBy(tp => tp.Pokemon.PokemonName)
+                    .Select(tp => new PokemonListEntry(
+                        tp.Pokemon.Id,
+                        tp.Pokemon.PokemonName,
+                        tp.Pokemon.Position,
+                        tp.Pokemon.Level,
+                        tp.Pokemon.IvTotal / 186.0,
+                        tp.Pokemon.Shiny ?? false,
+                        tp.Pokemon.Radiant ?? false,
+                        tp.Pokemon.Skin,
+                        tp.Pokemon.Gender,
+                        tp.Pokemon.Nickname,
+                        tp.Pokemon.Favorite,
+                        tp.Pokemon.Champion,
+                        tp.Pokemon.MarketEnlist,
+                        tp.Pokemon.HeldItem,
+                        tp.Pokemon.Moves ?? [],
+                        tp.Pokemon.Tags ?? [],
+                        tp.Pokemon.Tradable,
+                        tp.Pokemon.Breedable,
+                        tp.Pokemon.Timestamp,
+                        tp.Pokemon.Nature
+                    ))
                     .ToList();
 
                 return (sortedList, stats, partyLookup, userData?.Selected);
@@ -1124,7 +1176,8 @@ public class PokemonService(
                 p.Tags ?? [],
                 p.Tradable,
                 p.Breedable,
-                p.Timestamp
+                p.Timestamp,
+                p.Nature
             )).ToList();
 
             return (result, stats, partyLookup, userData?.Selected);
@@ -1139,62 +1192,18 @@ public class PokemonService(
     }
 
     /// <summary>
-    ///     Calculates statistics about a user's Pokemon collection.
-    /// </summary>
-    /// <param name="userId">The Discord ID of the user.</param>
-    /// <param name="conn">The LinqToDB connection.</param>
-    /// <returns>A dictionary containing count statistics for different Pokemon categories.</returns>
-    private async Task<Dictionary<string, int>> CalculateCollectionStatistics(ulong userId, DataConnection conn)
-    {
-        // Get all ownership records for this user
-        var ownerships = conn.GetTable<UserPokemonOwnership>()
-            .Where(o => o.UserId == userId);
-
-        // Join with Pokemon table to get details needed for stats
-        var pokemonQuery = from o in ownerships
-            join p in conn.GetTable<Database.Models.PostgreSQL.Pokemon.Pokemon>()
-                on o.PokemonId equals p.Id
-            select p;
-
-        // Get total count
-        var total = await pokemonQuery.CountAsyncLinqToDB();
-
-        // Get counts for different categories
-        var shinyCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Shiny == true);
-        var radiantCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Radiant == true);
-        var shadowCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Skin == "shadow");
-        var legendaryCount = await pokemonQuery.CountAsyncLinqToDB(p => PokemonList.LegendList.Contains(p.PokemonName));
-        var favoriteCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Favorite);
-        var championCount = await pokemonQuery.CountAsyncLinqToDB(p => p.Champion);
-        var marketCount = await pokemonQuery.CountAsyncLinqToDB(p => p.MarketEnlist);
-
-        return new Dictionary<string, int>
-        {
-            { "Total", total },
-            { "Shiny", shinyCount },
-            { "Radiant", radiantCount },
-            { "Shadow", shadowCount },
-            { "Legendary", legendaryCount },
-            { "Favorite", favoriteCount },
-            { "Champion", championCount },
-            { "Market", marketCount }
-        };
-    }
-
-    /// <summary>
     ///     Gets the total count of Pokemon owned by a user.
     /// </summary>
     /// <param name="userId">The ID of the user.</param>
     /// <returns>The total count of Pokemon owned by the user.</returns>
-    public async Task<int> GetUserPokemonCount(ulong userId)
+    public async Task<ulong> GetUserPokemonCount(ulong userId)
     {
         try
         {
-            await using var db = await dbProvider.GetContextAsync();
-            var conn = db.CreateLinqToDBConnection();
+            await using var db = await dbProvider.GetConnectionAsync();
 
-            return await conn.GetTable<UserPokemonOwnership>()
-                .CountAsyncLinqToDB(o => o.UserId == userId);
+            return (ulong)await db.UserPokemonOwnerships
+                .CountAsync(o => o.UserId == userId);
         }
         catch (Exception e)
         {
@@ -1283,9 +1292,9 @@ public class PokemonService(
     /// <param name="ev">The EV for the stat.</param>
     /// <param name="natureMultiplier">The nature multiplier for the stat.</param>
     /// <returns>The calculated stat value.</returns>
-    private static int CalculateStat(int baseStat, int level, int iv, int ev, double natureMultiplier)
+    private static double CalculateStat(int baseStat, int level, int iv, int ev, double natureMultiplier)
     {
-        return (int)(((2 * baseStat + iv + ev / 4) * level / 100 + 5) * natureMultiplier);
+        return (((2 * baseStat + iv + ev / 4) * level / 100 + 5) * natureMultiplier);
     }
 
     /// <summary>
@@ -1331,7 +1340,7 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokemon">The Pokemon to calculate friendship for.</param>
     /// <returns>The calculated friendship value.</returns>
-    public int CalculateFriendship(Database.Models.PostgreSQL.Pokemon.Pokemon? pokemon)
+    public int CalculateFriendship(Database.Linq.Models.Pokemon.Pokemon pokemon)
     {
         // Base friendship starts at 70
         var friendship = 70;
@@ -1395,8 +1404,8 @@ public class PokemonService(
         bool overrideLvl100 = false,
         IMessageChannel channel = null)
     {
-        await using var db = await dbProvider.GetContextAsync();
-        var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+        await using var db = await dbProvider.GetConnectionAsync();
+        var pokemon = await db.UserPokemon.FirstOrDefaultAsync(p => p.Id == pokemonId);
         if (pokemon == null) return (false, null, false);
 
         var originalName = pokemon.PokemonName;
@@ -1474,7 +1483,7 @@ public class PokemonService(
         }
 
         // Get owner's region
-        var owner = await db.Users.FirstOrDefaultAsyncEF(u => u.UserId == pokemon.Owner);
+        var owner = await db.Users.FirstOrDefaultAsync(u => u.UserId == pokemon.Owner);
         if (owner?.Region == null)
             return (false, null, false);
 
@@ -1496,8 +1505,8 @@ public class PokemonService(
 
         // Update the Pokemon
         await db.UserPokemon.Where(p => p.Id == pokemonId)
-            .ExecuteUpdateAsync(p => p
-                .SetProperty(x => x.PokemonName, evoName));
+            .Set(p => p.PokemonName, evoName)
+            .UpdateAsync();
 
         if (channel != null)
             try
@@ -1518,6 +1527,233 @@ public class PokemonService(
     }
 
     /// <summary>
+    ///     Creates a new Pokemon and adds it to a user's collection.
+    ///     Handles generation of IVs, nature, ability, and other attributes.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user who will own the Pokemon.</param>
+    /// <param name="pokemonName">The name of the Pokemon to create.</param>
+    /// <param name="shiny">Whether the Pokemon should be shiny.</param>
+    /// <param name="boosted">Whether the Pokemon's IVs should be boosted.</param>
+    /// <param name="radiant">Whether the Pokemon should be radiant.</param>
+    /// <param name="skin">The skin to apply to the Pokemon, if any.</param>
+    /// <param name="gender">The gender of the Pokemon, or null for random.</param>
+    /// <param name="level">The level of the Pokemon.</param>
+    /// <returns>The created Pokemon object.</returns>
+    public async Task<Database.Linq.Models.Pokemon.Pokemon?> CreatePokemon(
+        ulong userId,
+        string? pokemonName,
+        bool shiny = false,
+        bool boosted = false,
+        bool radiant = false,
+        string skin = null,
+        string gender = null,
+        int level = 1)
+    {
+        // Get form info from MongoDB
+        var formInfo = await mongo.Forms
+            .Find(f => f.Identifier.Equals(pokemonName.ToLower()))
+            .FirstOrDefaultAsync();
+
+        if (formInfo == null) return null;
+
+        // Get pokemon info
+        var pokemonInfo = await mongo.PFile
+            .Find(p => p.PokemonId == formInfo.PokemonId)
+            .FirstOrDefaultAsync();
+
+        if (pokemonInfo == null && pokemonName.Contains("alola"))
+        {
+            var pokemonNameWithoutSuffix = pokemonName.ToLower().Split("-")[0];
+            pokemonInfo = await mongo.PFile
+                .Find(p => p.Identifier == pokemonNameWithoutSuffix)
+                .FirstOrDefaultAsync();
+        }
+
+        if (pokemonInfo == null) return null;
+
+        // Get ability ids
+        var abilityDocs = await mongo.PokeAbilities
+            .Find(a => a.PokemonId == formInfo.PokemonId)
+            .ToListAsync();
+        var abilityIds = abilityDocs.Select(doc => doc.AbilityId).ToList();
+
+        // Determine base stats
+        var minIv = boosted ? 12 : 1;
+        var maxIv = boosted || _random.Next(2) == 0 ? 31 : 29;
+
+        // Generate IVs
+        var hpIv = _random.Next(minIv, maxIv + 1);
+        var atkIv = _random.Next(minIv, maxIv + 1);
+        var defIv = _random.Next(minIv, maxIv + 1);
+        var spaIv = _random.Next(minIv, maxIv + 1);
+        var spdIv = _random.Next(minIv, maxIv + 1);
+        var speIv = _random.Next(minIv, maxIv + 1);
+
+        // Random nature
+        var nature = await mongo.Natures
+            .Find(_ => true)
+            .ToListAsync();
+        var selectedNature = nature[_random.Next(nature.Count)].Identifier;
+
+        // Determine gender if not provided
+        if (string.IsNullOrEmpty(gender))
+        {
+            if (pokemonName.ToLower().Contains("nidoran-"))
+                gender = pokemonName.ToLower().EndsWith("f") ? "-f" : "-m";
+            else
+                switch (pokemonName.ToLower())
+                {
+                    case "illumise":
+                        gender = "-f";
+                        break;
+                    case "volbeat":
+                        gender = "-m";
+                        break;
+                    default:
+                    {
+                        if (pokemonInfo.GenderRate == -1)
+                            gender = "-x";
+                        else
+                            gender = _random.Next(8) < pokemonInfo.GenderRate ? "-f" : "-m";
+                        break;
+                    }
+                }
+        }
+
+        // Check for shadow override if no skin is specified
+        if (string.IsNullOrEmpty(skin) && !radiant && !shiny)
+        {
+            var makeShadow = await ShadowHuntCheck(userId, pokemonName);
+            if (makeShadow)
+            {
+                skin = "shadow";
+                // Log shadow creation
+                if (client.GetChannel(1005737655025291334) is IMessageChannel channel)
+                    await channel.SendMessageAsync($"`{userId} - {pokemonName}`");
+            }
+        }
+
+        // Create the Pokemon
+        var newPokemon = new Database.Linq.Models.Pokemon.Pokemon
+        {
+            PokemonName = pokemonName.Capitalize(),
+            Nickname = "None",
+            Gender = gender,
+            HpIv = hpIv,
+            AttackIv = atkIv,
+            DefenseIv = defIv,
+            SpecialAttackIv = spaIv,
+            SpecialDefenseIv = spdIv,
+            SpeedIv = speIv,
+            HpEv = 0,
+            AttackEv = 0,
+            DefenseEv = 0,
+            SpecialAttackEv = 0,
+            SpecialDefenseEv = 0,
+            SpeedEv = 0,
+            Level = level,
+            Moves = ["tackle", "tackle", "tackle", "tackle"],
+            HeldItem = "None",
+            Experience = 1,
+            Nature = selectedNature,
+            ExperienceCap = level * level,
+            Price = 0,
+            MarketEnlist = false,
+            Favorite = false,
+            AbilityIndex = abilityIds.Any() ? _random.Next(abilityIds.Count) : 0,
+            CaughtBy = userId,
+            Radiant = radiant,
+            Shiny = shiny,
+            Skin = skin,
+            Owner = userId,
+            Tags = [],
+            Tradable = true,
+            Breedable = true,
+            Temporary = false,
+            Happiness = pokemonInfo.BaseHappiness ?? 70,
+            Timestamp = DateTime.UtcNow
+        };
+
+        // Start a transaction to ensure consistency
+        await using var db = await dbProvider.GetConnectionAsync();
+        await using var transaction = await db.BeginTransactionAsync();
+
+        try
+        {
+            // Add the Pokemon and get its ID
+            newPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(newPokemon);
+
+            // Find the highest current position for this user
+            var highestPosition = await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.Position)
+                .Select(o => o.Position)
+                .FirstOrDefaultAsync();
+
+            // Create a new ownership record with the next position
+            var ownership = new UserPokemonOwnership
+            {
+                UserId = userId,
+                PokemonId = newPokemon.Id,
+                Position = highestPosition + 1 // Use the next available position
+            };
+
+            await db.InsertAsync(ownership);
+
+            // Update achievements
+            if (shiny)
+                await db.Achievements
+                    .Where(a => a.UserId == userId)
+                    .Set(a => a.ShinyCaught, a => a.ShinyCaught + 1)
+                    .UpdateAsync();
+            else
+                await db.Achievements
+                    .Where(a => a.UserId == userId)
+                    .Set(a => a.PokemonCaught, a => a.PokemonCaught + 1)
+                    .UpdateAsync();
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            Log.Error(ex, "Error creating Pokemon {Name} for user {UserId}", pokemonName, userId);
+            return null;
+        }
+
+        return newPokemon;
+    }
+
+    /// <summary>
+    ///     Checks if a shadow Pokemon should be spawned for a user's hunt.
+    ///     Calculates the chance based on the user's current chain value.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user.</param>
+    /// <param name="pokemon">The Pokemon the user is hunting.</param>
+    /// <returns>True if a shadow Pokemon should spawn, false otherwise.</returns>
+    private async Task<bool> ShadowHuntCheck(ulong userId, string? pokemon)
+    {
+        await using var db = await dbProvider.GetConnectionAsync();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+
+        if (user?.Hunt != pokemon?.Capitalize())
+            return false;
+
+        var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user.Chain / 1000.0);
+
+        if (makeShadow)
+            await db.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Chain, 0)
+                .UpdateAsync();
+        else
+            await db.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Chain, u => u.Chain + 1)
+                .UpdateAsync();
+        return makeShadow;
+    }
+
+    /// <summary>
     ///     Devolves a Pokemon to its previous evolution stage.
     /// </summary>
     /// <param name="userId">The ID of the user who owns the Pokemon.</param>
@@ -1525,8 +1761,8 @@ public class PokemonService(
     /// <returns>True if the Pokemon was successfully devolved, false otherwise.</returns>
     public async Task<bool> Devolve(ulong userId, ulong pokemonId)
     {
-        await using var db = await dbProvider.GetContextAsync();
-        var pokemon = await db.UserPokemon.FirstOrDefaultAsyncEF(p => p.Id == pokemonId);
+        await using var db = await dbProvider.GetConnectionAsync();
+        var pokemon = await db.UserPokemon.FirstOrDefaultAsync(p => p.Id == pokemonId);
         if (pokemon == null || pokemon.Radiant.GetValueOrDefault())
             return false;
 
@@ -1542,8 +1778,8 @@ public class PokemonService(
 
         var newName = preEvo.Identifier.Capitalize();
         await db.UserPokemon.Where(p => p.Id == pokemonId)
-            .ExecuteUpdateAsync(p => p
-                .SetProperty(x => x.PokemonName, newName));
+            .Set(p => p.PokemonName, newName)
+            .UpdateAsync();
 
         return true;
     }
@@ -1559,12 +1795,12 @@ public class PokemonService(
     /// <param name="overrideLvl100">Whether to override the level 100 evolution restriction.</param>
     /// <returns>True if the Pokemon meets the evolution requirements, false otherwise.</returns>
     private async Task<bool> CheckEvoReqs(
-        Database.Models.PostgreSQL.Pokemon.Pokemon pokemon,
+        Database.Linq.Models.Pokemon.Pokemon pokemon,
         int? heldItemId,
         int? activeItemId,
         string region,
         Dictionary<string, object> evoReq,
-        bool overrideLvl100)
+        bool overrideLvl100 = false)
     {
         var reqFlags = EvoReqs.FromRaw(evoReq);
 
@@ -1698,10 +1934,9 @@ public class PokemonService(
     {
         try
         {
-            await using var dbContext = await dbProvider.GetContextAsync();
-            var user = await dbContext.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsyncEF(u => u.UserId == userId);
+            await using var db = await dbProvider.GetConnectionAsync();
+            var user = await db.Users
+                .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null)
                 return $"Unknown Trainer ({userId})";
@@ -1760,7 +1995,7 @@ public class PokemonService(
 public record PokemonListEntry(
     ulong BotId,
     string Name,
-    int Number,
+    ulong Number,
     int Level,
     double IvPercent,
     bool Shiny,
@@ -1776,7 +2011,8 @@ public record PokemonListEntry(
     string[] Tags,
     bool Tradable,
     bool Breedable,
-    DateTime? Timestamp
+    DateTime? Timestamp,
+    string Nature
 );
 
 /// <summary>
