@@ -4,6 +4,7 @@ using EeveeCore.Common.Attributes.Interactions;
 using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Market.Services;
+using EeveeCore.Modules.Pokemon.Services;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
 
@@ -15,8 +16,9 @@ namespace EeveeCore.Modules.Market;
 /// </summary>
 /// <param name="interactivity">Service for handling interactive components like pagination.</param>
 /// <param name="tradeLockService">The trade lock service.</param>
+/// <param name="pokemonService">Service for getting Pokemon information and images.</param>
 [Group("market", "Pokemon market commands")]
-public class MarketSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService) 
+public class MarketSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService, PokemonService pokemonService) 
     : EeveeCoreSlashModuleBase<MarketService>
 {
 
@@ -200,65 +202,178 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         [Summary("search", "Search for specific Pokemon")]
         string? search = null)
     {
-        await DeferAsync();
-
-        var result = await Service.GetMarketListingsAsync(sortBy, filter, search);
-        
-        if (result.Listings.Count == 0)
+        try
         {
-            var message = result.HasFilters 
-                ? "No Pokemon are currently listed on the market that match your criteria."
-                : "The market is currently empty.";
-                
-            await ctx.Interaction.SendEphemeralFollowupErrorAsync(message);
-            return;
-        }
+            await DeferAsync();
 
-        // Create paginated market listing
-        var pages = new List<PageBuilder>();
-        var itemsPerPage = 10;
-        var totalPages = (result.Listings.Count - 1) / itemsPerPage + 1;
+            var result = await Service.GetMarketListingsAsync(sortBy, filter, search);
 
-        for (var i = 0; i < totalPages; i++)
-        {
-            var pageItems = result.Listings
-                .Skip(i * itemsPerPage)
-                .Take(itemsPerPage);
-
-            var description = new StringBuilder();
-            description.AppendLine("**Currently Available Pokemon:**\n");
-            
-            foreach (var listing in pageItems)
+            if (result.Listings.Count == 0)
             {
-                var emoji = GetMarketPokemonEmoji(listing.Shiny, listing.Radiant, listing.Skin);
-                var genderEmoji = GetGenderEmoji(listing.Gender);
-                var ivTotal = listing.HpIv + listing.AttackIv + listing.DefenseIv + 
-                             listing.SpecialAttackIv + listing.SpecialDefenseIv + listing.SpeedIv;
-                
-                description.AppendLine($"{emoji} **{listing.PokemonName}** {genderEmoji} • Lv.{listing.Level} • {ivTotal}/186 IV");
-                description.AppendLine($"💰 **{listing.Price:N0}** coins • ID: `{listing.ListingId}`");
-                description.AppendLine($"Use `/market info {listing.ListingId}` for details\n");
+                var message = result.HasFilters
+                    ? "No Pokemon are currently listed on the market that match your criteria."
+                    : "The market is currently empty.";
+
+                await ctx.Interaction.SendEphemeralFollowupErrorAsync(message);
+                return;
             }
 
-            var page = new PageBuilder()
-                .WithTitle("🏪 Pokemon Market")
-                .WithColor(Color.Green)
-                .WithDescription(description.ToString())
-                .WithFooter($"Page {i + 1}/{totalPages} • {result.Listings.Count} Pokemon listed");
+            // Create component paginator with page factory
+            const int itemsPerPage = 5;
+            var totalPages = (result.Listings.Count - 1) / itemsPerPage + 1;
 
-            pages.Add(page);
+            var paginator = new ComponentPaginatorBuilder()
+                .AddUser(ctx.User)
+                .WithPageFactory(GeneratePage)
+                .WithPageCount(totalPages)
+                .Build();
+
+            await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10), 
+                InteractionResponseType.DeferredChannelMessageWithSource);
+
+            IPage GeneratePage(IComponentPaginator p)
+            {
+                var pageItems = result.Listings
+                    .Skip(p.CurrentPageIndex * itemsPerPage)
+                    .Take(itemsPerPage)
+                    .ToList();
+
+                var fileAttachments = new List<FileAttachment>();
+                var attachmentCounter = 0;
+
+                // Create a main container to hold everything
+                var containerComponents = new List<IMessageComponentBuilder>();
+
+                // Add title
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"# 🏪 Pokemon Market\n**Currently Available Pokemon:**"));
+
+                // Add separator after title
+                containerComponents.Add(new SeparatorBuilder());
+
+                foreach (var listing in pageItems)
+                {
+                    var emoji = GetMarketPokemonEmoji(listing.Shiny, listing.Radiant, listing.Skin);
+                    var genderEmoji = GetGenderEmoji(listing.Gender);
+                    var ivTotal = listing.HpIv + listing.AttackIv + listing.DefenseIv +
+                                  listing.SpecialAttackIv + listing.SpecialDefenseIv + listing.SpeedIv;
+
+                    // Get Pokemon image
+                    var (_, imagePath) = pokemonService.GetPokemonFormInfo(
+                        listing.PokemonName,
+                        listing.Shiny == true,
+                        listing.Radiant == true,
+                        listing.Skin ?? "").Result;
+
+                    // Create info text component with IV progress bar
+                    var ivPercentage = (int)Math.Round((double)ivTotal / 186 * 100);
+                    var ivProgressBar = GenerateProgressBar(ivPercentage);
+                    
+                    var infoText = $"**{emoji} {listing.PokemonName}** {genderEmoji}\n" +
+                                   $"Level: {listing.Level}\n" +
+                                   $"IV: {ivProgressBar} {ivPercentage}%\n" +
+                                   $"💰 **{listing.Price:N0}** coins\n" +
+                                   $"ID: `{listing.ListingId}`";
+
+                    // Create section with text and thumbnail layout
+                    var sectionBuilder = new SectionBuilder()
+                        .WithComponents(new List<IMessageComponentBuilder>
+                        {
+                            new TextDisplayBuilder().WithContent(infoText)
+                        });
+
+                    // Add thumbnail as accessory (right side) if image exists
+                    if (File.Exists(imagePath))
+                    {
+                        var imageFileName = $"pokemon_{attachmentCounter}.png";
+                        var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                        fileAttachments.Add(new FileAttachment(fileStream, imageFileName));
+
+                        // Add thumbnail as accessory for the section (right side)
+                        var thumbnailBuilder = new ThumbnailBuilder()
+                            .WithMedia(new UnfurledMediaItemProperties
+                            {
+                                Url = $"attachment://{imageFileName}"
+                            });
+
+                        sectionBuilder.WithAccessory(thumbnailBuilder);
+                        attachmentCounter++;
+                    }
+                    else
+                    {
+                        // If no image, add info button as accessory instead
+                        var infoButton = new ButtonBuilder()
+                            .WithCustomId($"market_info:{listing.ListingId}")
+                            .WithStyle(ButtonStyle.Primary)
+                            .WithEmote(new Emoji("ℹ️"));
+
+                        sectionBuilder.WithAccessory(infoButton);
+                    }
+
+                    containerComponents.Add(sectionBuilder);
+
+                    // Add separator between listings
+                    if (listing != pageItems.Last())
+                    {
+                        containerComponents.Add(new SeparatorBuilder());
+                    }
+                }
+
+                // Add separator before controls
+                containerComponents.Add(new SeparatorBuilder());
+
+                // Create select menu with current page Pokemon
+                var selectOptions = pageItems.Select(listing => 
+                    new SelectMenuOptionBuilder()
+                        .WithLabel($"{GetMarketPokemonEmoji(listing.Shiny, listing.Radiant, listing.Skin)} {listing.PokemonName}")
+                        .WithValue($"market_info:{listing.ListingId}")
+                        .WithDescription($"Lv.{listing.Level} • {listing.Price:N0} coins • ID: {listing.ListingId}")
+                ).ToList();
+
+                var selectMenuRow = new ActionRowBuilder()
+                    .WithSelectMenu("pokemon_info_select", selectOptions, "Select a Pokemon for detailed info...", disabled: p.ShouldDisable());
+
+                containerComponents.Add(selectMenuRow);
+
+                // Create action row with navigation buttons (5 buttons for visual balance)
+                var navigationRow = new ActionRowBuilder()
+                    .WithButton("⏪", "market_first_page", ButtonStyle.Secondary, disabled: p.CurrentPageIndex == 0 || p.ShouldDisable())
+                    .AddPreviousButton(p, style: ButtonStyle.Secondary)
+                    .AddNextButton(p, style: ButtonStyle.Secondary)
+                    .WithButton("⏩", "market_last_page", ButtonStyle.Secondary, disabled: p.CurrentPageIndex == p.PageCount - 1 || p.ShouldDisable())
+                    .AddStopButton(p);
+
+                containerComponents.Add(navigationRow);
+
+                // Add footer text
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"Page {p.CurrentPageIndex + 1}/{p.PageCount} • {result.Listings.Count} Pokemon listed"));
+
+                // Create the main container with all components
+                var mainContainer = new ContainerBuilder()
+                    .WithComponents(containerComponents)
+                    .WithAccentColor(Color.Green);
+
+                var componentsV2 = new ComponentBuilderV2()
+                    .AddComponent(mainContainer);
+
+                var pageBuilder = new PageBuilder()
+                    .WithComponents(componentsV2.Build());
+
+                // Add file attachments if any
+                if (fileAttachments.Count > 0)
+                {
+                    pageBuilder.WithAttachmentsFactory(() => new ValueTask<IEnumerable<FileAttachment>?>(fileAttachments));
+                }
+
+                return pageBuilder.Build();
+            }
         }
-
-        // Create and send paginator
-        var paginator = new StaticPaginatorBuilder()
-            .WithPages(pages)
-            .WithUsers(ctx.User)
-            .WithDefaultEmotes()
-            .WithFooter(PaginatorFooter.PageNumber)
-            .Build();
-
-        await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10),
-            InteractionResponseType.DeferredUpdateMessage);
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     /// <summary>
@@ -283,5 +398,20 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
             "-f" => "♀️",
             _ => ""
         };
+    }
+
+    /// <summary>
+    ///     Generates a visual progress bar for IV percentage.
+    /// </summary>
+    private static string GenerateProgressBar(int percentage)
+    {
+        const int barLength = 30;
+        var filledLength = (int)Math.Round((double)percentage / 100 * barLength);
+        var emptyLength = barLength - filledLength;
+        
+        var filledBlocks = new string('█', filledLength);
+        var emptyBlocks = new string('░', emptyLength);
+        
+        return $"`{filledBlocks}{emptyBlocks}`";
     }
 }

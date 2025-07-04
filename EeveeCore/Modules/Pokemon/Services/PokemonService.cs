@@ -1006,12 +1006,13 @@ public class PokemonService(
                 _ => query
             };
 
-            // Apply search filter at database level where possible
+            // Apply search filter at database level where possible (case-insensitive)
             if (!string.IsNullOrEmpty(search))
             {
+                var searchLower = search.ToLower();
                 query = query.Where(p => 
-                    p.Pokemon.PokemonName.Contains(search) ||
-                    (p.Pokemon.Nickname != null && p.Pokemon.Nickname.Contains(search)));
+                    p.Pokemon.PokemonName.ToLower().Contains(searchLower) ||
+                    (p.Pokemon.Nickname != null && p.Pokemon.Nickname.ToLower().Contains(searchLower)));
             }
 
             // Calculate all stats in a single query using conditional aggregation

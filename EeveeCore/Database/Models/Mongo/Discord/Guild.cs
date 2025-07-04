@@ -98,4 +98,12 @@ public class Guild
     /// </summary>
     [BsonElement("locale")]
     public string Locale { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the guild has completed initial setup.
+    ///     This field exists in legacy database documents and is maintained for compatibility.
+    /// </summary>
+    [BsonElement("initial_setup")]
+    [BsonIgnoreIfNull]
+    public bool? InitialSetup { get; set; }
 }

@@ -7,6 +7,7 @@ using EeveeCore.Services.Impl;
 using Fergun.Interactive;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.OpenApi.Models;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Serilog;
 using RunMode = Discord.Commands.RunMode;
@@ -20,6 +21,30 @@ using EventHandler = EventHandler;
 /// </summary>
 public class Program
 {
+    /// <summary>
+    ///     Static constructor to configure MongoDB serialization settings.
+    /// </summary>
+    static Program()
+    {
+        // Configure MongoDB to ignore unknown elements globally for all classes
+        // This prevents deserialization errors when MongoDB documents contain fields
+        // that don't exist in the C# models (common during schema evolution)
+        BsonClassMap.RegisterClassMap<Database.Models.Mongo.Discord.Guild>(cm =>
+        {
+            cm.AutoMap();
+            cm.SetIgnoreExtraElements(true);
+        });
+        
+        // Set global convention to ignore extra elements for all MongoDB models
+        var conventionPack = new MongoDB.Bson.Serialization.Conventions.ConventionPack
+        {
+            new MongoDB.Bson.Serialization.Conventions.IgnoreExtraElementsConvention(true)
+        };
+        MongoDB.Bson.Serialization.Conventions.ConventionRegistry.Register(
+            "IgnoreExtraElements", 
+            conventionPack, 
+            t => t.Namespace?.StartsWith("EeveeCore.Database.Models.Mongo") == true);
+    }
     /// <summary>
     ///     The entry point of the application.
     /// </summary>

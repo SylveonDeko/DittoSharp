@@ -1,5 +1,6 @@
 using System.Text;
 using Discord.Interactions;
+using Discord.Rest;
 using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Pokemon.Services;
@@ -34,6 +35,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         /// <summary>Shadow variant of a Pokemon</summary>
         Shadow
     }
+
 
     /// <summary>
     ///     Collection of footer texts that are randomly displayed in embeds.
@@ -175,12 +177,151 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             .WithDescription(GenerateCollectionStats(stats, filter, filteredList.Count))
             .Build();
 
-        // Create paginated list based on view mode
+        // Use ComponentPaginator for detailed view, traditional for others
+        if (viewMode == "detailed")
+        {
+            const int detailedItemsPerPage = 5; // Fewer items for detailed view with images
+            var detailedTotalPages = (filteredList.Count - 1) / detailedItemsPerPage + 1;
+
+            var paginator = new ComponentPaginatorBuilder()
+                .AddUser(ctx.User)
+                .WithPageFactory(GenerateDetailedPage)
+                .WithPageCount(detailedTotalPages)
+                .Build();
+
+            await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10),
+                InteractionResponseType.DeferredChannelMessageWithSource);
+
+            IPage GenerateDetailedPage(IComponentPaginator p)
+            {
+                var pageItems = filteredList
+                    .Skip(p.CurrentPageIndex * detailedItemsPerPage)
+                    .Take(detailedItemsPerPage)
+                    .ToList();
+
+                var fileAttachments = new List<FileAttachment>();
+                var attachmentCounter = 0;
+                var containerComponents = new List<IMessageComponentBuilder>();
+
+                // Add title
+                var filterInfo = filter != "all" ? $" ({filter.Capitalize()})" : "";
+                var sortInfo = sortBy != "default" ? $" - Sorted by {sortBy.Capitalize()}" : "";
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"# Your Pokemon{filterInfo}{sortInfo}\n**Detailed View**"));
+
+                containerComponents.Add(new SeparatorBuilder());
+
+                foreach (var pokemon in pageItems)
+                {
+                    var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
+                    var gender = GetGenderEmoji(pokemon.Gender);
+                    var favorite = pokemon.Favorite ? "⭐ " : "";
+                    var inParty = partyLookup.Contains(pokemon.BotId) ? "👥 " : "";
+                    var isSelected = pokemon.BotId == selectedPokemon ? "🔍 " : "";
+                    var champion = pokemon.Champion ? "🏆 " : "";
+                    var market = pokemon.MarketEnlist ? "💰 " : "";
+
+                    // Create detailed text
+                    var detailedText = $"**{emoji}{favorite}{inParty}{isSelected}{champion}{market}{pokemon.Name.Capitalize()}** {gender}\n" +
+                                      $"**No.** {pokemon.Number} | **Level** {pokemon.Level}\n" +
+                                      $"**IV%** {pokemon.IvPercent:P2} | **Nature** {pokemon.Nature}\n" +
+                                      $"**Held Item** {pokemon.HeldItem ?? "None"}";
+
+                    if (!string.IsNullOrEmpty(pokemon.Nickname) && pokemon.Nickname != pokemon.Name)
+                        detailedText += $"\n**Nickname** {pokemon.Nickname}";
+
+                    // Add type information
+                    var types = Service.GetPokemonTypes(pokemon.Name).Result;
+                    if (types != null && types.Any())
+                        detailedText += $"\n**Type** {string.Join(" ", types.Select(GetTypeEmote))}";
+
+                    // Create section
+                    var sectionBuilder = new SectionBuilder()
+                        .WithComponents(new List<IMessageComponentBuilder>
+                        {
+                            new TextDisplayBuilder().WithContent(detailedText)
+                        });
+
+                    // Add Pokemon image as thumbnail
+                    var (_, imagePath) = Service.GetPokemonFormInfo(
+                        pokemon.Name,
+                        pokemon.Shiny == true,
+                        pokemon.Radiant == true,
+                        pokemon.Skin ?? "").Result;
+
+                    if (File.Exists(imagePath))
+                    {
+                        var imageFileName = $"pokemon_{attachmentCounter}.png";
+                        var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                        fileAttachments.Add(new FileAttachment(fileStream, imageFileName));
+
+                        sectionBuilder.WithAccessory(new ThumbnailBuilder()
+                            .WithMedia(new UnfurledMediaItemProperties
+                            {
+                                Url = $"attachment://{imageFileName}"
+                            }));
+
+                        attachmentCounter++;
+                    }
+                    else
+                    {
+                        // Add info button if no image
+                        sectionBuilder.WithAccessory(new ButtonBuilder()
+                            .WithCustomId($"pokemon_select:{pokemon.BotId}")
+                            .WithStyle(ButtonStyle.Secondary)
+                            .WithEmote(new Emoji("🔍"))
+                            .WithLabel("Select"));
+                    }
+
+                    containerComponents.Add(sectionBuilder);
+
+                    // Add separator between Pokemon
+                    if (pokemon != pageItems.Last())
+                    {
+                        containerComponents.Add(new SeparatorBuilder());
+                    }
+                }
+
+                // Add navigation and footer
+                containerComponents.Add(new SeparatorBuilder());
+                
+                var navigationRow = new ActionRowBuilder()
+                    .AddPreviousButton(p, style: ButtonStyle.Secondary)
+                    .AddNextButton(p, style: ButtonStyle.Secondary)
+                    .AddStopButton(p);
+
+                containerComponents.Add(navigationRow);
+
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"Page {p.CurrentPageIndex + 1}/{p.PageCount} • {filteredList.Count} Pokémon"));
+
+                // Create main container
+                var mainContainer = new ContainerBuilder()
+                    .WithComponents(containerComponents)
+                    .WithAccentColor(Color.Blue);
+
+                var componentsV2 = new ComponentBuilderV2()
+                    .AddComponent(mainContainer);
+
+                var pageBuilder = new PageBuilder()
+                    .WithComponents(componentsV2.Build());
+
+                if (fileAttachments.Count > 0)
+                {
+                    pageBuilder.WithAttachmentsFactory(() => new ValueTask<IEnumerable<FileAttachment>?>(fileAttachments));
+                }
+
+                return pageBuilder.Build();
+            }
+
+            return;
+        }
+
+        // Traditional pagination for normal/compact views
         var pages = new List<PageBuilder>();
         var itemsPerPage = viewMode switch
         {
             "compact" => 30,
-            "detailed" => 8,
             _ => 15
         };
 
@@ -509,31 +650,28 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     /// <returns>A Task representing the asynchronous operation.</returns>
     [SlashCommand("info", "Get information about a pokemon")]
     [RequireContext(ContextType.Guild)]
-    public async Task Info(string poke = null, PokemonVariantType? variant = null)
+    public async Task Info(
+        [Summary("pokemon", "The pokemon to get information about")]
+        [Autocomplete(typeof(AllPokemonAutocompleteHandler))]
+        string poke = null, 
+        PokemonVariantType? variant = null)
     {
         try
         {
             var totalPokemonCount = await Service.GetUserPokemonCount(ctx.User.Id);
             Database.Linq.Models.Pokemon.Pokemon? ownedPokemon;
-            // Case 1: No parameter - get selected Pokemon
+            // Case 1: No parameter - show paginated navigation starting from newest Pokemon
             if (string.IsNullOrWhiteSpace(poke))
             {
-                ownedPokemon = await Service.GetSelectedPokemonAsync(ctx.User.Id);
-                if (ownedPokemon == null)
-                {
-                    await ctx.Interaction.SendErrorAsync(
-                        "You do not have a pokemon selected. Use `/select` to select one!");
-                    return;
-                }
-
-                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, ownedPokemon.Id);
-                await DisplayPokemonInfo(ownedPokemon, totalPokemonCount, pokemonIndex);
+                await DeferAsync();
+                await DisplayPokemonWithNavigation(totalPokemonCount, null, true);
                 return;
             }
 
             // Case 2: "new", "newest", "latest" - get newest Pokemon with navigation
             if (poke.ToLower() is "newest" or "latest" or "atest" or "ewest" or "new")
             {
+                await DeferAsync();
                 await DisplayPokemonWithNavigation(totalPokemonCount, null, true);
                 return;
             }
@@ -553,6 +691,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                     return;
                 }
 
+                await DeferAsync();
                 await DisplayPokemonWithNavigation(totalPokemonCount, (ulong)pokeNumber);
                 return;
             }
@@ -970,6 +1109,45 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     {
         var interaction = ctx.Interaction as IComponentInteraction;
 
+        // Check if this is from a paginator and handle accordingly
+        if (interactivity.TryGetComponentPaginator(interaction.Message, out var paginator) && paginator.CanInteract(interaction.User))
+        {
+            await HandlePaginatorInfoButtons(action, param, interaction, paginator);
+            return;
+        }
+
+        // Handle non-paginated Pokemon info buttons
+        await HandleSimpleInfoButtons(action, param, interaction);
+    }
+
+    private async Task HandlePaginatorInfoButtons(string action, string param, IComponentInteraction interaction, IComponentPaginator paginator)
+    {
+        var pokemonId = ulong.Parse(param);
+
+        switch (action)
+        {
+            case "more":
+                // Store that we're in "more info" mode in the paginator state
+                var moreInfoState = new PokemonInfoState { ShowingMoreInfo = true, PokemonId = pokemonId };
+                paginator.UserState = moreInfoState;
+                await paginator.RenderPageAsync(interaction, InteractionResponseType.UpdateMessage, false);
+                break;
+
+            case "back":
+                // Remove the "more info" state
+                var backState = new PokemonInfoState { ShowingMoreInfo = false, PokemonId = pokemonId };
+                paginator.UserState = backState;
+                await paginator.RenderPageAsync(interaction, InteractionResponseType.UpdateMessage, false);
+                break;
+
+            case "close":
+                await interaction.Message.DeleteAsync();
+                break;
+        }
+    }
+
+    private async Task HandleSimpleInfoButtons(string action, string param, IComponentInteraction interaction)
+    {
         switch (action)
         {
             case "more":
@@ -981,7 +1159,8 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 var evolutionLine = await Service.GetEvolutionLine(pokemonName);
 
                 var moreInfoEmbed = new EmbedBuilder()
-                    .WithColor(0xFF0060);
+                    .WithColor(0xFF0060)
+                    .WithTitle("Additional Information");
 
                 // Add forms information
                 if (forms == null || !forms.Any() || forms.Contains("None"))
@@ -992,43 +1171,48 @@ public class PokemonSlashCommands(InteractiveService interactivity)
 
                 // Add evolution line
                 if (!string.IsNullOrEmpty(evolutionLine))
-                    moreInfoEmbed.AddField("More Info:", $"**Evolution Line**:\n{evolutionLine}");
-
+                    moreInfoEmbed.AddField("Evolution Line:", evolutionLine);
+                
                 var components = new ComponentBuilder()
                     .WithButton("Back", $"pokeinfo:back,{param}")
                     .WithButton("Close", $"pokeinfo:close,{param}", ButtonStyle.Danger, new Emoji("➖"))
                     .Build();
 
+                // Keep the original embed AND add the more info embed
+                var originalEmbed = interaction.Message.Embeds.First();
                 await interaction.UpdateAsync(msg =>
                 {
-                    msg.Embed = moreInfoEmbed.Build();
+                    msg.Embeds = new Embed[] { originalEmbed as Embed, moreInfoEmbed.Build() };
                     msg.Components = components;
                 });
                 break;
 
             case "back":
-                // Get the original embed from the message
-                var originalEmbed = interaction.Message.Embeds.First();
+                var backOriginalEmbed = interaction.Message.Embeds.First();
                 var backComponents = new ComponentBuilder()
                     .WithButton("More Information", $"pokeinfo:more,{param}", ButtonStyle.Primary, new Emoji("ℹ️"))
                     .Build();
 
                 await interaction.UpdateAsync(msg =>
                 {
-                    msg.Embed = originalEmbed as Embed;
+                    msg.Embeds = new Embed[] { backOriginalEmbed as Embed };
                     msg.Components = backComponents;
                 });
                 break;
 
             case "close":
-                await interaction.UpdateAsync(msg =>
-                {
-                    msg.Content = "Info closed.";
-                    msg.Embed = null;
-                    msg.Components = null;
-                });
+                await interaction.Message.DeleteAsync();
                 break;
         }
+    }
+
+    /// <summary>
+    /// State class to track whether we're showing more info in the paginator
+    /// </summary>
+    private class PokemonInfoState
+    {
+        public bool ShowingMoreInfo { get; set; }
+        public ulong PokemonId { get; set; }
     }
 
     /// <summary>
@@ -1136,7 +1320,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         {
             if (!startingPosition.HasValue)
             {
-                await ctx.Interaction.SendErrorAsync("Starting position is required for position mode.");
+                await ctx.Interaction.SendErrorFollowupAsync("Starting position is required for position mode.");
                 return;
             }
             startPosition = startingPosition.Value;
@@ -1146,7 +1330,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         var startingPokemon = await Service.GetPokemonByNumberAsync(ctx.User.Id, startPosition);
         if (startingPokemon == null)
         {
-            await ctx.Interaction.SendErrorAsync("You do not have that many pokemon. Go catch some more first!");
+            await ctx.Interaction.SendErrorFollowupAsync("You do not have that many pokemon. Go catch some more first!");
             return;
         }
 
@@ -1163,7 +1347,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         var startPageIndex = (int)startPosition - 1;
         paginator.SetPage(startPageIndex);
         
-        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10));
+        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(10), InteractionResponseType.DeferredChannelMessageWithSource);
 
         // Page factory method for lazy loading Pokemon info
         IPage GeneratePokemonInfoPage(IComponentPaginator p)
@@ -1187,28 +1371,76 @@ public class PokemonSlashCommands(InteractiveService interactivity)
                 var embed = CreatePokemonInfoEmbed(pokemon, totalPokemonCount, pokemonIndex, 
                     recentMode ? (int)pokemonPosition : null, recentMode ? (int)totalPokemonCount : null).Result;
 
+                // Check if we're in "more info" mode
+                var infoState = p.UserState as PokemonInfoState;
+                var showingMoreInfo = infoState?.ShowingMoreInfo == true && infoState.PokemonId == pokemon.Id;
+
+                // Create the final embed (with additional info if needed)
+                var finalEmbed = embed;
+                if (showingMoreInfo)
+                {
+                    var forms = Service.GetPokemonForms(pokemon.PokemonName).Result;
+                    var evolutionLine = Service.GetEvolutionLine(pokemon.PokemonName).Result;
+
+                    // Add the additional information as fields to the main embed
+                    var embedBuilder = embed.ToEmbedBuilder();
+                    
+                    // Add forms information
+                    if (forms == null || !forms.Any() || forms.Contains("None"))
+                        embedBuilder.AddField("Available Forms:", "`This Pokemon has no forms.`");
+                    else
+                        embedBuilder.AddField("Available Forms:",
+                            $"{string.Join("\n", forms)}\n`/form (form name)`\nor `/mega evolve`");
+
+                    // Add evolution line
+                    if (!string.IsNullOrEmpty(evolutionLine))
+                        embedBuilder.AddField("Evolution Line:", evolutionLine);
+                    
+                    finalEmbed = embedBuilder.Build();
+                }
+
                 // Add navigation buttons managed by the paginator
                 var components = new ComponentBuilder()
                     .AddPreviousButton(p, style: ButtonStyle.Primary)
-                    .AddNextButton(p, style: ButtonStyle.Primary)
-                    .WithButton("More Information", $"pokeinfo:more,{pokemon.Id}", 
-                        ButtonStyle.Secondary, new Emoji("ℹ️"))
-                    .AddStopButton(p)
-                    .Build();
+                    .AddNextButton(p, style: ButtonStyle.Primary);
+
+                if (showingMoreInfo)
+                {
+                    components.WithButton("Back", $"pokeinfo:back,{pokemon.Id}", 
+                        ButtonStyle.Secondary, new Emoji("◀️"));
+                }
+                else
+                {
+                    components.WithButton("More Information", $"pokeinfo:more,{pokemon.Id}", 
+                        ButtonStyle.Secondary, new Emoji("ℹ️"));
+                }
+
+                components.AddStopButton(p);
+                var finalComponents = components.Build();
 
                 // Get image path for attachment
                 var (_, imagePath) = Service.GetPokemonFormInfo(pokemon.PokemonName, 
                     pokemon.Shiny ?? false, pokemon.Radiant ?? false, pokemon.Skin ?? "").Result;
 
-                var pageBuilder = PageBuilder.FromEmbed(embed);
+                // Create page builder from the final embed
+                var pageBuilder = PageBuilder.FromEmbed(finalEmbed);
                 
                 // Add image if it exists
                 if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
                 {
-                    pageBuilder.WithImageUrl($"attachment://pokemon.png");
+                    // Update the embed to include the image URL
+                    var embedWithImage = finalEmbed.ToEmbedBuilder().WithImageUrl($"attachment://pokemon.png").Build();
+                    pageBuilder = PageBuilder.FromEmbed(embedWithImage);
+                    
+                    pageBuilder.WithAttachmentsFactory(async () =>
+                    {
+                        var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                        var fileAttachment = new FileAttachment(fileStream, "pokemon.png");
+                        return [fileAttachment];
+                    });
                 }
 
-                pageBuilder.WithComponents(components);
+                pageBuilder.WithComponents(finalComponents);
                 return pageBuilder.Build();
             }
             catch (Exception ex)
@@ -1269,11 +1501,6 @@ public class PokemonSlashCommands(InteractiveService interactivity)
             _ => ""
         };
 
-        // Get movement bars if it's a special pokemon
-        var specEmojis = !string.IsNullOrEmpty(pokemon.Skin)
-            ? "<a:spec1:1036851754303770734><a:spec2:1036851753058062376><a:spec3:1036851751023812628>\n"
-            : "";
-
         // Create footer text with navigation info if applicable
         var footerText = currentIndex.HasValue && totalRecent.HasValue
             ? $"Recent #{currentIndex}/{totalRecent} | Number {selectedPoke}/{pokeCount} | Global ID#: {pokemon.Id}"
@@ -1332,9 +1559,6 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         // Add tags if any exist
         if (pokemon.Tags is { Length: > 0 } && !pokemon.Tags.All(string.IsNullOrEmpty))
             infoField.AppendLine($"**Tags**: `{string.Join(", ", pokemon.Tags.Where(t => !string.IsNullOrEmpty(t)))}`");
-
-        // Add special indicator animations if needed
-        infoField.AppendLine(specEmojis);
 
         embed.AddField("Pokemon Information", infoField.ToString());
 
