@@ -307,7 +307,7 @@ public static class FishingConstants
         { "cheap", (0, 3500) },
         { "mid", (3500, 5000) },
         { "expensive", (5000, 8000) },
-        { "super", (8000, ulong.MaxValue) }
+        { "super", (8000, 999999999) }
     };
 
     // Excluded items from fishing rewards

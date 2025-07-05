@@ -1680,9 +1680,7 @@ public class PokemonService(
             Timestamp = DateTime.UtcNow
         };
 
-        // Start a transaction to ensure consistency
         await using var db = await dbProvider.GetConnectionAsync();
-        await using var transaction = await db.BeginTransactionAsync();
 
         try
         {
@@ -1717,11 +1715,9 @@ public class PokemonService(
                     .Where(a => a.UserId == userId)
                     .Set(a => a.PokemonCaught, a => a.PokemonCaught + 1)
                     .UpdateAsync();
-            await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
             Log.Error(ex, "Error creating Pokemon {Name} for user {UserId}", pokemonName, userId);
             return null;
         }
