@@ -62,7 +62,7 @@ public class DuelPokemon
     /// <param name="canStillEvolve">Whether the Pokémon is capable of evolving further.</param>
     /// <param name="dislikedFlavor">The flavor the Pokémon dislikes, affecting berry effects.</param>
     public DuelPokemon(int pokemonId, string? name, string? fullname, string nickname,
-        Dictionary<string?, List<int>> baseStats, int hp,
+        Dictionary<string, List<int>> baseStats, int hp,
         int hpIV, int atkIV, int defIV, int spatkIV, int spdefIV, int speedIV,
         int hpEV, int atkEV, int defEV, int spatkEV, int spdefEV, int speedEV,
         int level, Dictionary<string, double> natureStatDeltas, bool shiny, bool radiant, string skin,
@@ -3266,14 +3266,18 @@ public class DuelPokemon
         return (megaAbility.AbilityId, megaTypes.Types.Select(x => (ElementType)x).ToList());
     }
 
-    private static async Task LoadFormStats(List<string> forms, Dictionary<string?, List<int>> baseStats,
+    private static async Task LoadFormStats(List<string> forms, Dictionary<string, List<int>> baseStats,
         IMongoService mongoService)
     {
         var formTasks = forms.Select(formName => GetFormStats(formName, mongoService)).ToList();
 
         (string? formName, List<int> stats)[] results = await Task.WhenAll(formTasks);
 
-        foreach (var (formName, stats) in results) baseStats[formName] = stats;
+        foreach (var (formName, stats) in results) 
+        {
+            if (formName != null) 
+                baseStats[formName] = stats;
+        }
     }
 
     private static async Task<(string formName, List<int> stats)> GetFormStats(string formName,

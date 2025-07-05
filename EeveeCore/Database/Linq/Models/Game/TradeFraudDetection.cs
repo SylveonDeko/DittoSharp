@@ -180,6 +180,52 @@ public class TradeFraudDetection
 
     #endregion
 
+    #region Comprehensive Detection Fields
+
+    /// <summary>
+    ///     Gets or sets whether chain trading was detected.
+    /// </summary>
+    [Column(Name = "chain_trading_detected"), NotNull]
+    public bool ChainTradingDetected { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether burst trading was detected.
+    /// </summary>
+    [Column(Name = "burst_trading_detected"), NotNull]
+    public bool BurstTradingDetected { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether network fraud was detected.
+    /// </summary>
+    [Column(Name = "network_fraud_detected"), NotNull]
+    public bool NetworkFraudDetected { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether market manipulation was detected.
+    /// </summary>
+    [Column(Name = "market_manipulation_detected"), NotNull]
+    public bool MarketManipulationDetected { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether pokemon laundering was detected.
+    /// </summary>
+    [Column(Name = "pokemon_laundering_detected"), NotNull]
+    public bool PokemonLaunderingDetected { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the comprehensive risk score.
+    /// </summary>
+    [Column(Name = "comprehensive_risk_score"), Nullable]
+    public double? ComprehensiveRiskScore { get; set; }
+
+    /// <summary>
+    ///     Gets or sets actionable insights as JSON.
+    /// </summary>
+    [Column(Name = "actionable_insights"), Nullable]
+    public string? ActionableInsights { get; set; }
+
+    #endregion
+
     #region Navigation Properties
 
     /// <summary>

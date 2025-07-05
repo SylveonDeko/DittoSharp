@@ -18,7 +18,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
     private readonly IMongoService _mongoService;
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="MovesAutocompleteHandler" /> class.
+    ///     Initializes a new instance of the <see cref="MovesAutoCompleteHandler" /> class.
     /// </summary>
     /// <param name="dbProvider">The database connection provider.</param>
     /// <param name="mongoService">The MongoDB service for accessing collection data.</param>
@@ -61,7 +61,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
                 .FirstOrDefaultAsync();
 
             if (string.IsNullOrEmpty(selectedPokemon))
-                return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
+                return AutocompletionResult.FromSuccess([]);
 
             // Check cache or get moves from database
             if (!MoveCache.TryGetValue(selectedPokemon, out var moves))
@@ -83,7 +83,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
         {
             // Log the error and return an empty result
             Log.Information($"Error in MovesAutocompleteHandler: {ex.Message}");
-            return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
+            return AutocompletionResult.FromSuccess([]);
         }
     }
 
@@ -120,7 +120,7 @@ public class MovesAutoCompleteHandler : AutocompleteHandler
             .Find(pm => pm.Pokemon == pokemonName)
             .FirstOrDefaultAsync();
 
-        if (pokemonMoves == null || pokemonMoves.Moves == null) return new List<string>();
+        if (pokemonMoves == null || pokemonMoves.Moves == null) return [];
 
         return pokemonMoves.Moves.Distinct().OrderBy(m => m).ToList();
     }

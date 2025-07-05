@@ -75,7 +75,7 @@ public class DynamicFilterBuilder
             // If this criterion has a logical connector, it determines how to combine with the next group
             if (criterion.LogicalConnector != null)
             {
-                groups.Add(new CriteriaGroup { Criteria = new List<UserFilterCriteria>(currentGroup), LogicalOperator = currentOperator });
+                groups.Add(new CriteriaGroup { Criteria = [..currentGroup], LogicalOperator = currentOperator });
                 currentGroup.Clear();
                 currentOperator = criterion.LogicalConnector.ToUpper();
             }
@@ -386,7 +386,7 @@ public class DynamicFilterBuilder
 
         if (property.Type == typeof(string) || Nullable.GetUnderlyingType(property.Type) == typeof(string))
         {
-            var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
+            var containsMethod = typeof(string).GetMethod("Contains", [typeof(string)]);
             if (containsMethod == null)
                 return null;
 
@@ -522,7 +522,7 @@ public class DynamicFilterBuilder
     /// </summary>
     private class CriteriaGroup
     {
-        public List<UserFilterCriteria> Criteria { get; set; } = new();
+        public List<UserFilterCriteria> Criteria { get; set; } = [];
         public string LogicalOperator { get; set; } = "AND";
     }
 

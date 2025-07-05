@@ -39,13 +39,13 @@ public class CommandHandler : INService
     ///     Initializes a new instance of the <see cref="CommandHandler" /> class.
     /// </summary>
     /// <param name="client">The Discord client.</param>
-    /// <param name="dbContext">The database service.</param>
     /// <param name="commands">The service for handling commands.</param>
-    /// <param name="services">The service provider for dependency injection.</param>
-    /// <param name="interactions">The service for handling interactions.</param>
     /// <param name="guildSettings">The guild settings service.</param>
-    /// <param name="eventHandler">The event handler for discord events.</param>
+    /// <param name="interactions">The service for handling interactions.</param>
+    /// <param name="services">The service provider for dependency injection.</param>
     /// <param name="cache">The data cache service.</param>
+    /// <param name="eventHandler">The event handler for discord events.</param>
+    /// <param name="interactive">The interactive service for handling interactive components.</param>
     public CommandHandler(
         DiscordShardedClient client,
         CommandService commands,

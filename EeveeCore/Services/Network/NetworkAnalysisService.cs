@@ -20,7 +20,7 @@ public class NetworkAnalysisService : INService
     /// <summary>
     ///     Initializes a new instance of the <see cref="NetworkAnalysisService" /> class.
     /// </summary>
-    /// <param name="context">The database context.</param>
+    /// <param name="dbProvider">The database context provider.</param>
     /// <param name="graphService">The trade network graph service.</param>
     /// <param name="cache">The cache service.</param>
     /// <param name="logger">The logger.</param>
@@ -379,7 +379,7 @@ public class NetworkAnalysisService : INService
             {
                 if (neighbor == startNode && path.Count >= 3) // Found cycle back to start
                 {
-                    cycles.Add(new List<ulong>(path));
+                    cycles.Add([..path]);
                 }
                 else if (!visited.Contains(neighbor))
                 {
@@ -522,12 +522,12 @@ public class FunnelPattern
     /// <summary>
     ///     Gets or sets the list of source user IDs feeding value.
     /// </summary>
-    public List<ulong> SourceUserIds { get; set; } = new();
+    public List<ulong> SourceUserIds { get; set; } = [];
 
     /// <summary>
     ///     Gets or sets the path of the flow (sequence of user IDs).
     /// </summary>
-    public List<ulong> Path => new(SourceUserIds) { CentralUserId };
+    public List<ulong> Path => [..SourceUserIds, CentralUserId];
 
     /// <summary>
     ///     Gets or sets the total value funneled.
@@ -568,7 +568,7 @@ public class FunnelPattern
     /// <summary>
     ///     Gets or sets the reasons for suspicion.
     /// </summary>
-    public List<string> SuspicionReasons { get; set; } = new();
+    public List<string> SuspicionReasons { get; set; } = [];
 
     /// <summary>
     ///     Gets or sets the timestamp when the flow started.
@@ -624,7 +624,7 @@ public class AccountCluster
     /// <summary>
     ///     Gets or sets the user IDs in the cluster.
     /// </summary>
-    public List<ulong> UserIds { get; set; } = new();
+    public List<ulong> UserIds { get; set; } = [];
 
     /// <summary>
     ///     Gets or sets the size of the cluster.
@@ -650,7 +650,7 @@ public class AccountCluster
     /// <summary>
     ///     Gets or sets the reasons for suspicion.
     /// </summary>
-    public List<string> SuspicionReasons { get; set; } = new();
+    public List<string> SuspicionReasons { get; set; } = [];
 
     /// <summary>
     ///     Gets or sets the number of internal trades within the cluster.
@@ -701,7 +701,7 @@ public class CircularFlow
     /// <summary>
     ///     Gets or sets the path of the circular flow (sequence of user IDs).
     /// </summary>
-    public List<ulong> Path { get; set; } = new();
+    public List<ulong> Path { get; set; } = [];
 
     /// <summary>
     ///     Gets the length of the circular path.
@@ -737,7 +737,7 @@ public class CircularFlow
     /// <summary>
     ///     Gets or sets the reasons for suspicion.
     /// </summary>
-    public List<string> SuspicionReasons { get; set; } = new();
+    public List<string> SuspicionReasons { get; set; } = [];
 
     /// <summary>
     ///     Gets or sets the timestamp when the flow started.

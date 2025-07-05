@@ -12,44 +12,44 @@ public class EeveeCoreMessage : IUserMessage
     public DateTimeOffset CreatedAt => DateTime.Now;
 
     /// <inheritdoc />
-    public Task DeleteAsync(RequestOptions options = null)
+    public Task DeleteAsync(RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task AddReactionAsync(IEmote emote, RequestOptions options = null)
+    public Task AddReactionAsync(IEmote emote, RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task RemoveReactionAsync(IEmote emote, IUser user, RequestOptions options = null)
+    public Task RemoveReactionAsync(IEmote emote, IUser user, RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task RemoveReactionAsync(IEmote emote, ulong userId, RequestOptions options = null)
+    public Task RemoveReactionAsync(IEmote emote, ulong userId, RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task RemoveAllReactionsAsync(RequestOptions options = null)
+    public Task RemoveAllReactionsAsync(RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task RemoveAllReactionsForEmoteAsync(IEmote emote, RequestOptions options = null)
+    public Task RemoveAllReactionsForEmoteAsync(IEmote emote, RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
     public IAsyncEnumerable<IReadOnlyCollection<IUser>> GetReactionUsersAsync(IEmote emoji, int limit,
-        RequestOptions options = null,
+        RequestOptions? options = null,
         ReactionType type = ReactionType.Normal)
     {
         throw new NotImplementedException();
@@ -71,10 +71,10 @@ public class EeveeCoreMessage : IUserMessage
     public bool IsSuppressed => false;
 
     /// <inheritdoc />
-    public string Content { get; set; }
+    public string Content { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public string CleanContent { get; set; }
+    public string CleanContent { get; set; } = string.Empty;
 
     /// <inheritdoc />
     public DateTimeOffset Timestamp => DateTimeOffset.Now;
@@ -83,76 +83,76 @@ public class EeveeCoreMessage : IUserMessage
     public DateTimeOffset? EditedTimestamp => DateTimeOffset.Now;
 
     /// <inheritdoc />
-    public IMessageChannel Channel { get; set; }
+    public IMessageChannel Channel { get; set; } = null!;
 
     /// <inheritdoc />
-    public IUser Author { get; set; }
+    public IUser Author { get; set; } = null!;
 
     /// <inheritdoc />
-    public IReadOnlyCollection<IAttachment> Attachments { get; set; }
+    public IReadOnlyCollection<IAttachment> Attachments { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<IEmbed> Embeds { get; set; }
+    public IReadOnlyCollection<IEmbed> Embeds { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<ITag> Tags { get; set; }
+    public IReadOnlyCollection<ITag> Tags { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<ulong> MentionedChannelIds { get; set; }
+    public IReadOnlyCollection<ulong> MentionedChannelIds { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<ulong> MentionedRoleIds { get; set; }
+    public IReadOnlyCollection<ulong> MentionedRoleIds { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<ulong> MentionedUserIds { get; set; }
+    public IReadOnlyCollection<ulong> MentionedUserIds { get; set; } = [];
 
     /// <inheritdoc />
     public bool MentionedEveryone { get; set; }
 
     /// <inheritdoc />
-    public MessageActivity Activity { get; set; }
+    public MessageActivity Activity { get; set; } = null!;
 
     /// <inheritdoc />
-    public MessageApplication Application { get; set; }
+    public MessageApplication Application { get; set; } = null!;
 
     /// <inheritdoc />
-    public MessageReference Reference { get; set; }
+    public MessageReference Reference { get; set; } = null!;
 
     /// <inheritdoc />
-    public IReadOnlyDictionary<IEmote, ReactionMetadata> Reactions { get; set; }
+    public IReadOnlyDictionary<IEmote, ReactionMetadata> Reactions { get; set; } = new Dictionary<IEmote, ReactionMetadata>();
 
     /// <inheritdoc />
-    public IReadOnlyCollection<IMessageComponent> Components { get; set; }
+    public IReadOnlyCollection<IMessageComponent> Components { get; set; } = [];
 
     /// <inheritdoc />
-    public IReadOnlyCollection<IStickerItem> Stickers { get; set; }
+    public IReadOnlyCollection<IStickerItem> Stickers { get; set; } = [];
 
     /// <inheritdoc />
     public MessageFlags? Flags { get; set; }
 
     /// <inheritdoc />
-    public IMessageInteraction Interaction { get; set; }
+    public IMessageInteraction Interaction { get; set; } = null!;
 
     /// <inheritdoc />
-    public Task ModifyAsync(Action<MessageProperties> func, RequestOptions options = null)
+    public Task ModifyAsync(Action<MessageProperties> func, RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task PinAsync(RequestOptions options = null)
+    public Task PinAsync(RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task UnpinAsync(RequestOptions options = null)
+    public Task UnpinAsync(RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public Task CrosspostAsync(RequestOptions options = null)
+    public Task CrosspostAsync(RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
@@ -170,7 +170,7 @@ public class EeveeCoreMessage : IUserMessage
 
 
     /// <inheritdoc />
-    public Task EndPollAsync(RequestOptions options)
+    public Task EndPollAsync(RequestOptions? options)
     {
         throw new NotImplementedException();
     }
@@ -178,25 +178,25 @@ public class EeveeCoreMessage : IUserMessage
     /// <inheritdoc />
     public IAsyncEnumerable<IReadOnlyCollection<IUser>> GetPollAnswerVotersAsync(uint answerId, int? limit = null,
         ulong? afterId = null,
-        RequestOptions options = null)
+        RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }
 
     /// <inheritdoc />
-    public MessageResolvedData ResolvedData { get; }
+    public MessageResolvedData ResolvedData { get; } = null!;
 
     /// <inheritdoc />
-    public IUserMessage ReferencedMessage { get; set; }
+    public IUserMessage ReferencedMessage { get; set; } = null!;
 
     /// <inheritdoc />
-    public IMessageInteractionMetadata InteractionMetadata { get; }
+    public IMessageInteractionMetadata InteractionMetadata { get; } = null!;
 
     /// <inheritdoc />
-    public IReadOnlyCollection<MessageSnapshot> ForwardedMessages { get; }
+    public IReadOnlyCollection<MessageSnapshot> ForwardedMessages { get; } = [];
 
     /// <inheritdoc />
-    public Poll? Poll { get; }
+    public Poll? Poll { get; } = null;
 
     /// <inheritdoc />
     public IThreadChannel Thread => throw new NotImplementedException();
@@ -205,14 +205,14 @@ public class EeveeCoreMessage : IUserMessage
     public MessageRoleSubscriptionData RoleSubscriptionData => throw new NotImplementedException();
 
     /// <inheritdoc />
-    public PurchaseNotification PurchaseNotification { get; }
+    public PurchaseNotification PurchaseNotification { get; } = default;
 
     /// <inheritdoc />
-    public MessageCallData? CallData { get; }
+    public MessageCallData? CallData { get; } = null;
 
     /// <inheritdoc />
     public IAsyncEnumerable<IReadOnlyCollection<IUser>> GetReactionUsersAsync(IEmote emoji, int limit,
-        RequestOptions options = null)
+        RequestOptions? options = null)
     {
         throw new NotImplementedException();
     }

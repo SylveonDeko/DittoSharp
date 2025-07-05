@@ -6,6 +6,7 @@ using EeveeCore.Modules.Market.Services;
 using EeveeCore.Modules.Pokemon.Services;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
+using LinqToDB;
 
 namespace EeveeCore.Modules.Market;
 
@@ -16,10 +17,12 @@ namespace EeveeCore.Modules.Market;
 /// <param name="interactivity">Service for handling interactive components like pagination.</param>
 /// <param name="tradeLockService">The trade lock service.</param>
 /// <param name="pokemonService">Service for getting Pokemon information and images.</param>
+/// <param name="dbProvider">The database connection provider.</param>
 [Group("market", "Pokemon market commands")]
-public class MarketSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService, PokemonService pokemonService) 
+public class MarketSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService, PokemonService pokemonService, LinqToDbConnectionProvider dbProvider) 
     : EeveeCoreSlashModuleBase<MarketService>
 {
+    private readonly LinqToDbConnectionProvider _dbProvider = dbProvider;
 
     /// <summary>
     ///     Adds a Pokemon to the market for sale.
@@ -34,6 +37,19 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         [Summary("price", "The price to list the Pokemon for (in coins)")] int price)
     {
         await DeferAsync();
+        
+        // Check if user is market banned
+        await using var db = await _dbProvider.GetConnectionAsync();
+        var user = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => new { u.MarketBanned, u.MarketBanReason })
+            .FirstOrDefaultAsync();
+            
+        if (user?.MarketBanned == true)
+        {
+            await ctx.Interaction.SendEphemeralFollowupErrorAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}");
+            return;
+        }
 
         var success = await tradeLockService.ExecuteWithTradeLockAsync(ctx.User, async () =>
         {
@@ -71,6 +87,19 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
     public async Task BuyPokemonFromMarket(
         [Summary("listing_id", "The market listing ID of the Pokemon to buy")] ulong listingId)
     {
+        // Check if user is market banned
+        await using var db = await _dbProvider.GetConnectionAsync();
+        var user = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => new { u.MarketBanned, u.MarketBanReason })
+            .FirstOrDefaultAsync();
+            
+        if (user?.MarketBanned == true)
+        {
+            await ctx.Interaction.RespondAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}", ephemeral: true);
+            return;
+        }
+        
         var success = await tradeLockService.ExecuteWithTradeLockAsync(ctx.User, async () =>
         {
             var lockSuccess = await Service.ExecuteWithMarketLockAsync(listingId, async () =>
@@ -118,6 +147,19 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         [Autocomplete(typeof(MarketListingsAutocompleteHandler))] ulong listingId)
     {
         await DeferAsync();
+        
+        // Check if user is market banned
+        await using var db = await _dbProvider.GetConnectionAsync();
+        var user = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => new { u.MarketBanned, u.MarketBanReason })
+            .FirstOrDefaultAsync();
+            
+        if (user?.MarketBanned == true)
+        {
+            await ctx.Interaction.SendEphemeralFollowupErrorAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}");
+            return;
+        }
 
         var result = await Service.RemovePokemonFromMarketAsync(ctx.User.Id, listingId);
         

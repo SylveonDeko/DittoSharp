@@ -18,11 +18,6 @@ public class HelpService : INService
     ///     Initializes a new instance of <see cref="HelpService" />.
     /// </summary>
     /// <param name="client">The discord client</param>
-    /// <param name="bot">The bot itself</param>
-    /// <param name="blacklistService">The user/server blacklist service</param>
-    /// <param name="cmds">The command service</param>
-    /// <param name="perms">The global permissions service</param>
-    /// <param name="nPerms">The per server permission service</param>
     /// <param name="interactionService">The discord interaction service</param>
     /// <param name="guildSettings">Service to get guild configs</param>
     /// <param name="eventHandler">The event handler Sylveon made because the events in dnet were single threaded.</param>

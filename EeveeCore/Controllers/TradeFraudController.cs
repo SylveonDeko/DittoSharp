@@ -91,7 +91,7 @@ public class TradeFraudController : ControllerBase
                 FraudPreventionRate = 98.5, // Would be calculated from historical data
                 RecentAlerts = recentAlerts,
                 TopRiskUsers = topRiskUsers,
-                RiskTrends = new List<RiskTrendDto>(), // Would be populated from trend analysis
+                RiskTrends = [], // Would be populated from trend analysis
                 GeneratedAt = DateTime.UtcNow,
                 DataAsOf = DateTime.UtcNow
             };
@@ -227,13 +227,23 @@ public class TradeFraudController : ControllerBase
                 RiskScore95thPercentile = risk95th,
                 RiskDistribution = riskDistribution,
                 Thresholds = new RiskThresholdsDto(),
-                TopRiskFactors = new List<RiskFactorDto>
-                {
-                    new() { FactorName = "Account Age", Weight = 0.2, AverageScore = 0.3, AffectedUsers = riskScores.Count },
-                    new() { FactorName = "Trade Imbalance", Weight = 0.3, AverageScore = 0.4, AffectedUsers = riskScores.Count },
-                    new() { FactorName = "Velocity", Weight = 0.25, AverageScore = 0.2, AffectedUsers = riskScores.Count }
-                },
-                RiskTimeSeries = new List<RiskTimeSeriesDto>(),
+                TopRiskFactors =
+                [
+                    new()
+                    {
+                        FactorName = "Account Age", Weight = 0.2, AverageScore = 0.3, AffectedUsers = riskScores.Count
+                    },
+                    new()
+                    {
+                        FactorName = "Trade Imbalance", Weight = 0.3, AverageScore = 0.4,
+                        AffectedUsers = riskScores.Count
+                    },
+                    new()
+                    {
+                        FactorName = "Velocity", Weight = 0.25, AverageScore = 0.2, AffectedUsers = riskScores.Count
+                    }
+                ],
+                RiskTimeSeries = [],
                 CalculatedAt = DateTime.UtcNow,
                 TimeRange = TimeSpan.FromDays(timeWindowDays)
             };
@@ -290,7 +300,7 @@ public class TradeFraudController : ControllerBase
                     ["Velocity"] = 0.3 // Would be calculated from actual trading velocity
                 },
                 PrimaryRiskDrivers = userNode.Flags.ToList(),
-                RiskHistory = new List<RiskTimeSeriesDto>(),
+                RiskHistory = [],
                 CalculatedAt = DateTime.UtcNow
             };
 

@@ -193,7 +193,7 @@ public static class FishingConstants
     /// <summary>
     ///     Rods that provide a second chance to catch Pokemon after timeout.
     /// </summary>
-    public static readonly string[] SecondChanceRods = { "supreme-rod", "master-rod" };
+    public static readonly string[] SecondChanceRods = ["supreme-rod", "master-rod"];
     
     /// <summary>
     ///     Chance denominator for second chance attempts with premium rods.
@@ -204,33 +204,33 @@ public static class FishingConstants
     /// <summary>
     ///     Array of items that are considered sellable/useless.
     /// </summary>
-    public static readonly string[] SellableItems = 
-    {
+    public static readonly string[] SellableItems =
+    [
         "nugget", 
         "big-nugget", 
         "big-pearl", 
         "pearl", 
         "comet-shard"
-    };
+    ];
     
     // Ultra rare items
     /// <summary>
     ///     Array of ultra rare items that can be obtained from fishing.
     /// </summary>
-    public static readonly string[] UltraRareItems = { "supreme-rod", "rusty-shield" };
+    public static readonly string[] UltraRareItems = ["supreme-rod", "rusty-shield"];
     
     // Chest items
     /// <summary>
     ///     Array of chest items that go into inventory rather than items.
     /// </summary>
-    public static readonly string[] ChestItems = { "common-chest", "rare-chest", "mystery-box" };
+    public static readonly string[] ChestItems = ["common-chest", "rare-chest", "mystery-box"];
     
     // Funny fail messages for empty boxes
     /// <summary>
     ///     Array of humorous messages displayed when multi-box events fail.
     /// </summary>
-    public static readonly string[] FunnyFails = 
-    {
+    public static readonly string[] FunnyFails =
+    [
         "The box explodes leaving behind a cloud of glitter and sadness",
         "Looks like we accidentally sent you a box of disappointment instead of a box of fun!",
         "Sorry, the contents got lost in translation - literally!",
@@ -270,20 +270,20 @@ public static class FishingConstants
         "Looks like you got the 'empty surprise' option! Congrats!",
         "The contents were probably abducted by aliens...right?",
         "Congratulations, you just won an empty box!"
-    };
+    ];
     
     // Energy phrases
     /// <summary>
     ///     Array of phrases to display remaining energy to users.
     /// </summary>
-    public static readonly string[] EnergyPhrases = 
-    {
+    public static readonly string[] EnergyPhrases =
+    [
         "You have used up a point of energy. Only {0} remain.",
         "You have used up all but {0} of your energy points.",
         "You have {0} more energy to spend.",
         "You have spent one Energy Point. {0} Remaining.",
         "You have used up one of your Energy Points. You have {0} left."
-    };
+    ];
 
     // Rarity chances (out of 10000)
     /// <summary>
@@ -314,7 +314,7 @@ public static class FishingConstants
     /// <summary>
     ///     Array of items excluded from fishing reward pools.
     /// </summary>
-    public static readonly string[] ExcludedItems = { "old-rod", "master-rod", "epic-rod" };
+    public static readonly string[] ExcludedItems = ["old-rod", "master-rod", "epic-rod"];
     
     // Fishing image
     /// <summary>
@@ -331,49 +331,49 @@ public static class WaterPokemonLists
     /// <summary>
     ///     Common water-type Pokemon that can be caught while fishing.
     /// </summary>
-    public static readonly string[] CommonWater = 
-    {
+    public static readonly string[] CommonWater =
+    [
         "magikarp", "goldeen", "psyduck", "slowpoke", "tentacool", "seel", "shellder",
         "krabby", "horsea", "staryu", "poliwag", "squirtle", "totodile", "mudkip",
         "piplup", "oshawott", "froakie", "popplio", "sobble"
-    };
+    ];
 
     /// <summary>
     ///     Uncommon water-type Pokemon that can be caught while fishing.
     /// </summary>
-    public static readonly string[] UncommonWater = 
-    {
+    public static readonly string[] UncommonWater =
+    [
         "seaking", "golduck", "slowbro", "tentacruel", "dewgong", "cloyster", "kingler",
         "seadra", "starmie", "poliwhirl", "wartortle", "croconaw", "marshtomp", "prinplup",
         "dewott", "frogadier", "brionne", "drizzile"
-    };
+    ];
 
     /// <summary>
     ///     Rare water-type Pokemon that can be caught while fishing.
     /// </summary>
-    public static readonly string[] RareWater = 
-    {
+    public static readonly string[] RareWater =
+    [
         "poliwrath", "politoed", "blastoise", "feraligatr", "swampert", "empoleon",
         "samurott", "greninja", "primarina", "inteleon", "gyarados", "kingdra",
         "vaporeon", "lapras", "wailmer", "wailord", "relicanth", "luvdisc"
-    };
+    ];
 
     /// <summary>
     ///     Extremely rare water-type Pokemon that can be caught while fishing.
     /// </summary>
-    public static readonly string[] ExtremelyRareWater = 
-    {
+    public static readonly string[] ExtremelyRareWater =
+    [
         "articuno", "suicune", "lugia", "kyogre", "palkia", "phione", "manaphy",
         "keldeo", "volcanion", "tapu-fini", "primarina"
-    };
+    ];
 
     /// <summary>
     ///     Ultra rare water-type Pokemon that can be caught while fishing.
     /// </summary>
-    public static readonly string[] UltraRareWater = 
-    {
+    public static readonly string[] UltraRareWater =
+    [
         "arceus", "dialga", "giratina", "reshiram", "zekrom", "kyurem", "xerneas",
         "yveltal", "zygarde", "solgaleo", "lunala", "necrozma", "zacian", "zamazenta",
         "eternatus", "calyrex"
-    };
+    ];
 }

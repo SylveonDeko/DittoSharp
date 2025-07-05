@@ -12,21 +12,13 @@ public partial class Move
         var msg = "";
         var currentType = GetType(attacker, defender, battle);
 
-        // Move effectiveness
+        // Move effectiveness - calculate but don't show yet
         var effectiveness = defender.Effectiveness(currentType, battle, attacker, this);
         if (Effect == 338) effectiveness *= defender.Effectiveness(ElementType.FLYING, battle, attacker, this);
 
-        switch (effectiveness)
-        {
-            case <= 0:
-                return ("The attack had no effect!\n", 0);
-            case <= .5:
-                msg += "It's not very effective...\n";
-                break;
-            case >= 2:
-                msg += "It's super effective!\n";
-                break;
-        }
+        // Early return for no effect
+        if (effectiveness <= 0)
+            return ("The attack had no effect!\n", 0);
 
         // Calculate the number of hits for this move.
         var parentalBond = false;
@@ -220,9 +212,7 @@ public partial class Move
             var power = GetPower(attacker, defender, battle);
             if (power == null) throw new InvalidOperationException($"{Name} has no power and no override.");
 
-            // Check accuracy on each hit
-            // WARNING: If there is something BEFORE this in the loop which adds to msg (like "A critical hit")
-            // it MUST be after this block, or it will appear even after "misses" from this move.
+            // Check accuracy on each hit FIRST - before any message generation
             if (hit > 0 && attacker.Ability() != Ability.SKILL_LINK)
             {
                 // Increasing damage each hit
@@ -246,6 +236,20 @@ public partial class Move
                         hits = hit;
                         break;
                     }
+            }
+
+            // Show effectiveness message AFTER all hit checks pass for this iteration
+            if (hit == 0) // Only show on first hit
+            {
+                switch (effectiveness)
+                {
+                    case <= .5:
+                        msg += "It's not very effective...\n";
+                        break;
+                    case >= 2:
+                        msg += "It's super effective!\n";
+                        break;
+                }
             }
 
             double damage = 2 * attacker.Level;

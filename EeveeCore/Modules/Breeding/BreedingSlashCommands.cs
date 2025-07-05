@@ -93,7 +93,7 @@ public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<Br
     /// <summary>
     ///     Core breeding implementation that handles the breeding process.
     /// </summary>
-    /// <param name="maleId">The ID of the male Pokémon to breed.</param>
+    /// <param name="male">The ID of the male Pokémon to breed.</param>
     /// <param name="interaction">The message to update with breeding results.</param>
     /// <param name="auto">Whether this is an auto-retry.</param>
     /// <returns>A task representing the asynchronous operation.</returns>

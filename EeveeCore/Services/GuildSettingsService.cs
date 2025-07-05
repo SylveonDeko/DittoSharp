@@ -25,8 +25,8 @@ public class GuildSettingsService : IAsyncDisposable
     ///     Initializes a new instance of the GuildSettingsService.
     /// </summary>
     /// <param name="mongo">Provider for mongo access</param>
-    /// <param name="cache">Memory cache for storing frequently accessed guild settings.</param>
     /// <param name="creds">Bot credentials.</param>
+    /// <param name="cache">Memory cache for storing frequently accessed guild settings.</param>
     /// <exception cref="ArgumentNullException">Thrown when any required dependency is null.</exception>
     public GuildSettingsService(
         IMongoService mongo,
@@ -110,6 +110,8 @@ public class GuildSettingsService : IAsyncDisposable
     ///     Gets the guild configuration for the specified guild ID with caching.
     /// </summary>
     /// <param name="guildId">The ID of the guild to get configuration for.</param>
+    /// <param name="callerName">The name of the calling method for logging purposes.</param>
+    /// <param name="filePath">The file path of the calling method for logging purposes.</param>
     /// <returns>The guild configuration.</returns>
     /// <exception cref="Exception">Thrown when failing to get guild config.</exception>
     public async Task<Guild> GetGuildConfigAsync(
@@ -168,6 +170,8 @@ public class GuildSettingsService : IAsyncDisposable
     /// </summary>
     /// <param name="guildId">The ID of the guild to update configuration for.</param>
     /// <param name="config">The updated guild configuration.</param>
+    /// <param name="callerName">The name of the calling method for logging purposes.</param>
+    /// <param name="filePath">The file path of the calling method for logging purposes.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="Exception">Thrown when the update operation fails.</exception>
     public async Task UpdateGuildConfigAsync(

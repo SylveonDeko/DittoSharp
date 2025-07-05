@@ -517,4 +517,50 @@ public class User
     public string? PatreonOverride { get; set; }
 
     #endregion
+
+    #region Trade and Market Bans
+
+    /// <summary>
+    ///     Gets or sets whether the user is banned from trading.
+    /// </summary>
+    [Column(Name = "trade_banned")]
+    public bool? TradeBanned { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the reason for the trade ban.
+    /// </summary>
+    [Column(Name = "trade_ban_reason")]
+    public string? TradeBanReason { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the date when the trade ban was applied.
+    /// </summary>
+    [Column(Name = "trade_ban_date")]
+    public DateTime? TradeBanDate { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the fraud detection ID that caused the trade ban.
+    /// </summary>
+    [Column(Name = "trade_ban_fraud_id")]
+    public int? TradeBanFraudId { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether the user is banned from the market.
+    /// </summary>
+    [Column(Name = "market_banned")]
+    public bool? MarketBanned { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the reason for the market ban.
+    /// </summary>
+    [Column(Name = "market_ban_reason")]
+    public string? MarketBanReason { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the date when the market ban was applied.
+    /// </summary>
+    [Column(Name = "market_ban_date")]
+    public DateTime? MarketBanDate { get; set; }
+
+    #endregion
 }

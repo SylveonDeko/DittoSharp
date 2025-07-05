@@ -42,7 +42,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     ///     Initializes a new instance of the PokemonBattleModule class with required dependencies.
     /// </summary>
     /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
-    /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
+    /// <param name="db">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown management.</param>
     public PokemonBattleModule(

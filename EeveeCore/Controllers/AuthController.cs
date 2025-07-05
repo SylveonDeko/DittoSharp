@@ -21,6 +21,7 @@ public class AuthController : ControllerBase
     ///     Initializes a new instance of the <see cref="AuthController"/> class.
     /// </summary>
     /// <param name="jwtTokenService">The JWT token service for authentication operations.</param>
+    /// <param name="credentials">The bot credentials for Discord OAuth configuration.</param>
     public AuthController(JwtTokenService jwtTokenService, BotCredentials credentials)
     {
         _jwtTokenService = jwtTokenService;

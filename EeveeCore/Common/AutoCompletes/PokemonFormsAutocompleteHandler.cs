@@ -30,10 +30,9 @@ public class PokemonFormsAutocompleteHandler(IMongoService mongo, PokemonService
             var selectedPokemon = await pokemonService.GetSelectedPokemonAsync(context.User.Id);
             if (selectedPokemon == null)
             {
-                return AutocompletionResult.FromSuccess(new[]
-                {
+                return AutocompletionResult.FromSuccess([
                     new AutocompleteResult("No Pokemon selected - use /pokemon select first", "none")
-                });
+                ]);
             }
 
             var pokemonName = selectedPokemon.PokemonName.ToLower();
@@ -86,10 +85,9 @@ public class PokemonFormsAutocompleteHandler(IMongoService mongo, PokemonService
         catch
         {
             // Return error message if something goes wrong
-            return AutocompletionResult.FromSuccess(new[]
-            {
+            return AutocompletionResult.FromSuccess([
                 new AutocompleteResult("Error loading forms", "error")
-            });
+            ]);
         }
     }
 
@@ -103,56 +101,56 @@ public class PokemonFormsAutocompleteHandler(IMongoService mongo, PokemonService
         return pokemonName switch
         {
             // Arceus plate forms
-            "arceus" => new List<string> 
-            { 
-                "electric", "poison", "rock", "ghost", "water", "flying", "fairy", 
-                "psychic", "grass", "steel", "bug", "ice", "fighting", "dragon", 
-                "fire", "dark", "ground" 
-            },
+            "arceus" =>
+            [
+                "electric", "poison", "rock", "ghost", "water", "flying", "fairy",
+                "psychic", "grass", "steel", "bug", "ice", "fighting", "dragon",
+                "fire", "dark", "ground"
+            ],
             // Deoxys forms
-            "deoxys" => new List<string> { "attack", "defense", "speed" },
+            "deoxys" => ["attack", "defense", "speed"],
             // Rotom appliance forms
-            "rotom" => new List<string> { "heat", "wash", "frost", "fan", "mow" },
+            "rotom" => ["heat", "wash", "frost", "fan", "mow"],
             // Legendary origin/alternate forms
-            "giratina" => new List<string> { "origin" },
-            "shaymin" => new List<string> { "sky" },
-            "meloetta" => new List<string> { "pirouette" },
-            "keldeo" => new List<string> { "resolute" },
-            "hoopa" => new List<string> { "unbound" },
+            "giratina" => ["origin"],
+            "shaymin" => ["sky"],
+            "meloetta" => ["pirouette"],
+            "keldeo" => ["resolute"],
+            "hoopa" => ["unbound"],
             // Forces of nature therian forms
-            "thundurus" => new List<string> { "therian" },
-            "tornadus" => new List<string> { "therian" },
-            "landorus" => new List<string> { "therian" },
-            "enamorus" => new List<string> { "therian" },
+            "thundurus" => ["therian"],
+            "tornadus" => ["therian"],
+            "landorus" => ["therian"],
+            "enamorus" => ["therian"],
             // Fusion Pokemon (handled by separate commands, but listed for reference)
-            "kyurem" => new List<string> { "white", "black" },
-            "necrozma" => new List<string> { "dawn", "dusk", "ultra" },
-            "calyrex" => new List<string> { "ice-rider", "shadow-rider" },
+            "kyurem" => ["white", "black"],
+            "necrozma" => ["dawn", "dusk", "ultra"],
+            "calyrex" => ["ice-rider", "shadow-rider"],
             // Zygarde forms
-            "zygarde" => new List<string> { "10", "complete" },
+            "zygarde" => ["10", "complete"],
             // Oricorio dance styles
-            "oricorio" => new List<string> { "pom-pom", "pau", "sensu" },
+            "oricorio" => ["pom-pom", "pau", "sensu"],
             // Urshifu styles
-            "urshifu" => new List<string> { "rapid-strike" },
+            "urshifu" => ["rapid-strike"],
             // Basculin variants
-            "basculin" => new List<string> { "blue-striped", "white-striped" },
+            "basculin" => ["blue-striped", "white-striped"],
             // Darmanitan zen mode
-            "darmanitan" => new List<string> { "zen" },
+            "darmanitan" => ["zen"],
             // Tauros Paldea forms
-            "tauros" => new List<string> { "blaze-paldea", "aqua-paldea" },
+            "tauros" => ["blaze-paldea", "aqua-paldea"],
             // Primal forms
-            "kyogre" => new List<string> { "primal" },
-            "groudon" => new List<string> { "primal" },
+            "kyogre" => ["primal"],
+            "groudon" => ["primal"],
             // Origin forms for creation trio
-            "dialga" => new List<string> { "origin", "primal" },
-            "palkia" => new List<string> { "origin" },
+            "dialga" => ["origin", "primal"],
+            "palkia" => ["origin"],
             // Crowned forms
-            "zacian" => new List<string> { "crowned" },
-            "zamazenta" => new List<string> { "crowned" },
+            "zacian" => ["crowned"],
+            "zamazenta" => ["crowned"],
             // Eevee special forms (level 100 + max happiness)
-            "eevee" => new List<string> { "partner" },
-            "pikachu" => new List<string> { "partner" },
-            _ => new List<string>()
+            "eevee" => ["partner"],
+            "pikachu" => ["partner"],
+            _ => []
         };
     }
 }

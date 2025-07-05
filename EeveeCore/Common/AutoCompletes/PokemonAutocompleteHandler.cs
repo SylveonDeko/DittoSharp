@@ -96,7 +96,7 @@ public class PokemonAutocompleteHandler : AutocompleteHandler
         {
             // Log the error and return empty result
             Log.Information($"Error in PokemonAutocompleteHandler: {ex.Message}");
-            return AutocompletionResult.FromSuccess(Array.Empty<AutocompleteResult>());
+            return AutocompletionResult.FromSuccess([]);
         }
     }
 

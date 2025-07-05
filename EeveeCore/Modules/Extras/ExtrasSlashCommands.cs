@@ -1557,12 +1557,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             ).FirstOrDefaultAsync();
 
             if (selectedPokemon == null)
-                return Array.Empty<AutocompleteResult>();
+                return [];
 
             var moves = await Service.GetMoves(selectedPokemon.PokemonName.ToLower());
 
             if (moves == null)
-                return Array.Empty<AutocompleteResult>();
+                return [];
 
             return moves
                 .Where(m => m.StartsWith(move.ToLower()))

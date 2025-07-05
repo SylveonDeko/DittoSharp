@@ -182,12 +182,12 @@ public static class MissionConstants
     /// <summary>
     ///     Possible credit amounts for Meowth ticket lottery.
     /// </summary>
-    public static readonly int[] LotteryAmounts = { 100, 250, 350, 1000, 5000, 25000, 50000, 100000, 150000 };
+    public static readonly int[] LotteryAmounts = [100, 250, 350, 1000, 5000, 25000, 50000, 100000, 150000];
 
     /// <summary>
     ///     Weights for lottery amounts (higher = more likely).
     /// </summary>
-    public static readonly int[] LotteryWeights = { 20, 25, 20, 20, 20, 20, 20, 20, 20 };
+    public static readonly int[] LotteryWeights = [20, 25, 20, 20, 20, 20, 20, 20, 20];
 
     #endregion
 

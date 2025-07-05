@@ -7,7 +7,7 @@ namespace EeveeCore.Common.AutoCompletes;
 ///     Provides autocomplete functionality for party names.
 ///     Suggests existing party names matching the user's input.
 /// </summary>
-/// <param name="dbContext">The database context for querying party data.</param>
+/// <param name="_context">The database context for querying party data.</param>
 public class PartyNameAutocompleteHandler(LinqToDbConnectionProvider _context) : AutocompleteHandler
 {
     /// <summary>

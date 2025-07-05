@@ -278,7 +278,7 @@ public class SpawnService : INService, IReadyExecutor
     /// </summary>
     /// <param name="userId">The Discord ID of the user.</param>
     /// <param name="channelId">The Discord ID of the channel.</param>
-    /// <param name="dbContext">The database context for queries.</param>
+    /// <param name="db">The database connection for queries.</param>
     /// <returns>A tuple containing shiny status and honey effect.</returns>
     private async Task<(bool IsShiny, Honey? Honey)> GetSpawnModifiers(ulong userId, ulong channelId,
         DittoDataConnection db)
@@ -679,7 +679,7 @@ public class SpawnService : INService, IReadyExecutor
     ///     Either increases the user's shadow hunt chain or rewards a shadow Pokemon.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="dbContext">The database context.</param>
+    /// <param name="db">The database connection.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleShadowReward(User user, DittoDataConnection db)
     {
@@ -708,7 +708,7 @@ public class SpawnService : INService, IReadyExecutor
     ///     Adds a chest item to the user's inventory.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="dbContext">The database context.</param>
+    /// <param name="db">The database connection.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleChestReward(User user, DittoDataConnection db)
     {
@@ -745,7 +745,7 @@ public class SpawnService : INService, IReadyExecutor
     ///     Creates and returns a gift item.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="dbContext">The database context.</param>
+    /// <param name="db">The database connection.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleGiftReward(User user, DittoDataConnection db)
     {
@@ -759,7 +759,7 @@ public class SpawnService : INService, IReadyExecutor
     ///     Adds redeems to the user's account.
     /// </summary>
     /// <param name="user">The user receiving the reward.</param>
-    /// <param name="dbContext">The database context.</param>
+    /// <param name="db">The database connection.</param>
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleRedeemReward(User user, DittoDataConnection db)
     {
@@ -1387,9 +1387,9 @@ public class SpawnService : INService, IReadyExecutor
             $"Small images: {config.SmallImages}",
             $"Modal view: {config.ModalView}",
             $"Enable spawns all: {config.EnableSpawnsAll}",
-            $"Enabled channels: {string.Join(", ", config.EnabledChannels?.Select(c => c) ?? Array.Empty<ulong>())}",
-            $"Disabled spawn channels: {string.Join(", ", config.DisabledSpawnChannels?.Select(c => c) ?? Array.Empty<ulong>())}",
-            $"Redirects: {string.Join(", ", config.Redirects?.Select(c => c) ?? Array.Empty<ulong>())}"
+            $"Enabled channels: {string.Join(", ", config.EnabledChannels?.Select(c => c) ?? [])}",
+            $"Disabled spawn channels: {string.Join(", ", config.DisabledSpawnChannels?.Select(c => c) ?? [])}",
+            $"Redirects: {string.Join(", ", config.Redirects?.Select(c => c) ?? [])}"
         ]);
 
         return string.Join("\n", debugMessages);
@@ -1646,8 +1646,8 @@ public class SpawnService : INService, IReadyExecutor
             guild = new Guild
             {
                 GuildId = guildId,
-                EnabledChannels = new List<ulong>(),
-                DisabledSpawnChannels = new List<ulong>()
+                EnabledChannels = [],
+                DisabledSpawnChannels = []
             };
 
             // Add the channel to the appropriate list
@@ -1662,10 +1662,10 @@ public class SpawnService : INService, IReadyExecutor
         {
             // Initialize arrays if they are null
             if (guild.EnabledChannels == null)
-                guild.EnabledChannels = new List<ulong>();
+                guild.EnabledChannels = [];
 
             if (guild.DisabledSpawnChannels == null)
-                guild.DisabledSpawnChannels = new List<ulong>();
+                guild.DisabledSpawnChannels = [];
 
             // Add the channel to the appropriate list if not already present
             if (enable && !guild.EnabledChannels.Contains(channelId))
@@ -2033,7 +2033,7 @@ public class SpawnService : INService, IReadyExecutor
         catch (Exception ex)
         {
             Log.Error(ex, "Error getting active spawns for channel {ChannelId}", channelId);
-            return new List<ulong>();
+            return [];
         }
     }
 
@@ -2167,7 +2167,7 @@ public class SpawnService : INService, IReadyExecutor
             _abilitiesLastCached = DateTime.UtcNow;
         }
 
-        return _cachedAbilitiesByPokemonId.GetValueOrDefault(pokemonId, new List<int>());
+        return _cachedAbilitiesByPokemonId.GetValueOrDefault(pokemonId, []);
     }
 
     /// <summary>
@@ -2205,7 +2205,7 @@ public class SpawnService : INService, IReadyExecutor
                 foreach (var type in pokemonType.Types)
                 {
                     if (!_cachedPokemonByType.ContainsKey(type))
-                        _cachedPokemonByType[type] = new List<string>();
+                        _cachedPokemonByType[type] = [];
 
                     if (pokemonIdToForms.TryGetValue(pokemonType.PokemonId, out var formNames))
                     {
@@ -2218,7 +2218,7 @@ public class SpawnService : INService, IReadyExecutor
             _pokemonByTypeLastCached = DateTime.UtcNow;
         }
 
-        return _cachedPokemonByType.GetValueOrDefault(typeId, new List<string>());
+        return _cachedPokemonByType.GetValueOrDefault(typeId, []);
     }
 
     /// <summary>

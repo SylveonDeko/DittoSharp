@@ -184,5 +184,11 @@ public class SuspiciousTradeAnalytics
     [Column(Name = "admin_review_timestamp"), Nullable]
     public DateTime? AdminReviewTimestamp { get; set; }
 
+    /// <summary>
+    ///     Gets or sets comprehensive insights from fraud analysis as a list.
+    /// </summary>
+    [NotColumn]
+    public List<string>? ComprehensiveInsights { get; set; }
+
     #endregion
 }

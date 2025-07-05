@@ -32,7 +32,7 @@ public class DuelService : INService
     ///     Sets up Redis for tracking battle cooldowns and states.
     /// </summary>
     /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
-    /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
+    /// <param name="db">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown and battle state persistence.</param>
     public DuelService(

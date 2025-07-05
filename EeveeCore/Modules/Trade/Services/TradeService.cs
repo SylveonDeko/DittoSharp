@@ -19,7 +19,6 @@ public class TradeService : INService
     private readonly DiscordShardedClient _discordClient;
     private readonly ITradeLockService _tradeLockService;
     private readonly TradeEvolutionService _evolutionService;
-    private readonly TradeFraudDetectionService _fraudDetectionService;
     
     // In-memory trade session cache
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, TradeSession> _activeSessions = new();
@@ -36,15 +35,13 @@ public class TradeService : INService
     /// <param name="discordClient">The Discord client.</param>
     /// <param name="tradeLockService">The trade lock service.</param>
     /// <param name="evolutionService">The trade evolution service.</param>
-    /// <param name="fraudDetectionService">The fraud detection service.</param>
-    public TradeService(LinqToDbConnectionProvider context, IDataCache cache, DiscordShardedClient discordClient, ITradeLockService tradeLockService, TradeEvolutionService evolutionService, TradeFraudDetectionService fraudDetectionService)
+    public TradeService(LinqToDbConnectionProvider context, IDataCache cache, DiscordShardedClient discordClient, ITradeLockService tradeLockService, TradeEvolutionService evolutionService)
     {
         _context = context;
         _cache = cache;
         _discordClient = discordClient;
         _tradeLockService = tradeLockService;
         _evolutionService = evolutionService;
-        _fraudDetectionService = fraudDetectionService;
     }
 
     /// <summary>
@@ -246,11 +243,11 @@ public class TradeService : INService
     }
 
     /// <summary>
-    ///     Removes a Pokemon from a trade session.
+    ///     Removes a Pokemon from a trade session by collection position.
     /// </summary>
     /// <param name="sessionId">The trade session ID.</param>
     /// <param name="userId">The user removing the Pokemon.</param>
-    /// <param name="pokemonPosition">The position of the Pokemon to remove.</param>
+    /// <param name="pokemonPosition">The position of the Pokemon in the user's collection.</param>
     /// <returns>A TradeResult indicating success or failure.</returns>
     public async Task<TradeResult> RemovePokemonFromTradeAsync(Guid sessionId, ulong userId, ulong pokemonPosition)
     {
@@ -267,17 +264,68 @@ public class TradeService : INService
             return TradeResult.Failure("Pokemon not found.");
         }
 
-        // Find and remove the entry
+        // Find and remove the entry - check if this specific Pokemon ID is in the trade
         var entry = session.GetPokemonBy(userId).FirstOrDefault(p => p.PokemonId == pokemon.Id);
         if (entry == null)
         {
-            return TradeResult.Failure($"You do not have {pokemon.PokemonName} in your trade list!");
+            // Show user which Pokemon are actually in their trade for debugging
+            var pokemonInTrade = session.GetPokemonBy(userId).ToList();
+            if (pokemonInTrade.Any())
+            {
+                var tradeList = string.Join(", ", pokemonInTrade
+                    .Where(e => e.PokemonId.HasValue)
+                    .Take(3) // Show max 3 for brevity
+                    .Select(e => $"ID:{e.PokemonId}"));
+                return TradeResult.Failure($"Position {pokemonPosition} ({pokemon.PokemonName} ID:{pokemon.Id}) is not in your trade list! Current trade: {tradeList}");
+            }
+            return TradeResult.Failure($"You do not have {pokemon.PokemonName} (position {pokemonPosition}) in your trade list!");
         }
 
         session.RemoveEntry(entry.Id);
         await UpdateSessionInRedisAsync(session);
 
         return TradeResult.FromSuccess($"Removed {pokemon.PokemonName} from your trade!");
+    }
+
+    /// <summary>
+    ///     Removes a Pokemon from a trade session by trade entry index.
+    /// </summary>
+    /// <param name="sessionId">The trade session ID.</param>
+    /// <param name="userId">The user removing the Pokemon.</param>
+    /// <param name="tradeEntryIndex">The index of the Pokemon in the trade list to remove (0-based).</param>
+    /// <returns>A TradeResult indicating success or failure.</returns>
+    public async Task<TradeResult> RemovePokemonFromTradeByIndexAsync(Guid sessionId, ulong userId, ulong tradeEntryIndex)
+    {
+        var session = await GetTradeSessionAsync(sessionId);
+        if (session == null)
+        {
+            return TradeResult.Failure("Trade session not found.");
+        }
+
+        // Get user's Pokemon entries in the trade
+        var userEntries = session.GetPokemonBy(userId).ToList();
+        
+        if (tradeEntryIndex >= (ulong)userEntries.Count)
+        {
+            return TradeResult.Failure("Invalid trade entry index.");
+        }
+
+        var entry = userEntries[(int)tradeEntryIndex];
+        
+        // Get the Pokemon name for feedback
+        var pokemonName = "Pokemon";
+        if (entry.PokemonId.HasValue)
+        {
+            await using var db = await _context.GetConnectionAsync();
+            var pokemon = await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == entry.PokemonId.Value);
+            pokemonName = pokemon?.PokemonName ?? "Pokemon";
+        }
+
+        session.RemoveEntry(entry.Id);
+        await UpdateSessionInRedisAsync(session);
+
+        return TradeResult.FromSuccess($"Removed {pokemonName} from your trade!");
     }
 
     /// <summary>
@@ -293,7 +341,7 @@ public class TradeService : INService
             return TradeResult.Failure("Trade session not found.");
         }
 
-        if (session.Status != TradeStatus.PendingConfirmation)
+        if (session.Status != TradeStatus.PendingConfirmation && session.Status != TradeStatus.Processing)
         {
             return TradeResult.Failure("Trade is not ready for execution.");
         }
@@ -308,24 +356,13 @@ public class TradeService : INService
             return TradeResult.Failure("Trade is already being processed.");
         }
 
-        // Perform fraud detection analysis before executing trade
-        var fraudResult = await _fraudDetectionService.AnalyzeTradeAsync(session);
-        
-        if (!fraudResult.IsAllowed)
+        // Fraud detection is now done during confirmation stage to prevent delays
+        // Only set status if not already processing (race condition protection)
+        if (session.Status != TradeStatus.Processing)
         {
-            // Mark session as failed due to fraud detection
-            session.Status = TradeStatus.Failed;
-            await StoreSessionInRedisAsync(session);
-            
-            // Clear trade locks
-            await _tradeLockService.RemoveTradeLockAsync(session.Player1Id);
-            await _tradeLockService.RemoveTradeLockAsync(session.Player2Id);
-            
-            return TradeResult.Failure(fraudResult.Message ?? "Trade blocked due to suspicious activity.");
+            session.Status = TradeStatus.Processing;
         }
-
         session.IsAttemptingTrade = true;
-        session.Status = TradeStatus.Processing;
         await UpdateSessionInRedisAsync(session);
 
         try
@@ -597,6 +634,7 @@ public class TradeService : INService
         return false;
     }
 
+
     /// <summary>
     ///     Updates the trade interface to show that the trade has been cancelled.
     /// </summary>
@@ -773,7 +811,12 @@ public class TradeService : INService
             TimeSpan.FromMinutes(SessionTimeoutMinutes + 1));
     }
 
-    private async Task UpdateSessionInRedisAsync(TradeSession session)
+    /// <summary>
+    ///     Updates a trade session in Redis with current timestamp.
+    /// </summary>
+    /// <param name="session">The session to update.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public async Task UpdateSessionInRedisAsync(TradeSession session)
     {
         session.LastUpdated = DateTime.UtcNow;
         await StoreSessionInRedisAsync(session);
@@ -984,15 +1027,7 @@ public class TradeService : INService
                         .Select(e => $"• {e.PokemonName} evolved into **{e.Evolution}**!"));
             }
 
-            if (user1 != null)
-            {
-                await user1.SendMessageAsync($"Your trade has been completed successfully! 🎉{evolutionMessage}");
-            }
-
-            if (user2 != null)
-            {
-                await user2.SendMessageAsync($"Your trade has been completed successfully! 🎉{evolutionMessage}");
-            }
+            // DM notifications removed per user request
         }
         catch
         {

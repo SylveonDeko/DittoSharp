@@ -571,11 +571,11 @@ public class FishingService : INService, IReadyExecutor
             // Return a fallback list of common items for this tier
             return tier switch
             {
-                "cheap" => new List<string> { "nugget", "pearl", "big-pearl" },
-                "mid" => new List<string> { "comet-shard", "protein", "leftovers" },
-                "expensive" => new List<string> { "choice-scarf", "focus-sash", "destiny-knot" },
-                "super" => new List<string> { "master-ball", "rare-candy", "bottle-cap" },
-                _ => new List<string> { "nugget", "pearl" }
+                "cheap" => ["nugget", "pearl", "big-pearl"],
+                "mid" => ["comet-shard", "protein", "leftovers"],
+                "expensive" => ["choice-scarf", "focus-sash", "destiny-knot"],
+                "super" => ["master-ball", "rare-candy", "bottle-cap"],
+                _ => ["nugget", "pearl"]
             };
         }
     }

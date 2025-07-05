@@ -39,10 +39,20 @@ public class TradeLog
     public ulong SenderId { get; set; }
 
     /// <summary>
+    ///     Internal storage for sender Pokemon as long[] for PostgreSQL compatibility
+    /// </summary>
+    [Column("sender_pokes", DbType = "bigint[]")]
+    internal long[]? _senderPokemon { get; set; }
+
+    /// <summary>
     ///     Gets or sets the array of Pokémon IDs that the sender traded away.
     /// </summary>
-    [Column("sender_pokes")]
-    public ulong[]? SenderPokemon { get; set; }
+    [NotColumn]
+    public ulong[]? SenderPokemon 
+    { 
+        get => _senderPokemon?.Select(x => (ulong)x).ToArray();
+        set => _senderPokemon = value?.Select(x => (long)x).ToArray();
+    }
 
     /// <summary>
     ///     Gets or sets the amount of MewCoins that the sender included in the trade.
@@ -69,10 +79,20 @@ public class TradeLog
     public ulong ReceiverId { get; set; }
 
     /// <summary>
+    ///     Internal storage for receiver Pokemon as long[] for PostgreSQL compatibility
+    /// </summary>
+    [Column("receiver_pokes", DbType = "bigint[]")]
+    internal long[]? _receiverPokemon { get; set; }
+
+    /// <summary>
     ///     Gets or sets the array of Pokémon IDs that the receiver traded away.
     /// </summary>
-    [Column("receiver_pokes")]
-    public ulong[]? ReceiverPokemon { get; set; }
+    [NotColumn]
+    public ulong[]? ReceiverPokemon 
+    { 
+        get => _receiverPokemon?.Select(x => (ulong)x).ToArray();
+        set => _receiverPokemon = value?.Select(x => (long)x).ToArray();
+    }
 
     /// <summary>
     ///     Gets or sets the amount of MewCoins that the receiver included in the trade.

@@ -97,6 +97,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     ///     Filter to apply to the Pokemon list (all, shiny, radiant, shadow, legendary, favorite, champion,
     ///     party, market).
     /// </param>
+    /// <param name="genderPicked">Filter Pokemon by gender (all, male, female, genderless).</param>
     /// <param name="viewMode">The display mode for the list (normal, compact, detailed).</param>
     /// <param name="search">Optional search term to filter Pokemon by name, nickname, tags, or moves.</param>
     /// <returns>A Task representing the asynchronous operation.</returns>
@@ -428,9 +429,9 @@ public class PokemonSlashCommands(InteractiveService interactivity)
     ///     Generates summary statistics for the user's Pokemon collection.
     ///     Creates a formatted string with counts of different Pokemon types and variants.
     /// </summary>
-    /// <param name="allPokemon">The complete list of the user's Pokemon.</param>
-    /// <param name="filtered">The filtered list of Pokemon based on current view options.</param>
+    /// <param name="stats">Dictionary containing counts of different Pokemon types and variants.</param>
     /// <param name="filter">The current filter being applied.</param>
+    /// <param name="filteredCount">The number of Pokemon after filtering.</param>
     /// <returns>A formatted string containing collection statistics.</returns>
     private string GenerateCollectionStats(Dictionary<string, int> stats, string filter, int filteredCount)
     {
@@ -659,11 +660,19 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         {
             var totalPokemonCount = await Service.GetUserPokemonCount(ctx.User.Id);
             Database.Linq.Models.Pokemon.Pokemon? ownedPokemon;
-            // Case 1: No parameter - show paginated navigation starting from newest Pokemon
+            // Case 1: No parameter - show paginated navigation starting from currently selected Pokemon
             if (string.IsNullOrWhiteSpace(poke))
             {
                 await DeferAsync();
-                await DisplayPokemonWithNavigation(totalPokemonCount, null, true);
+                var selectedPokemon = await Service.GetSelectedPokemonAsync(ctx.User.Id);
+                if (selectedPokemon == null)
+                {
+                    await ctx.Interaction.SendErrorFollowupAsync("You haven't selected a Pokemon. Use `/pokemon select <number>` to select one first, or specify a Pokemon name/number.");
+                    return;
+                }
+                
+                var pokemonIndex = await Service.GetPokemonIndex(ctx.User.Id, selectedPokemon.Id);
+                await DisplayPokemonWithNavigation(totalPokemonCount, pokemonIndex);
                 return;
             }
 

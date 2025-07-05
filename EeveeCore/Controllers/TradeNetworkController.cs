@@ -468,7 +468,7 @@ public class TradeNetworkController : ControllerBase
             // Add funnel patterns
             var filteredFunnels = funnels.AsEnumerable();
             if (!string.IsNullOrEmpty(flowType) && !flowType.Equals("Funnel", StringComparison.OrdinalIgnoreCase))
-                filteredFunnels = Enumerable.Empty<FunnelPattern>();
+                filteredFunnels = [];
             if (minSuspicionScore.HasValue)
                 filteredFunnels = filteredFunnels.Where(f => f.SuspicionScore >= minSuspicionScore.Value);
                 
@@ -495,7 +495,7 @@ public class TradeNetworkController : ControllerBase
             // Add circular flows
             var filteredCircular = circularFlows.AsEnumerable();
             if (!string.IsNullOrEmpty(flowType) && !flowType.Equals("Circular", StringComparison.OrdinalIgnoreCase))
-                filteredCircular = Enumerable.Empty<CircularFlow>();
+                filteredCircular = [];
             if (minSuspicionScore.HasValue)
                 filteredCircular = filteredCircular.Where(f => f.SuspicionScore >= minSuspicionScore.Value);
                 

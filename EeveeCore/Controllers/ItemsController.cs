@@ -79,7 +79,7 @@ public class ItemsController : ControllerBase
                 .Where(item => !activeItems.Contains(item.Item))
                 .Select(item => item.Item)
                 .Concat(berryItems.Where(berry => !activeItems.Contains(berry)))
-                .Concat(new[] { "glitchy-orb" }) // Special case from service logic
+                .Concat(["glitchy-orb"]) // Special case from service logic
                 .Distinct()
                 .ToList();
 

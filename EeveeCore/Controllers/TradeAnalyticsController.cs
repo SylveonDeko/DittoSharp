@@ -132,7 +132,8 @@ public class TradeAnalyticsController : ControllerBase
                 BlockedTradeCount = 0, // Would come from actual blocking system
                 BlockedTradeValue = 0,
                 FlaggedUserCount = network.Nodes.Values.Count(n => n.RiskScore > 0.6),
-                CommonSuspiciousPatterns = new List<string> { "High velocity trading", "Value imbalance", "New account activity", "Circular flows" },
+                CommonSuspiciousPatterns =
+                    ["High velocity trading", "Value imbalance", "New account activity", "Circular flows"],
                 FalsePositiveRate = 0.05,
                 DetectionAccuracy = 0.94
             };
@@ -190,7 +191,6 @@ public class TradeAnalyticsController : ControllerBase
             var endDate = DateTime.UtcNow;
             var startDate = endDate.AddDays(-timeWindowDays);
 
-            // Mock implementation - would query actual trade data from database
             var timeSeries = GenerateMockTimeSeries(startDate, endDate, 1000, 500000, 200);
 
             return Ok(timeSeries);

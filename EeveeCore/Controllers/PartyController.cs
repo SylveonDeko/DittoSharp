@@ -50,7 +50,7 @@ public class PartyController : ControllerBase
                 return NotFound(new { error = "User not found" });
 
             // Parse party array and get Pokemon details
-            var partyPokemonIds = user ?? new ulong[0];
+            var partyPokemonIds = user ?? [];
             var partyPokemon = new List<object>();
 
             for (var i = 0; i < partyPokemonIds.Length && i < 6; i++)
@@ -176,7 +176,7 @@ public class PartyController : ControllerBase
             if (user == null)
                 return NotFound(new { error = "User not found" });
 
-            var partyPokemonIds = user?.Where(id => id != 0).ToList() ?? new List<ulong>();
+            var partyPokemonIds = user?.Where(id => id != 0).ToList() ?? [];
             
             if (!partyPokemonIds.Any())
             {

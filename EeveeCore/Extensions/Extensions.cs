@@ -37,8 +37,6 @@ public static class Extensions
     /// </summary>
     /// <param name="interaction">Discord interaction context.</param>
     /// <param name="message">Message to include in the error.</param>
-    /// ///
-    /// <param name="config">Bot configuration.</param>
     /// <returns>Task representing the asynchronous operation.</returns>
     public static Task SendErrorAsync(this IDiscordInteraction interaction, string? message)
     {
@@ -50,8 +48,6 @@ public static class Extensions
     /// </summary>
     /// <param name="interaction">Discord interaction context.</param>
     /// <param name="message">Message to include in the error.</param>
-    /// ///
-    /// <param name="config">Bot configuration.</param>
     /// <returns>Task representing the asynchronous operation.</returns>
     public static Task SendEphemeralErrorAsync(this IDiscordInteraction interaction, string? message)
     {
@@ -103,8 +99,6 @@ public static class Extensions
     /// </summary>
     /// <param name="interaction">Discord interaction context.</param>
     /// <param name="message">Message to include in the error.</param>
-    /// ///
-    /// <param name="config">Bot configuration.</param>
     /// <returns>Task representing the asynchronous operation.</returns>
     public static Task<IUserMessage> SendErrorFollowupAsync(this IDiscordInteraction interaction, string message)
     {
@@ -116,7 +110,6 @@ public static class Extensions
     /// </summary>
     /// <param name="interaction">Discord interaction context.</param>
     /// <param name="message">Message to include in the error.</param>
-    /// <param name="config">Bot configuration.</param>
     /// <returns>Task representing the asynchronous operation.</returns>
     public static Task<IUserMessage> SendEphemeralFollowupErrorAsync(this IDiscordInteraction interaction,
         string message)

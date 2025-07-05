@@ -18,6 +18,10 @@ namespace EeveeCore.Modules.Pokemon.Services;
 /// <summary>
 ///     Service class for handling Pokemon-related operations.
 /// </summary>
+/// <param name="client">The Discord sharded client.</param>
+/// <param name="dbProvider">The database connection provider.</param>
+/// <param name="mongo">The MongoDB service.</param>
+/// <param name="redis">The Redis cache service.</param>
 public class PokemonService(
     DiscordShardedClient client,
     LinqToDbConnectionProvider dbProvider,
@@ -934,6 +938,7 @@ public class PokemonService(
     /// <param name="userId">The Discord ID of the user.</param>
     /// <param name="sortOrder">How to sort the Pokemon.</param>
     /// <param name="filter">Filter to apply (all, shiny, radiant, etc).</param>
+    /// <param name="gender">Gender filter to apply (all, male, female, genderless).</param>
     /// <param name="search">Optional search term.</param>
     /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
     public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<ulong> PartyPokemon,
@@ -1993,6 +1998,16 @@ public class PokemonService(
 /// <param name="Skin">The skin of the Pokemon, if any.</param>
 /// <param name="Gender">The gender of the Pokemon.</param>
 /// <param name="Nickname">The nickname of the Pokemon, if any.</param>
+/// <param name="Favorite">Whether the Pokemon is marked as favorite.</param>
+/// <param name="Champion">Whether the Pokemon is a champion.</param>
+/// <param name="MarketEnlist">Whether the Pokemon is enlisted in the market.</param>
+/// <param name="HeldItem">The item held by the Pokemon.</param>
+/// <param name="Moves">The moves known by the Pokemon.</param>
+/// <param name="Tags">The tags associated with the Pokemon.</param>
+/// <param name="Tradable">Whether the Pokemon is tradable.</param>
+/// <param name="Breedable">Whether the Pokemon is breedable.</param>
+/// <param name="Timestamp">The timestamp when the Pokemon was obtained.</param>
+/// <param name="Nature">The nature of the Pokemon.</param>
 public record PokemonListEntry(
     ulong BotId,
     string Name,

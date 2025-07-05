@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using EeveeCore.Modules.Market.Services;
-using EeveeCore.Modules.Trade.Services;
 using EeveeCore.Common.Constants;
 using Serilog;
 using LinqToDB;
@@ -18,26 +17,18 @@ public class MarketController : ControllerBase
 {
     private readonly MarketService _marketService;
     private readonly LinqToDbConnectionProvider _dbProvider;
-    private readonly TradeFraudDetectionService _fraudDetectionService;
-    private readonly TradeValueCalculator _valueCalculator;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="MarketController"/> class.
     /// </summary>
     /// <param name="marketService">The market service.</param>
     /// <param name="dbProvider">The database connection provider.</param>
-    /// <param name="fraudDetectionService">The fraud detection service.</param>
-    /// <param name="valueCalculator">The trade value calculator.</param>
     public MarketController(
         MarketService marketService, 
-        LinqToDbConnectionProvider dbProvider,
-        TradeFraudDetectionService fraudDetectionService,
-        TradeValueCalculator valueCalculator)
+        LinqToDbConnectionProvider dbProvider)
     {
         _marketService = marketService;
         _dbProvider = dbProvider;
-        _fraudDetectionService = fraudDetectionService;
-        _valueCalculator = valueCalculator;
     }
 
     /// <summary>

@@ -15,16 +15,19 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 {
     private readonly ITradeLockService _tradeLockService;
     private readonly TradeEvolutionService _tradeEvolutionService;
+    private readonly FraudDetectionService _fraudDetectionService;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="TradeComponents" /> class.
     /// </summary>
     /// <param name="tradeLockService">The trade lock service.</param>
     /// <param name="tradeEvolutionService">The trade evolution service.</param>
-    public TradeComponents(ITradeLockService tradeLockService, TradeEvolutionService tradeEvolutionService)
+    /// <param name="fraudDetectionService">The comprehensive fraud detection service.</param>
+    public TradeComponents(ITradeLockService tradeLockService, TradeEvolutionService tradeEvolutionService, FraudDetectionService fraudDetectionService)
     {
         _tradeLockService = tradeLockService;
         _tradeEvolutionService = tradeEvolutionService;
+        _fraudDetectionService = fraudDetectionService;
     }
 
     /// <summary>
@@ -63,6 +66,13 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             await FollowupAsync("This trade is no longer active.", ephemeral: true);
             return;
         }
+        
+        // Prevent double-click race condition
+        if (session.Status == TradeStatus.Processing)
+        {
+            await FollowupAsync("This trade is already being processed.", ephemeral: true);
+            return;
+        }
 
         if (!session.HasItems())
         {
@@ -83,7 +93,34 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         if (session.IsBothConfirmed())
         {
-            // Both players confirmed, execute the trade
+            // Run fraud detection BEFORE trade execution to prevent delays
+            var fraudResult = await _fraudDetectionService.AnalyzeTradeAsync(session);
+            
+            if (!fraudResult.IsAllowed)
+            {
+                // Mark session as failed due to fraud detection
+                session.Status = TradeStatus.Failed;
+                await Service.UpdateSessionInRedisAsync(session);
+                
+                // Clear trade locks
+                await Service.ClearOrphanedTradeLocksAsync(session.Player1Id);
+                await Service.ClearOrphanedTradeLocksAsync(session.Player2Id);
+                
+                var embed = new EmbedBuilder()
+                    .WithTitle("❌ Trade Blocked")
+                    .WithDescription(fraudResult.Message ?? "Trade blocked due to suspicious activity.")
+                    .WithColor(Color.Red)
+                    .Build();
+                
+                await FollowupAsync(embed: embed);
+                return;
+            }
+            
+            // Prevent race condition - mark as processing immediately
+            session.Status = TradeStatus.Processing;
+            await Service.UpdateSessionInRedisAsync(session);
+            
+            // Both players confirmed and fraud check passed, execute the trade
             var executeResult = await Service.ExecuteTradeAsync(sessionGuid);
             
             if (executeResult.Success)

@@ -4,6 +4,7 @@ using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Trade.Models;
 using EeveeCore.Modules.Trade.Services;
 using Fergun.Interactive;
+using LinqToDB;
 using Serilog;
 
 namespace EeveeCore.Modules.Trade;
@@ -14,9 +15,11 @@ namespace EeveeCore.Modules.Trade;
 /// </summary>
 /// <param name="interactivity">Service for handling interactive components like pagination.</param>
 /// <param name="tradeLockService">The trade lock service.</param>
-public class TradeSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService)
+/// <param name="dbProvider">The database connection provider.</param>
+public class TradeSlashCommands(InteractiveService interactivity, ITradeLockService tradeLockService, LinqToDbConnectionProvider dbProvider)
     : EeveeCoreSlashModuleBase<TradeService>
 {
+    private readonly LinqToDbConnectionProvider _dbProvider = dbProvider;
     /// <summary>
     ///     Initiates a trade with another user.
     /// </summary>
@@ -41,6 +44,30 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             }
 
             await DeferAsync();
+
+            // Check if users are trade banned
+            await using var db = await _dbProvider.GetConnectionAsync();
+            var currentUser = await db.Users
+                .Where(u => u.UserId == ctx.User.Id)
+                .Select(u => new { u.TradeBanned, u.TradeBanReason })
+                .FirstOrDefaultAsync();
+
+            if (currentUser?.TradeBanned == true)
+            {
+                await FollowupAsync($"You are banned from trading. Reason: {currentUser.TradeBanReason ?? "Fraud detection"}", ephemeral: true);
+                return;
+            }
+
+            var targetUser = await db.Users
+                .Where(u => u.UserId == user.Id)
+                .Select(u => new { u.TradeBanned })
+                .FirstOrDefaultAsync();
+
+            if (targetUser?.TradeBanned == true)
+            {
+                await FollowupAsync($"{user.Username} is banned from trading.", ephemeral: true);
+                return;
+            }
 
             // Check if either user is already trade locked
             if (await tradeLockService.IsUserTradeLockedAsync(ctx.User.Id))
@@ -420,6 +447,19 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
     public async Task CancelMyTrades()
     {
         await DeferAsync(ephemeral: true);
+
+        // Check if user is trade banned
+        await using var db = await _dbProvider.GetConnectionAsync();
+        var user = await db.Users
+            .Where(u => u.UserId == ctx.User.Id)
+            .Select(u => new { u.TradeBanned, u.TradeBanReason })
+            .FirstOrDefaultAsync();
+
+        if (user?.TradeBanned == true)
+        {
+            await FollowupAsync($"You are banned from trading. Reason: {user.TradeBanReason ?? "Fraud detection"}", ephemeral: true);
+            return;
+        }
 
         // Clear all trade locks for this user (more robust than single remove)
         await tradeLockService.ClearAllTradeLocksAsync(ctx.User.Id);
