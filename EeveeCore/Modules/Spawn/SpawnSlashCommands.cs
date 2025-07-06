@@ -3,6 +3,7 @@ using EeveeCore.Common.Attributes.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Spawn.Components;
 using EeveeCore.Modules.Spawn.Services;
+using EeveeCore.Modules.Missions.Services;
 using Serilog;
 
 namespace EeveeCore.Modules.Spawn;
@@ -12,8 +13,9 @@ namespace EeveeCore.Modules.Spawn;
 ///     Includes commands for configuring spawn settings, debugging, and handling catch interactions.
 /// </summary>
 [Group("spawn", "Spawn related commands")]
-public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
+public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashModuleBase<SpawnService>
 {
+    
     /// <summary>
     ///     Represents the options for enabling or disabling spawns in a channel.
     /// </summary>
@@ -314,6 +316,9 @@ public class SpawnSlashCommands : EeveeCoreSlashModuleBase<SpawnService>
         await ctx.Interaction.FollowupAsync(embed: result.ResponseEmbed);
 
         if (!result.Success) return;
+
+        // Fire mission event for successful catch
+        _ = Task.Run(async () => await missionService.FirePokemonCaughtEvent(ctx.Interaction));
 
         // Handle the original spawn message
         try

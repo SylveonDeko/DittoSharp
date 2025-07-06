@@ -48,7 +48,7 @@ public class MissionService(
     /// <summary>
     ///     Event fired when a Pokemon is fished.
     /// </summary>
-    public event EventHandler.AsyncEventHandler<IDiscordInteraction, User>? PokemonFished;
+    public event EventHandler.AsyncEventHandler<IMessage, User>? PokemonFished;
 
     /// <summary>
     ///     Event fired when a duel is completed.
@@ -84,6 +84,16 @@ public class MissionService(
     ///     Event fired when XP is gained.
     /// </summary>
     public event EventHandler.AsyncEventHandler<ulong, int>? XpGained;
+
+    /// <summary>
+    ///     Event fired when a word search game is completed.
+    /// </summary>
+    public event EventHandler.AsyncEventHandler<IDiscordInteraction, int>? GameWordSearchCompleted;
+
+    /// <summary>
+    ///     Event fired when a slot machine game is played.
+    /// </summary>
+    public event EventHandler.AsyncEventHandler<IDiscordInteraction, bool>? GameSlotsPlayed;
 
     #endregion
 
@@ -159,7 +169,7 @@ public class MissionService(
             }
 
             var currentProgress = GetProgressValue(userProgress, missionProgressKey);
-            var targetValue = mission.Target; // For now, using main target. TODO: Handle multiple targets
+            var targetValue = mission.Target; // For now, using main target. 
 
             if (currentProgress >= targetValue)
                 return false; // Already completed
@@ -204,6 +214,9 @@ public class MissionService(
             "party" => userProgress.Party,
             "pokemon_setup" => userProgress.PokemonSetup,
             "vote" => userProgress.Vote,
+            "game_wordsearch" => userProgress.GameWordSearch,
+            "game_slots" => userProgress.GameSlots,
+            "game_slots_win" => userProgress.GameSlotsWin,
             _ => 0
         };
     }
@@ -225,12 +238,59 @@ public class MissionService(
             "party" => Builders<UserProgress>.Update.Set(up => up.Party, value),
             "pokemon_setup" => Builders<UserProgress>.Update.Set(up => up.PokemonSetup, value),
             "vote" => Builders<UserProgress>.Update.Set(up => up.Vote, value),
+            "game_wordsearch" => Builders<UserProgress>.Update.Set(up => up.GameWordSearch, value),
+            "game_slots" => Builders<UserProgress>.Update.Set(up => up.GameSlots, value),
+            "game_slots_win" => Builders<UserProgress>.Update.Set(up => up.GameSlotsWin, value),
             _ => throw new ArgumentException($"Unknown progress key: {key}")
         };
 
         await mongoService.UserProgress.UpdateOneAsync(
             up => up.UserId == userProgress.UserId,
             updateDefinition);
+    }
+
+    /// <summary>
+    ///     Updates user progress for a specific field by incrementing the current value.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="progressKey">The progress field to update.</param>
+    /// <param name="increment">The amount to increment by.</param>
+    private async Task IncrementUserProgressAsync(ulong userId, string progressKey, int increment = 1)
+    {
+        try
+        {
+            var userProgress = await mongoService.UserProgress.Find(up => up.UserId == userId).FirstOrDefaultAsync();
+            
+            if (userProgress == null)
+            {
+                userProgress = new UserProgress
+                {
+                    UserId = userId,
+                    Breed = 0,
+                    Catch = 0,
+                    DuelLose = 0,
+                    DuelWin = 0,
+                    Ev = 0,
+                    Fish = 0,
+                    Npc = 0,
+                    Party = 0,
+                    PokemonSetup = 0,
+                    Vote = 0,
+                    GameWordSearch = 0,
+                    GameSlots = 0,
+                    GameSlotsWin = 0
+                };
+                await mongoService.UserProgress.InsertOneAsync(userProgress);
+            }
+
+            var currentValue = GetProgressValue(userProgress, progressKey);
+            var newValue = currentValue + increment;
+            await UpdateProgressValue(userProgress, progressKey, newValue);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error incrementing user progress for user {UserId}, key {ProgressKey}", userId, progressKey);
+        }
     }
 
     #endregion
@@ -534,6 +594,8 @@ public class MissionService(
         PokemonSetup += HandlePokemonSetup;
         PartyRegistered += HandlePartyRegistered;
         XpGained += HandleXpGained;
+        GameWordSearchCompleted += HandleGameWordSearchCompleted;
+        GameSlotsPlayed += HandleGameSlotsPlayed;
     }
 
     #endregion
@@ -686,11 +748,11 @@ public class MissionService(
         }
     }
 
-    private async Task HandlePokemonFished(IDiscordInteraction interaction, User user)
+    private async Task HandlePokemonFished(IMessage message, User user)
     {
         try
         {
-            var userId = interaction.User.Id;
+            var userId = message.Author.Id;
             var activeMissions = await GetActiveMissionsWithKeyAndIvAsync("fish");
             var xpGained = MissionConstants.FishXp;
 
@@ -702,7 +764,13 @@ public class MissionService(
                     if (completed)
                     {
                         xpGained += 1 + (mission.Reward / 2);
-                        await SendMissionCompletionMessage(interaction, mission.Reward);
+                        // Send completion message to channel
+                        await message.Channel.SendMessageAsync("Daily Mission Completed.", 
+                            embed: new EmbedBuilder()
+                                .WithTitle("Congratulations!\nTake this reward!")
+                                .WithDescription($"{mission.Reward} shards of Crystallized Ditto Slime.")
+                                .WithColor(MissionConstants.MissionCompleteColor)
+                                .Build());
                     }
                 }
             }
@@ -918,6 +986,97 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Handles word search game completion events.
+    /// </summary>
+    /// <param name="interaction">The Discord interaction.</param>
+    /// <param name="wordsFound">The number of words found in the game.</param>
+    private async Task HandleGameWordSearchCompleted(IDiscordInteraction interaction, int wordsFound)
+    {
+        try
+        {
+            var userId = interaction.User.Id;
+            var activeMissions = await GetActiveMissionsWithKeyAndIvAsync("game_wordsearch");
+            var xpGained = MissionConstants.GameWordSearchXp;
+
+            if (activeMissions.Count > 0)
+            {
+                foreach (var mission in activeMissions)
+                {
+                    var completed = await ProcessUserMissionProgressAsync(userId, mission.Id, 1);
+                    if (completed)
+                    {
+                        xpGained += 1 + (mission.Reward / 2);
+                        await SendMissionCompletionMessage(interaction, mission.Reward);
+                    }
+                }
+            }
+
+            await IncrementUserProgressAsync(userId, "game_wordsearch", 1);
+            await XpGained?.Invoke(userId, xpGained)!;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error handling word search game completion");
+        }
+    }
+
+    /// <summary>
+    ///     Handles slot machine game played events.
+    /// </summary>
+    /// <param name="interaction">The Discord interaction.</param>
+    /// <param name="won">Whether the player won the slot machine game.</param>
+    private async Task HandleGameSlotsPlayed(IDiscordInteraction interaction, bool won)
+    {
+        try
+        {
+            var userId = interaction.User.Id;
+            var activeMissions = await GetActiveMissionsWithKeyAndIvAsync("game_slots");
+            var activeWinMissions = won ? await GetActiveMissionsWithKeyAndIvAsync("game_slots_win") : new List<MissionInfo>();
+            var xpGained = MissionConstants.GameSlotsXp + (won ? MissionConstants.GameSlotsWinXp : 0);
+
+            // Process slot play missions
+            if (activeMissions.Count > 0)
+            {
+                foreach (var mission in activeMissions)
+                {
+                    var completed = await ProcessUserMissionProgressAsync(userId, mission.Id, 1);
+                    if (completed)
+                    {
+                        xpGained += 1 + (mission.Reward / 2);
+                        await SendMissionCompletionMessage(interaction, mission.Reward);
+                    }
+                }
+            }
+
+            // Process slot win missions if applicable
+            if (won && activeWinMissions.Count > 0)
+            {
+                foreach (var mission in activeWinMissions)
+                {
+                    var completed = await ProcessUserMissionProgressAsync(userId, mission.Id, 1);
+                    if (completed)
+                    {
+                        xpGained += 2 + (mission.Reward / 2);
+                        await SendMissionCompletionMessage(interaction, mission.Reward);
+                    }
+                }
+            }
+
+            await IncrementUserProgressAsync(userId, "game_slots", 1);
+            if (won)
+            {
+                await IncrementUserProgressAsync(userId, "game_slots_win", 1);
+            }
+
+            await XpGained?.Invoke(userId, xpGained)!;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error handling slot machine game event");
+        }
+    }
+
     private static async Task SendMissionCompletionMessage(IDiscordInteraction interaction, int reward)
     {
         try
@@ -937,6 +1096,32 @@ public class MissionService(
         {
             Log.Error(e, "Error sending mission completion message");
         }
+    }
+
+    #endregion
+
+    #region Public Event Triggers
+
+    /// <summary>
+    ///     Triggers the GameWordSearchCompleted event.
+    /// </summary>
+    /// <param name="interaction">The Discord interaction.</param>
+    /// <param name="wordsFound">The number of words found in the game.</param>
+    public async Task TriggerGameWordSearchCompletedAsync(IDiscordInteraction interaction, int wordsFound)
+    {
+        if (GameWordSearchCompleted != null)
+            await GameWordSearchCompleted(interaction, wordsFound);
+    }
+
+    /// <summary>
+    ///     Triggers the GameSlotsPlayed event.
+    /// </summary>
+    /// <param name="interaction">The Discord interaction.</param>
+    /// <param name="won">Whether the player won the slot machine game.</param>
+    public async Task TriggerGameSlotsPlayedAsync(IDiscordInteraction interaction, bool won)
+    {
+        if (GameSlotsPlayed != null)
+            await GameSlotsPlayed(interaction, won);
     }
 
     #endregion
@@ -973,10 +1158,10 @@ public class MissionService(
     /// <summary>
     ///     Fires a pokemon fished event.
     /// </summary>
-    public async Task FirePokemonFishedEvent(IDiscordInteraction interaction, User user)
+    public async Task FirePokemonFishedEvent(IMessage message, User user)
     {
         if (PokemonFished != null)
-            await PokemonFished(interaction, user);
+            await PokemonFished(message, user);
     }
 
     /// <summary>

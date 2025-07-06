@@ -1,4 +1,10 @@
 using LinqToDB;
+using EeveeCore.Common.ModuleBehaviors;
+using EeveeCore.Modules.Missions.Services;
+using EeveeCore.Modules.Pokemon.Services;
+using EeveeCore.Services.Impl;
+using Serilog;
+using System.Text.Json;
 using EggHatchery = EeveeCore.Database.Linq.Models.Pokemon.EggHatchery;
 using UserPokemonOwnership = EeveeCore.Database.Linq.Models.Pokemon.UserPokemonOwnership;
 using User = EeveeCore.Database.Linq.Models.Bot.User;
@@ -9,13 +15,33 @@ namespace EeveeCore.Modules.Parties.Services;
 ///     Provides functionality for managing Pokémon egg hatcheries.
 ///     Handles operations for adding, removing, and monitoring eggs in different hatchery groups
 ///     with varying incubation rates and slot limits based on user's Patreon tier.
+///     Also handles egg hatching when counters reach zero.
 /// </summary>
 /// <param name="dbContext">The database context for accessing egg and user data.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
-public class HatcheryService(LinqToDbConnectionProvider dbContext, DiscordShardedClient client) : INService
+/// <param name="eventHandler">The event handler for Discord events.</param>
+/// <param name="missionService">The mission service for tracking mission progress.</param>
+/// <param name="pokemonService">The Pokemon service for creating hatched Pokemon.</param>
+public class HatcheryService(
+    LinqToDbConnectionProvider dbContext, 
+    DiscordShardedClient client,
+    EventHandler eventHandler,
+    MissionService missionService,
+    PokemonService pokemonService) : INService, IReadyExecutor
 {
     private const string PremiumX2Icon = "<:premiumX2:1064764945578852382>";
     private const string PremiumX3Icon = "<:premiumX3:1064764942848376893>";
+
+    private readonly EventHandler _eventHandler = eventHandler;
+    private readonly MissionService _missionService = missionService;
+    private readonly PokemonService _pokemonService = pokemonService;
+    private readonly Random _random = new();
+
+    /// <summary>
+    ///     Cache for user message cooldowns to prevent spam
+    ///     Maps user IDs to the time of their last message processing
+    /// </summary>
+    private readonly ConcurrentDictionary<ulong, DateTime> _userCooldowns = new();
 
     /// <summary>
     ///     Dictionary storing paged results for users viewing hatchery data.
@@ -65,6 +91,285 @@ public class HatcheryService(LinqToDbConnectionProvider dbContext, DiscordSharde
         if (_pagedResults.TryGetValue(userId, out var result)) _pagedResults[userId] = (result.Pages, newPage);
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Initializes the hatchery service and registers the message handler for egg hatching.
+    /// </summary>
+    public async Task OnReadyAsync()
+    {
+        await Task.CompletedTask;
+        _eventHandler.MessageReceived += HandleMessageForEggHatching;
+    }
+
+    /// <summary>
+    ///     Handles incoming messages to process egg hatching for users.
+    ///     Decrements egg counters and converts eggs to Pokemon when they hatch.
+    /// </summary>
+    /// <param name="message">The received message.</param>
+    private async Task HandleMessageForEggHatching(IMessage message)
+    {
+        try
+        {
+            if (message.Author.IsBot || message.Channel is not ITextChannel channel)
+                return;
+
+            var userId = message.Author.Id;
+
+            // Implement cooldown to prevent spam (similar to Python version)
+            var now = DateTime.UtcNow;
+            if (_userCooldowns.TryGetValue(userId, out var lastProcess) && now < lastProcess.AddSeconds(4))
+                return;
+
+            // Check if user exists
+            await using var db = await dbContext.GetConnectionAsync();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null) return;
+
+            _userCooldowns[userId] = now;
+
+            // Process egg hatching for all hatchery groups
+            var hatchedEggs = new List<(string EggName, Database.Linq.Models.Pokemon.Pokemon Pokemon)>();
+
+            // Process each hatchery group (1, 2, 3)
+            for (short group = 1; group <= 3; group++)
+            {
+                var groupHatched = await ProcessHatcheryGroup(userId, group, channel.Guild.Id);
+                hatchedEggs.AddRange(groupHatched);
+            }
+
+            // Send hatching notifications and fire mission events
+            if (hatchedEggs.Count > 0)
+            {
+                await SendHatchingNotifications(message, hatchedEggs);
+                
+                // Fire mission events for each hatched Pokemon
+                foreach (var (eggName, pokemon) in hatchedEggs)
+                {
+                    _ = Task.Run(async () => await _missionService.FirePokemonHatchedEvent(message, pokemon));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error processing egg hatching for user {UserId}", message.Author.Id);
+        }
+    }
+
+    /// <summary>
+    ///     Processes egg hatching for a specific hatchery group.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="group">The hatchery group (1-3).</param>
+    /// <param name="guildId">The guild ID for premium speed calculations.</param>
+    /// <returns>List of hatched eggs with their Pokemon.</returns>
+    private async Task<List<(string EggName, Database.Linq.Models.Pokemon.Pokemon Pokemon)>> ProcessHatcheryGroup(ulong userId, short group, ulong guildId)
+    {
+        var hatchedEggs = new List<(string, Database.Linq.Models.Pokemon.Pokemon)>();
+
+        await using var db = await dbContext.GetConnectionAsync();
+        
+        // Get hatchery for this user and group
+        var hatchery = await db.EggHatcheries
+            .Where(e => e.UserId == userId && e.Group == group)
+            .FirstOrDefaultAsync();
+            
+        if (hatchery == null) return hatchedEggs;
+
+        // Calculate speed modifier based on hatchery group and premium status
+        var speedModifier = await GetHatcherySpeedModifier(userId, group, guildId);
+
+        // Get all slot IDs from the hatchery
+        var slotIds = new[] { hatchery.Slot1, hatchery.Slot2, hatchery.Slot3, hatchery.Slot4, hatchery.Slot5, 
+                             hatchery.Slot6, hatchery.Slot7, hatchery.Slot8, hatchery.Slot9, hatchery.Slot10 }
+            .Where(id => id.HasValue)
+            .Select(id => id.Value)
+            .ToList();
+
+        if (slotIds.Count == 0) return hatchedEggs;
+
+        // Get all eggs in these slots with Pokemon data
+        var eggs = await db.UserPokemonOwnerships
+            .Where(p => slotIds.Contains(p.PokemonId))
+            .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { Ownership = o, Pokemon = p })
+            .ToListAsync();
+
+        foreach (var egg in eggs)
+        {
+            // Decrement counter based on speed modifier
+            var newCounter = Math.Max(0, egg.Pokemon.Counter.GetValueOrDefault() - speedModifier);
+            
+            if (newCounter == 0)
+            {
+                // Egg is ready to hatch!
+                var pokemon = await HatchEggFromOwnership(egg.Pokemon);
+                if (pokemon != null)
+                {
+                    hatchedEggs.Add((egg.Pokemon.PokemonName, pokemon));
+                    
+                    // Remove the egg from hatchery slot
+                    await RemoveEggFromHatcherySlot(hatchery, egg.Pokemon.Id);
+                    
+                    // Chance for common chest drop (1 in 200, same as Python)
+                    if (_random.Next(200) == 0)
+                    {
+                        await AddCommonChestToUser(userId);
+                    }
+                }
+            }
+            else
+            {
+                // Update the counter
+                await db.UserPokemon
+                    .Where(p => p.Id == egg.Pokemon.Id)
+                    .Set(p => p.Counter, newCounter)
+                    .UpdateAsync();
+            }
+        }
+
+        return hatchedEggs;
+    }
+
+    /// <summary>
+    ///     Converts an egg to a Pokemon when it hatches.
+    /// </summary>
+    /// <param name="pokemon">The pokemon record to hatch.</param>
+    /// <returns>The hatched Pokemon.</returns>
+    private async Task<Database.Linq.Models.Pokemon.Pokemon?> HatchEggFromOwnership(Database.Linq.Models.Pokemon.Pokemon pokemon)
+    {
+        try
+        {
+            // The egg is already a Pokemon record, just update its Counter to 0
+            // and mark it as hatched by removing the Counter
+            await using var db = await dbContext.GetConnectionAsync();
+            await db.UserPokemon
+                .Where(p => p.Id == pokemon.Id)
+                .Set(p => p.Counter, 0)
+                .UpdateAsync();
+
+            // Return the Pokemon (already have the data)
+            return pokemon;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error hatching egg {PokemonId} for user {UserId}", pokemon.Id, pokemon.Owner);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Removes an egg from the hatchery slot when it hatches.
+    /// </summary>
+    private async Task RemoveEggFromHatcherySlot(EggHatchery hatchery, ulong eggId)
+    {
+        try
+        {
+            await using var db = await dbContext.GetConnectionAsync();
+            
+            // Find which slot contains this egg and clear it
+            if (hatchery.Slot1 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot1, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot2 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot2, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot3 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot3, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot4 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot4, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot5 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot5, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot6 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot6, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot7 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot7, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot8 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot8, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot9 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot9, (ulong?)null).UpdateAsync();
+            else if (hatchery.Slot10 == eggId)
+                await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot10, (ulong?)null).UpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error removing egg {EggId} from hatchery slot for user {UserId}", eggId, hatchery.UserId);
+        }
+    }
+
+    /// <summary>
+    ///     Gets the speed modifier for a hatchery group based on premium status.
+    /// </summary>
+    private async Task<int> GetHatcherySpeedModifier(ulong userId, short group, ulong guildId)
+    {
+        // Base speed: 1 per message
+        const int baseSpeed = 1;
+
+        return group switch
+        {
+            1 => baseSpeed,
+            2 => (int)(baseSpeed * 2.5),
+            3 => baseSpeed * 3,
+            _ => baseSpeed
+        };
+    }
+
+    /// <summary>
+    ///     Adds a common chest to the user's inventory.
+    /// </summary>
+    private async Task AddCommonChestToUser(ulong userId)
+    {
+        try
+        {
+            await using var db = await dbContext.GetConnectionAsync();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null) return;
+
+            var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ?? new Dictionary<string, int>();
+            inventory["common chest"] = inventory.GetValueOrDefault("common chest", 0) + 1;
+
+            await db.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Inventory, JsonSerializer.Serialize(inventory))
+                .UpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error adding common chest to user {UserId}", userId);
+        }
+    }
+
+    /// <summary>
+    ///     Sends hatching notifications to the channel.
+    /// </summary>
+    private async Task SendHatchingNotifications(IMessage message, List<(string EggName, Database.Linq.Models.Pokemon.Pokemon Pokemon)> hatchedEggs)
+    {
+        try
+        {
+            var notifications = new List<string>();
+            
+            foreach (var (eggName, pokemon) in hatchedEggs)
+            {
+                notifications.Add($"Congratulations!\nYour {eggName} Egg has hatched!");
+                
+                // Check for common chest drops
+                if (_random.Next(200) == 0)
+                {
+                    notifications.Add("How...\nIt was holding a common chest within its egg!");
+                }
+            }
+
+            if (notifications.Count > 0)
+            {
+                var embed = new EmbedBuilder()
+                    .WithDescription(string.Join("\n", notifications))
+                    .WithColor(new Color(0xFF, 0x49, 0xE6))
+                    .Build();
+
+                await message.Channel.SendMessageAsync(embed: embed);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error sending hatching notifications for user {UserId}", message.Author.Id);
+        }
     }
 
     /// <summary>

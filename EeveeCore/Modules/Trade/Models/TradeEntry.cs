@@ -130,7 +130,7 @@ public class TradeEntry
         return ItemType switch
         {
             TradeItemType.Pokemon => $"**{Pokemon?.PokemonName}** `(GlobalID:{PokemonId})`",
-            TradeItemType.Credits => $"**{Credits:N0}** MewCoins",
+            TradeItemType.Credits => $"**{Credits:N0}** Coins",
             TradeItemType.Tokens => $"{TokenType?.GetEmoji()} **{TokenType?.GetDisplayName()}**: `{TokenCount}`",
             _ => "Unknown Item"
         };

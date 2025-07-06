@@ -2,6 +2,7 @@ using System.Text.Json;
 using EeveeCore.Common.ModuleBehaviors;
 using EeveeCore.Modules.Fishing.Common;
 using EeveeCore.Modules.Pokemon.Services;
+using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
 using MongoDB.Driver;
@@ -24,6 +25,7 @@ public class FishingService : INService, IReadyExecutor
     private readonly EventHandler _eventHandler;
     private readonly IMongoService _mongoService;
     private readonly PokemonService _pokemonService;
+    private readonly MissionService _missionService;
     private readonly Random _random;
     
     /// <summary>
@@ -40,8 +42,9 @@ public class FishingService : INService, IReadyExecutor
     /// <param name="client">The Discord client for interactions.</param>
     /// <param name="eventHandler">The event handler for Discord events.</param>
     /// <param name="pokemonService">Pokemon service for Pokemon-related operations.</param>
+    /// <param name="missionService">Mission service for tracking mission progress.</param>
     public FishingService(IMongoService mongoService, LinqToDbConnectionProvider dbProvider, IDataCache cache, 
-        DiscordShardedClient client, EventHandler eventHandler, PokemonService pokemonService)
+        DiscordShardedClient client, EventHandler eventHandler, PokemonService pokemonService, MissionService missionService)
     {
         _mongoService = mongoService;
         _dbProvider = dbProvider;
@@ -49,6 +52,7 @@ public class FishingService : INService, IReadyExecutor
         _client = client;
         _eventHandler = eventHandler;
         _pokemonService = pokemonService;
+        _missionService = missionService;
         _random = new Random();
     }
 
@@ -107,6 +111,17 @@ public class FishingService : INService, IReadyExecutor
             fishingData.LeveledUp,
             fishingData.NewLevel,
             fishingData.RemainingEnergy);
+
+        // Fire mission event for successful fishing
+        if (result.Success)
+        {
+            await using var db = await _dbProvider.GetConnectionAsync();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == message.Author.Id);
+            if (user != null)
+            {
+                _ = Task.Run(async () => await _missionService.FirePokemonFishedEvent(message, user));
+            }
+        }
 
         // Add success reaction
         try

@@ -76,6 +76,21 @@ public static class MissionConstants
     /// </summary>
     public const int VoteXp = 1;
 
+    /// <summary>
+    ///     XP gained from completing word search games.
+    /// </summary>
+    public const int GameWordSearchXp = 2;
+
+    /// <summary>
+    ///     XP gained from playing slot machine games.
+    /// </summary>
+    public const int GameSlotsXp = 1;
+
+    /// <summary>
+    ///     XP gained from winning slot machine games.
+    /// </summary>
+    public const int GameSlotsWinXp = 3;
+
     #endregion
 
     #region Mission System
@@ -119,7 +134,7 @@ public static class MissionConstants
                 Name = "100000 Credits",
                 Cost = 150,
                 Reward = 100000,
-                Description = "Instant MewCoins boost!",
+                Description = "Instant Coins boost!",
                 Type = StoreItemType.Credits
             }
         },

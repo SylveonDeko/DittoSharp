@@ -2,6 +2,7 @@ using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Breeding.Services;
 using EeveeCore.Modules.Pokemon.Services;
+using EeveeCore.Modules.Missions.Services;
 
 namespace EeveeCore.Modules.Breeding;
 
@@ -9,8 +10,9 @@ namespace EeveeCore.Modules.Breeding;
 ///     Module containing Pokémon breeding commands and interactions.
 /// </summary>
 [Group("breeding", "Commands for Pokémon breeding")]
-public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<BreedingService>
+public class BreedingModule(PokemonService pkServ, MissionService missionService) : EeveeCoreSlashModuleBase<BreedingService>
 {
+    private readonly MissionService _missionService = missionService;
     private static readonly HashSet<ulong> AllowedUserIds = [790722073248661525];
 
     /// <summary>
@@ -241,6 +243,23 @@ public class BreedingModule(PokemonService pkServ) : EeveeCoreSlashModuleBase<Br
             successEmbed.WithColor(new Color(0xffeb0f));
         else
             successEmbed.WithColor(new Color(0x0fff13));
+
+        // Fire mission event for successful breeding
+        // Create a temporary Pokemon object from the breeding result
+        var tempPokemon = new Database.Linq.Models.Pokemon.Pokemon
+        {
+            PokemonName = result.Child.Name,
+            HpIv = result.Child.Hp,
+            AttackIv = result.Child.Attack,
+            DefenseIv = result.Child.Defense,
+            SpecialAttackIv = result.Child.SpAtk,
+            SpecialDefenseIv = result.Child.SpDef,
+            SpeedIv = result.Child.Speed,
+            Level = result.Child.Level,
+            Shiny = result.Child.Shiny,
+            Nature = result.Child.Nature,
+        };
+        _ = Task.Run(async () => await _missionService.FirePokemonBredEvent(ctx.Interaction, tempPokemon, result.IsShadow));
 
         // Remove the first female from the list if not a Ditto
         if (result.Child.Name.ToLower() != "ditto") await Service.RemoveFirstFemaleAsync(ctx.User.Id);

@@ -392,7 +392,7 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
             .WithDescription("Learn how to gift items to other users!")
             .WithColor(Color.Gold)
             .AddField("**Gift Credits**",
-                "Use `/gift credits @user amount` to give MewCoins to another user.\n" +
+                "Use `/gift credits @user amount` to give Coins to another user.\n" +
                 "Example: `/gift credits @friend 10000`")
             .AddField("**Gift Redeems**",
                 "Use `/gift redeems @user amount` to give redeems to another user.\n" +

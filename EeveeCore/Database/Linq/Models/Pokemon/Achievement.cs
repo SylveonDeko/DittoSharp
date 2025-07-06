@@ -386,4 +386,26 @@ public class Achievement
     public int WomboUsed { get; set; }
 
     #endregion
+
+    #region Game Stats
+
+    /// <summary>
+    ///     Gets or sets the number of word search games completed by the user.
+    /// </summary>
+    [Column("game_wordsearch")]
+    public int GameWordsearch { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of slot machine games played by the user.
+    /// </summary>
+    [Column("game_slots")]
+    public int GameSlots { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of slot machine games won by the user.
+    /// </summary>
+    [Column("game_slots_win")]
+    public int GameSlotsWin { get; set; }
+
+    #endregion
 }

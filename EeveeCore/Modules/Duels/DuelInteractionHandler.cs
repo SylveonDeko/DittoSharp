@@ -5,6 +5,7 @@ using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Modules.Duels.Impl.Helpers;
 using EeveeCore.Modules.Duels.Impl.Move;
 using EeveeCore.Modules.Duels.Services;
+using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
 using Serilog;
@@ -48,11 +49,12 @@ public class DuelInteractionHandler(
     /// <param name="dbProvider">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="duelService">The duel service for managing battle state.</param>
+    /// <param name="missionService">The mission service for tracking mission progress.</param>
     /// <returns>
     ///     A task representing the asynchronous operation that returns the winning Trainer.
     /// </returns>
     public static async Task<Trainer> RunBattle(Battle battle, LinqToDbConnectionProvider dbProvider,
-        DiscordShardedClient client, DuelService duelService)
+        DiscordShardedClient client, DuelService duelService, MissionService missionService = null)
     {
         Trainer? winner = null;
         var battleId = battle.Context.Interaction.Id.ToString();
@@ -105,6 +107,11 @@ public class DuelInteractionHandler(
                 // Check for human vs human battle
                 if (battle is { Trainer1: MemberTrainer t1, Trainer2: MemberTrainer t2 })
                 {
+                    // Fire DuelCompleted mission event for both participants
+                    if (missionService != null)
+                    {
+                        _ = Task.Run(async () => await missionService.FireDuelCompletedEvent(battle.Context.Interaction, winner as MemberTrainer, t1.Id == (winner as MemberTrainer)?.Id ? t2 : t1));
+                    }
                     // Handle post-battle rewards, XP gain, etc.
                     var description = "";
 

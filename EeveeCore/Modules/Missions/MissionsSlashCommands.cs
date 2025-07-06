@@ -233,6 +233,9 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
             "party" => userProgress.Party,
             "pokemon_setup" => userProgress.PokemonSetup,
             "vote" => userProgress.Vote,
+            "game_wordsearch" => userProgress.GameWordSearch,
+            "game_slots" => userProgress.GameSlots,
+            "game_slots_win" => userProgress.GameSlotsWin,
             _ => 0
         };
     }

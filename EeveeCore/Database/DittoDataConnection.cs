@@ -115,6 +115,16 @@ public class DittoDataConnection : DataConnection
     /// </summary>
     public ITable<InvalidPokemonReference> InvalidPokemonReferences => this.GetTable<InvalidPokemonReference>();
 
+    /// <summary>
+    ///     Gets the milestone progress tracking for achievements.
+    /// </summary>
+    public ITable<MilestoneProgress> MilestoneProgress => this.GetTable<MilestoneProgress>();
+
+    /// <summary>
+    ///     Gets the user loyalty and daily streak tracking.
+    /// </summary>
+    public ITable<UserLoyalty> UserLoyalty => this.GetTable<UserLoyalty>();
+
     #endregion
 
     #region Bot Tables

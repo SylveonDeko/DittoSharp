@@ -35,5 +35,5 @@ public class VoucherRequest
     ///     Gets or sets the Discord user ID of the artist assigned to this voucher request.
     /// </summary>
     [Column(Name = "artist")]
-    public long? ArtistId { get; set; }
+    public ulong? ArtistId { get; set; }
 }

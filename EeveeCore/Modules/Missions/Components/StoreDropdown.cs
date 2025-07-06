@@ -409,7 +409,7 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
             var embed = new EmbedBuilder()
                 .WithTitle("🎰 Final Lottery Result!")
-                .WithDescription($"**Your final choice revealed: {finalAmount:N0} MewCoins!**\n\nYou have been awarded **{finalAmount:N0} MewCoins**!")
+                .WithDescription($"**Your final choice revealed: {finalAmount:N0} Coins!**\n\nYou have been awarded **{finalAmount:N0} MewCoins**!")
                 .WithColor(new Color(finalAmount >= 50000 ? 0xFFD700u : finalAmount >= 10000 ? 0x00FF00u : 0xFF4500u))
                 .WithFooter("Thanks for playing the Meowth Ticket Lottery!")
                 .Build();

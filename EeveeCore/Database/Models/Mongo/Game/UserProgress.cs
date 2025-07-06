@@ -80,4 +80,22 @@ public class UserProgress
     /// </summary>
     [BsonElement("vote")]
     public int Vote { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of word search games completed by the user.
+    /// </summary>
+    [BsonElement("game_wordsearch")]
+    public int GameWordSearch { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of slot machine games played by the user.
+    /// </summary>
+    [BsonElement("game_slots")]
+    public int GameSlots { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the number of slot machine games won by the user.
+    /// </summary>
+    [BsonElement("game_slots_win")]
+    public int GameSlotsWin { get; set; }
 }

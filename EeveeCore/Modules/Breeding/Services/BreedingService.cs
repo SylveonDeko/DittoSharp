@@ -1,6 +1,8 @@
 using System.Text.Json;
 using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Database.Models.Mongo.Pokemon;
+using EeveeCore.Modules.Achievements.Services;
+using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
 using MongoDB.Driver;
@@ -21,6 +23,8 @@ public class BreedingService : INService
     private readonly Dictionary<(ulong UserId, int MaleId), int> _breedRetries = new();
     private readonly LinqToDbConnectionProvider _dbContextProvider;
     private readonly IMongoService _mongoService;
+    private readonly AchievementService _achievementService;
+    private readonly MissionService _missionService;
 
     /// <summary>
     ///     List of nature options for Pokémon
@@ -48,14 +52,20 @@ public class BreedingService : INService
     /// <param name="mongoService">The MongoDB service for database operations.</param>
     /// <param name="dbContextProvider">The database context provider.</param>
     /// <param name="redisCache">The Redis cache service.</param>
+    /// <param name="achievementService">The achievement service for tracking milestones.</param>
+    /// <param name="missionService">The mission service for tracking mission progress.</param>
     public BreedingService(
         IMongoService mongoService,
         LinqToDbConnectionProvider dbContextProvider,
-        RedisCache redisCache)
+        RedisCache redisCache,
+        AchievementService achievementService,
+        MissionService missionService)
     {
         _mongoService = mongoService;
         _dbContextProvider = dbContextProvider;
         _redisCache = redisCache;
+        _achievementService = achievementService;
+        _missionService = missionService;
         new HttpClient();
 
         // Initialize the cache for breed cooldowns
@@ -587,6 +597,19 @@ public class BreedingService : INService
                 .Where(a => a.UserId == userId)
                 .Set(a => a.BreedSuccess, a => a.BreedSuccess + 1)
                 .UpdateAsync();
+
+        // Comprehensive achievement tracking with IV analysis and milestones
+        try
+        {
+            var childIvs = new[] { child.Hp, child.Attack, child.Defense, child.SpAtk, child.SpDef, child.Speed };
+            
+            // Track comprehensive breeding achievements including milestones and rewards
+            await _achievementService.TrackBreedingAsync(userId, childIvs, isShiny, isShadow);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Error tracking comprehensive breeding achievements for user {UserId}", userId);
+        }
 
         return new BreedingResult
         {

@@ -6,6 +6,8 @@ using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Database.Models.Mongo.Discord;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Spawn.Constants;
+using EeveeCore.Modules.Achievements.Services;
+using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
 using MongoDB.Driver;
@@ -69,6 +71,16 @@ public class SpawnService : INService, IReadyExecutor
     private readonly PokemonService _pokemonService;
 
     /// <summary>
+    ///     Service for tracking achievements and milestones.
+    /// </summary>
+    private readonly AchievementService _achievementService;
+
+    /// <summary>
+    ///     Service for handling mission-related operations.
+    /// </summary>
+    private readonly MissionService _missionService;
+
+    /// <summary>
     ///     Random number generator for spawn mechanics.
     /// </summary>
     private readonly Random _random;
@@ -96,19 +108,25 @@ public class SpawnService : INService, IReadyExecutor
     /// <param name="pokemonService">Pokemon service for Pokemon-related operations.</param>
     /// <param name="dbContextProvider">Provider for database access.</param>
     /// <param name="cache">Cache service for temporary data.</param>
+    /// <param name="achievementService">Service for tracking achievements and milestones.</param>
+    /// <param name="missionService">Service for handling mission-related operations.</param>
     public SpawnService(
         DiscordShardedClient client,
         IMongoService mongoDb,
         EventHandler handler,
         PokemonService pokemonService,
         LinqToDbConnectionProvider dbContextProvider,
-        IDataCache cache)
+        IDataCache cache,
+        AchievementService achievementService,
+        MissionService missionService)
     {
         _client = client;
         _mongoDb = mongoDb;
         _pokemonService = pokemonService;
         _dbContextProvider = dbContextProvider;
         _cache = cache;
+        _achievementService = achievementService;
+        _missionService = missionService;
         _random = new Random();
 
         handler.MessageReceived += HandleMessageAsync;
@@ -1565,6 +1583,24 @@ public class SpawnService : INService, IReadyExecutor
                     .Where(a => a.UserId == userId)
                     .Set(a => a.PokemonCaught, a => a.PokemonCaught + 1)
                     .UpdateAsync();
+
+            // Comprehensive achievement tracking with type-specific milestones
+            try
+            {
+                // Get Pokemon type information for type-specific achievements
+                var pokemonTypes = await _mongoDb.PokemonTypes
+                    .Find(pt => pt.PokemonId == Convert.ToInt32(pokemon.Id))
+                    .FirstOrDefaultAsync();
+
+                var typeIds = pokemonTypes?.Types ?? [];
+
+                // Track comprehensive achievements including milestones and rewards
+                await _achievementService.TrackPokemonCaughtAsync(userId, typeIds, shiny, false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Error tracking comprehensive achievements for Pokemon catch");
+            }
         }
         catch (Exception ex)
         {
