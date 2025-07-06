@@ -203,6 +203,131 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
+    ///     Handles the interaction when the "Main" button is clicked on any balance sub-view.
+    ///     Returns the user to the main balance display.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [ComponentInteraction("main_button", true)]
+    public async Task MainButtonHandler()
+    {
+        await DeferAsync();
+        await BalanceMain(ctx.User);
+    }
+
+    /// <summary>
+    ///     Displays the main balance view for button handlers (updates original response).
+    /// </summary>
+    /// <param name="user">The user to show the balance for.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public async Task BalanceMain(IUser user)
+    {
+        await using var db = await _dbContextProvider.GetConnectionAsync();
+
+        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
+        if (details == null)
+        {
+            await ModifyOriginalResponseAsync(msg =>
+            {
+                msg.Content = $"{user.Username} has not started!";
+                msg.Embeds = null;
+                msg.Components = null;
+            });
+            return;
+        }
+
+        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        {
+            await ModifyOriginalResponseAsync(msg =>
+            {
+                msg.Content = $"You are not permitted to see the Trainer card of {user.Username}";
+                msg.Embeds = null;
+                msg.Components = null;
+            });
+            return;
+        }
+
+        var voteStreak = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - details.LastVote > 36 * 60 * 60
+            ? 0
+            : details.VoteStreak;
+
+        var trainerNick = details.TrainerNickname ?? user.Username;
+        var region = details.Region;
+        var heldItem = details.HeldItem;
+        var staffRank = details.Staff;
+
+        // Create Components V2 container
+        var containerComponents = new List<IMessageComponentBuilder>();
+
+        // Add title with staff indicators
+        var titleText = staffRank.ToLower() switch
+        {
+            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+            "user" => $"**{trainerNick}** - *Trainer Information*",
+            _ => $"**{trainerNick}** - *Official Staff Member ({staffRank})*"
+        };
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
+
+        // Add main balance section
+        var balanceText = $"## Balances\n" +
+                         $"**Credits:** {details.MewCoins:N0}\n" +
+                         $"**Redeems:** {details.Redeems}\n" +
+                         $"**Mystery Tokens:** {details.MysteryToken}\n" +
+                         $"**[Dittopia](https://discord.gg/eeveecore) Rep.:** {details.OsRep}";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
+
+        // Add game progress section  
+        var energy = details.Energy ?? 10;
+        var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) + string.Concat(Enumerable.Repeat("⚫", 10 - energy));
+        var progressText = $"## Game Progress\n" +
+                          $"**Energy:** {energyBar} ({energy}/10)\n" +
+                          $"**EV Points:** {details.EvPoints}\n" +
+                          $"**Upvote Points:** {details.UpvotePoints}\n" +
+                          $"**Vote Streak:** {voteStreak}\n" +
+                          $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
+                          $"**Region:** {region.Capitalize()}";
+
+        if (details.Voucher > 0)
+        {
+            progressText += $"\n**Unused Vouchers:** {details.Voucher}";
+        }
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
+
+        // Add navigation buttons
+        var navigationRow = new ActionRowBuilder()
+            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+            .WithButton("Details", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
+
+        containerComponents.Add(navigationRow);
+
+        // Create the main container
+        var accentColor = staffRank.ToLower() switch
+        {
+            "gym" => Color.Orange,
+            "user" => new Color(0xFFB6C1),
+            _ => Color.Gold
+        };
+
+        var mainContainer = new ContainerBuilder()
+            .WithComponents(containerComponents)
+            .WithAccentColor(accentColor);
+
+        var componentsV2 = new ComponentBuilderV2()
+            .AddComponent(mainContainer);
+
+        await ModifyOriginalResponseAsync(msg =>
+        {
+            msg.Content = "";
+            msg.Embeds = null;
+            msg.Components = componentsV2.Build();
+            msg.Flags = MessageFlags.ComponentsV2;
+        });
+    }
+
+    /// <summary>
     ///     Sets the user's active region, which affects regional Pokémon forms.
     /// </summary>
     /// <param name="location">The region to set.</param>
@@ -430,7 +555,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     }
 
     /// <summary>
-    ///     Shows the user's balance and related information.
+    ///     Shows the user's balance and related information using Components V2.
     /// </summary>
     /// <param name="user">The user to show the balance for, or the command user if null.</param>
     /// <param name="hidden">Whether to show the balance as an ephemeral message.</param>
@@ -468,89 +593,80 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var heldItem = details.HeldItem;
         var staffRank = details.Staff;
 
-        StringBuilder desc = new();
-        desc.AppendLine($"{trainerNick}'s\n__**Balances**__");
-        desc.AppendLine($"**Credits**: {details.MewCoins}");
-        desc.AppendLine($"**Redeems**: {details.Redeems}");
-        desc.AppendLine($"**Mystery Tokens**: {details.MysteryToken}");
-        desc.AppendLine($"**[Dittopia](https://discord.gg/eeveecore) Rep.**: {details.OsRep}\n");
-        desc.AppendLine($"**EV Points**: {details.EvPoints}");
-        desc.AppendLine($"**Upvote Points**: {details.UpvotePoints}");
-        desc.AppendLine($"**Vote Streak**: `{voteStreak}`");
-        desc.AppendLine($"**Holding**: {heldItem.Capitalize().Replace("-", " ")}");
-        desc.AppendLine($"**Region**: {region.Capitalize()}");
+        // Create Components V2 container
+        var containerComponents = new List<IMessageComponentBuilder>();
 
-        if (details.Voucher > 0) desc.AppendLine($"\n\n**Unused Vouchers**: {details.Voucher}");
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        if (staffRank.ToLower() == "gym")
+        // Add title with staff indicators
+        var titleText = staffRank.ToLower() switch
         {
-            embed.WithAuthor(
-                "Official Gym Leader",
-                "https://cdn.discordapp.com/attachments/1004310910313181325/1038076633803931729/ezgif-4-9aa2641b3d.gif"
-            );
+            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+            "user" => $"**{trainerNick}** - *Trainer Information*",
+            _ => $"**{trainerNick}** - *Official Staff Member ({staffRank})*"
+        };
 
-            embed.AddField(
-                "Bot Role",
-                "**Dittopia Gym Leader**"
-            );
-        }
-        else if (staffRank.ToLower() != "user")
+        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
+
+        // Add main balance section
+        var balanceText = $"## Balances\n" +
+                         $"**Credits:** {details.MewCoins:N0}\n" +
+                         $"**Redeems:** {details.Redeems}\n" +
+                         $"**Mystery Tokens:** {details.MysteryToken}\n" +
+                         $"**[Dittopia](https://discord.gg/eeveecore) Rep.:** {details.OsRep}";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
+
+        // Add game progress section  
+        var energy = details.Energy ?? 10;
+        var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) + string.Concat(Enumerable.Repeat("⚫", 10 - energy));
+        var progressText = $"## Game Progress\n" +
+                          $"**Energy:** {energyBar} ({energy}/10)\n" +
+                          $"**EV Points:** {details.EvPoints}\n" +
+                          $"**Upvote Points:** {details.UpvotePoints}\n" +
+                          $"**Vote Streak:** {voteStreak}\n" +
+                          $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
+                          $"**Region:** {region.Capitalize()}";
+
+        if (details.Voucher > 0)
         {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                $"attachment://di.webp"
-            );
-
-            embed.WithAuthor(
-                "Official Staff Member",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-
-            embed.AddField(
-                "Bot Staff Rank",
-                staffRank
-            );
-        }
-        else
-        {
-            embed.WithAuthor("Trainer Information");
+            progressText += $"\n**Unused Vouchers:** {details.Voucher}";
         }
 
-        // Create component buttons for the embedded response
-        var components = new ComponentBuilder()
+        containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
+
+        // Add navigation buttons
+        var navigationRow = new ActionRowBuilder()
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
+            .WithButton("Details", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
 
-        // Check if we need to send di.webp attachment for staff members
-        if (staffRank.ToLower() != "user" && staffRank.ToLower() != "gym")
+        containerComponents.Add(navigationRow);
+
+        // Create the main container
+        var accentColor = staffRank.ToLower() switch
         {
-            var diImagePath = Path.Combine("data", "images", "di.webp");
-            if (File.Exists(diImagePath))
-            {
-                await using var fileStream = new FileStream(diImagePath, FileMode.Open, FileAccess.Read);
-                var fileAttachment = new FileAttachment(fileStream, "di.webp");
-                await RespondWithFileAsync(embed: embed.Build(), components: components, ephemeral: hidden, attachment: fileAttachment);
-                return;
-            }
-        }
-        
-        await RespondAsync(embed: embed.Build(), components: components, ephemeral: hidden);
+            "gym" => Color.Orange,
+            "user" => new Color(0xFFB6C1),
+            _ => Color.Gold
+        };
+
+        var mainContainer = new ContainerBuilder()
+            .WithComponents(containerComponents)
+            .WithAccentColor(accentColor);
+
+        var componentsV2 = new ComponentBuilderV2()
+            .AddComponent(mainContainer);
+
+        await RespondAsync(components: componentsV2.Build(), flags: MessageFlags.ComponentsV2, ephemeral: hidden);
     }
 
     /// <summary>
-    ///     Displays information about chests in the user's inventory.
+    ///     Displays information about chests in the user's inventory using Components V2.
     /// </summary>
     /// <param name="user">The user whose chest information to display.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <remarks>
     ///     This method is called when the user clicks the "Chests" button on the balance display.
-    ///     It replaces the original message with a new embed showing chest counts.
+    ///     It replaces the original message with a new Components V2 display showing chest counts.
     /// </remarks>
     public async Task BalanceChests(IUser user)
     {
@@ -583,45 +699,57 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var staffRank = details.Staff;
         var trainerNick = details.TrainerNickname ?? user.Username;
 
-        StringBuilder desc = new();
-        desc.AppendLine("### You have:");
-        desc.AppendLine($"\n- <:legend:1212910198335737876>`Legend`:\n    - **{legend}**");
-        desc.AppendLine($"\n- <:mythic:1212910137858330674>`Mythic`:\n    - **{mythic}**");
-        desc.AppendLine($"\n- <:rare:1212910022137348106>`Rare`:\n    - **{rare}**");
-        desc.AppendLine($"\n- <:common:1212910253524389898>`Common`:\n    - **{common}**");
+        // Create Components V2 container
+        var containerComponents = new List<IMessageComponentBuilder>();
 
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        if (staffRank.ToLower() != "user")
+        // Add title
+        var titleText = staffRank.ToLower() switch
         {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                $"attachment://di.webp"
-            );
+            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+            "user" => $"**{trainerNick}**",
+            _ => $"**{trainerNick}** - *Official Staff Member*"
+        };
 
-            embed.WithAuthor(
-                $"{trainerNick}'s Chests",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-        }
-        else
+        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Chests"));
+
+        // Add chest inventory
+        var chestsText = $"## Chest Inventory\n" +
+                        $"**Legend:** {legend}\n" +
+                        $"**Mythic:** {mythic}\n" +
+                        $"**Rare:** {rare}\n" +
+                        $"**Common:** {common}";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(chestsText));
+
+        // Add navigation buttons
+        var navigationRow = new ActionRowBuilder()
+            .WithButton("Main", "main_button", ButtonStyle.Primary)
+            .WithButton("Chests", "chest_button", ButtonStyle.Success, disabled: true)
+            .WithButton("Details", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
+
+        containerComponents.Add(navigationRow);
+
+        // Create the main container
+        var accentColor = staffRank.ToLower() switch
         {
-            embed.WithAuthor($"{trainerNick}'s Chests");
-        }
+            "gym" => Color.Orange,
+            "user" => new Color(0xFFB6C1),
+            _ => Color.Gold
+        };
 
-        // Recreate the component buttons to keep them available
-        var components = new ComponentBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
+        var mainContainer = new ContainerBuilder()
+            .WithComponents(containerComponents)
+            .WithAccentColor(accentColor);
+
+        var componentsV2 = new ComponentBuilderV2()
+            .AddComponent(mainContainer);
 
         await ModifyOriginalResponseAsync(msg =>
         {
-            msg.Embed = embed.Build();
-            msg.Components = components;
+            msg.Embeds = null;
+            msg.Components = componentsV2.Build();
+            msg.Flags = MessageFlags.ComponentsV2;
         });
     }
 
@@ -665,84 +793,98 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var tokens = JsonSerializer.Deserialize<Dictionary<string, int>>(tokenData ?? "{}") ??
                      new Dictionary<string, int>();
 
-        StringBuilder desc = new();
-        desc.AppendLine("### You have:");
-
-        var hasTokens = false;
-        foreach (var (typeName, count) in tokens)
-            if (count > 0)
-            {
-                desc.AppendLine($"- {typeName}: **{count}**");
-                hasTokens = true;
-            }
-
-        if (!hasTokens) desc = new StringBuilder($"{user.Username} has no tokens.");
-
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
         var trainerNick = details.TrainerNickname ?? user.Username;
         var staffRank = details.Staff;
 
-        if (staffRank.ToLower() != "user")
-        {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                $"attachment://di.webp"
-            );
+        // Create Components V2 container
+        var containerComponents = new List<IMessageComponentBuilder>();
 
-            embed.WithAuthor(
-                $"{trainerNick}'s Tokens",
-                "https://cdn.discordapp.com/emojis/1075509351223144520.gif?size=80&quality=lossless"
-            );
-        }
-        else
+        // Add title
+        var titleText = staffRank.ToLower() switch
         {
-            embed.WithAuthor($"{trainerNick}'s Tokens");
+            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+            "user" => $"**{trainerNick}**",
+            _ => $"**{trainerNick}** - *Official Staff Member*"
+        };
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Tokens"));
+
+        // Add tokens list
+        var hasTokens = false;
+        var tokensList = new List<string>();
+        
+        foreach (var (typeName, count) in tokens)
+        {
+            if (count > 0)
+            {
+                tokensList.Add($"**{typeName}:** {count}");
+                hasTokens = true;
+            }
         }
 
-        // Recreate the component buttons to keep them available
-        var components = new ComponentBuilder()
+        var tokensText = hasTokens 
+            ? $"## Your Tokens\n{string.Join("\n", tokensList)}"
+            : $"## Your Tokens\n*You don't have any tokens yet.*";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(tokensText));
+
+        // Add navigation buttons
+        var navigationRow = new ActionRowBuilder()
+            .WithButton("Main", "main_button", ButtonStyle.Primary)
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
+            .WithButton("Details", "misc_button", ButtonStyle.Secondary)
+            .WithButton("Tokens", "tokens_button", ButtonStyle.Success, disabled: true);
+
+        containerComponents.Add(navigationRow);
+
+        // Create the main container
+        var accentColor = staffRank.ToLower() switch
+        {
+            "gym" => Color.Orange,
+            "user" => new Color(0xFFB6C1),
+            _ => Color.Gold
+        };
+
+        var mainContainer = new ContainerBuilder()
+            .WithComponents(containerComponents)
+            .WithAccentColor(accentColor);
+
+        var componentsV2 = new ComponentBuilderV2()
+            .AddComponent(mainContainer);
 
         await ModifyOriginalResponseAsync(msg =>
         {
-            msg.Embed = embed.Build();
-            msg.Components = components;
+            msg.Embeds = null;
+            msg.Components = componentsV2.Build();
+            msg.Flags = MessageFlags.ComponentsV2;
         });
     }
 
     /// <summary>
-    ///     Displays miscellaneous information about a user's account and inventory.
+    ///     Displays miscellaneous information about a user's account and inventory using Components V2.
     /// </summary>
     /// <param name="user">The user whose miscellaneous information to display.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <remarks>
-    ///     This method is called when the user clicks the "Misc" button on the balance display.
-    ///     It creates a follow-up message with detailed information about various aspects
+    ///     This method is called when the user clicks the "Details" button on the balance display.
+    ///     It replaces the original message with detailed information about various aspects
     ///     of the user's account including market slots, daycare, Pokemon owned,
     ///     shadow hunt, and fishing stats.
     /// </remarks>
     public async Task BalanceMisc(IUser user)
     {
-        StringBuilder desc = new();
-
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
         var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
         if (details == null)
         {
-            await FollowupAsync($"{user.Username} has not started!", ephemeral: _hidden);
+            await RespondAsync($"{user.Username} has not started!", ephemeral: _hidden);
             return;
         }
 
         if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
         {
-            await FollowupAsync(
+            await RespondAsync(
                 $"You are not permitted to see the Trainer card of {user.Username}",
                 ephemeral: _hidden
             );
@@ -751,23 +893,18 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         var marketUsed = await db.Market
             .CountAsync(m => m.OwnerId == user.Id && m.BuyerId == null);
-
-        // Count eggs using the ownership table and Pokemon table
         var daycared = await db.UserPokemonOwnerships
             .Join(db.UserPokemon,
                 o => o.PokemonId,
                 p => p.Id,
                 (o, p) => new { Ownership = o, Pokemon = p })
             .CountAsync(j => j.Ownership.UserId == user.Id && j.Pokemon.PokemonName == "Egg");
-
-        // Get total Pokemon count from the ownership table
         var pokemonCount = await db.UserPokemonOwnerships
             .CountAsync(o => o.UserId == user.Id);
 
         var bike = details.Bike ?? false;
         var trainerNick = details.TrainerNickname ?? user.Username;
         var daycareLimit = details.DaycareLimit ?? 1;
-        var heldItem = details.HeldItem;
         var marketLimit = details.MarketLimit;
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(details.Inventory ?? "{}") ??
                         new Dictionary<string, int>();
@@ -778,85 +915,121 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var fishingExp = details.FishingExp ?? 0;
         var fishingLevelCap = details.FishingLevelCap ?? 50;
 
-        // Generate visual health bars
-        var energy = Service.DoHealth(10, details.Energy ?? 10);
-        var fishingExpBar = Service.DoHealth((int)fishingLevelCap, (int)fishingExp);
+        var energyValue = details.Energy ?? 10;
+        var energyBar = string.Concat(Enumerable.Repeat("🟢", energyValue)) + string.Concat(Enumerable.Repeat("⚫", 10 - energyValue));
+        var fishingProgress = (double)fishingExp / fishingLevelCap;
+        var fishingBarLength = 10;
+        var filledBars = (int)(fishingProgress * fishingBarLength);
+        var fishingExpBar = string.Concat(Enumerable.Repeat("🟦", filledBars)) + string.Concat(Enumerable.Repeat("⬜", fishingBarLength - filledBars));
 
-        var marketLimitBonus = 0;
+        // Create Components V2 container
+        var containerComponents = new List<IMessageComponentBuilder>();
 
-        var marketText = $"{marketUsed}/{marketLimit}";
-        if (marketLimitBonus > 0) marketText += $" (+ {marketLimitBonus}!)";
+        // Add title
+        var titleText = staffRank.ToLower() switch
+        {
+            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+            "user" => $"**{trainerNick}**",
+            _ => $"**{trainerNick}** - *Official Staff Member*"
+        };
 
-        desc.AppendLine($"\n**Market Slots**: `{marketText}`");
-        desc.AppendLine($"| **Daycare**: `{daycared}/{daycareLimit}`");
-        desc.AppendLine($"\n**Pokemon Owned**: `{pokemonCount:,}`");
+        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Details"));
 
-        if (!string.IsNullOrEmpty(hunt))
-            desc.AppendLine($"\n**Shadow Hunt**: `{hunt} ({huntProgress}x)`");
-        else
-            desc.AppendLine("\n**Shadow Hunt**: Select with `/hunt`!");
+        // Add account stats
+        var accountText = $"## Account Stats\n" +
+                         $"**Market Slots:** {marketUsed}/{marketLimit}\n" +
+                         $"**Daycare:** {daycared}/{daycareLimit}\n" +
+                         $"**Pokemon Owned:** {pokemonCount:N0}\n" +
+                         $"**Bicycle:** {(bike ? "Yes" : "No")}";
 
-        desc.AppendLine($"\n**Bicycle**: {bike}");
-        desc.AppendLine("\n**General Inventory**\n");
+        containerComponents.Add(new TextDisplayBuilder().WithContent(accountText));
 
-        // Filter out chest items from display
+        // Add hunt info
+        var huntText = !string.IsNullOrEmpty(hunt) 
+            ? $"## Shadow Hunt\n**Target:** {hunt}\n**Chain:** {huntProgress}x"
+            : $"## Shadow Hunt\n*No active hunt - use `/hunt` to start*";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(huntText));
+
+        // Add energy and fishing stats
+        var statsText = $"## Energy & Fishing\n" +
+                       $"**Energy:** {energyBar} ({energyValue}/10)\n" +
+                       $"**Fishing Level:** {fishingLevel}\n" +
+                       $"**Fishing Exp:** {fishingExp}/{fishingLevelCap}\n" +
+                       $"**Progress:** {fishingExpBar}";
+
+        containerComponents.Add(new TextDisplayBuilder().WithContent(statsText));
+
+        // Add inventory (without chest items and custom emotes)
+        var inventoryItems = new List<string>();
         inventory.Remove("coin-case");
 
-        foreach (var (item, count) in inventory)
+        foreach (var (item, count) in inventory.Where(i => !IsChestItem(i.Key)).Take(10))
         {
-            if (item.Contains("common chest") ||
-                item.Contains("rare chest") ||
-                item.Contains("mythic chest") ||
-                item.Contains("legend chest") ||
-                item.Contains("spooky chest") ||
-                item.Contains("fleshy chest") ||
-                item.Contains("ghost detector") ||
-                item.Contains("horrific chest") ||
-                item.Contains("heart chest"))
-                continue;
-
+            var itemName = item.Replace("-", " ").Capitalize();
             if (item.Contains("breeding"))
-                desc.AppendLine(
-                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateBreedingMultiplier(count)})`");
+                inventoryItems.Add($"**{itemName}:** {count} (x{Service.CalculateBreedingMultiplier(count)})");
             else if (item.Contains("iv"))
-                desc.AppendLine(
-                    $"{item.Replace("-", " ").Capitalize()} `{count}` `({Service.CalculateIvMultiplier(count)})`");
+                inventoryItems.Add($"**{itemName}:** {count} (x{Service.CalculateIvMultiplier(count)})");
             else
-                desc.AppendLine($"{item.Replace("-", " ").Capitalize()} `{count}`x");
+                inventoryItems.Add($"**{itemName}:** {count}");
         }
 
-        var embed = new EmbedBuilder()
-            .WithColor(new Color(0xFFB6C1))
-            .WithDescription(desc.ToString());
-
-        embed.AddField("Energy", energy);
-        embed.AddField(
-            "Fishing Stats",
-            $"Fishing Level - {fishingLevel}\nFishing Exp - {fishingExp}/{fishingLevelCap}\n{fishingExpBar}"
-        );
-
-        if (staffRank.ToLower() != "user")
+        if (inventoryItems.Any())
         {
-            embed.WithFooter(
-                $"DittoBOT {staffRank}",
-                $"attachment://di.webp"
-            );
-
-            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
-        }
-        else
-        {
-            embed.WithAuthor($"{trainerNick}'s Miscellaneous Balances");
+            var inventoryText = $"## Inventory\n{string.Join("\n", inventoryItems)}";
+            if (inventory.Count > 10)
+                inventoryText += $"\n*... and {inventory.Count - 10} more items*";
+            
+            containerComponents.Add(new TextDisplayBuilder().WithContent(inventoryText));
         }
 
-        // Recreate the component buttons
-        var components = new ComponentBuilder()
+        // Add navigation buttons
+        var navigationRow = new ActionRowBuilder()
+            .WithButton("Main", "main_button", ButtonStyle.Primary)
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Misc", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Radiant Tokens", "tokens_button", ButtonStyle.Secondary)
-            .Build();
+            .WithButton("Details", "misc_button", ButtonStyle.Success, disabled: true)
+            .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
 
-        await FollowupAsync(embed: embed.Build(), components: components, ephemeral: _hidden);
+        containerComponents.Add(navigationRow);
+
+        // Create the main container
+        var accentColor = staffRank.ToLower() switch
+        {
+            "gym" => Color.Orange,
+            "user" => new Color(0xFFB6C1),
+            _ => Color.Gold
+        };
+
+        var mainContainer = new ContainerBuilder()
+            .WithComponents(containerComponents)
+            .WithAccentColor(accentColor);
+
+        var componentsV2 = new ComponentBuilderV2()
+            .AddComponent(mainContainer);
+
+        await ModifyOriginalResponseAsync(msg =>
+        {
+            msg.Embeds = null;
+            msg.Components = componentsV2.Build();
+            msg.Flags = MessageFlags.ComponentsV2;
+        });
+    }
+
+    /// <summary>
+    /// Helper method to determine if an item is a chest type that should be filtered out.
+    /// </summary>
+    private static bool IsChestItem(string item)
+    {
+        return item.Contains("common chest") ||
+               item.Contains("rare chest") ||
+               item.Contains("mythic chest") ||
+               item.Contains("legend chest") ||
+               item.Contains("spooky chest") ||
+               item.Contains("fleshy chest") ||
+               item.Contains("ghost detector") ||
+               item.Contains("horrific chest") ||
+               item.Contains("heart chest");
     }
 
     /// <summary>
