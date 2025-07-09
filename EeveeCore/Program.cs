@@ -244,7 +244,7 @@ public class Program
             LogLevel = LogSeverity.Debug,
             ConnectionTimeout = int.MaxValue,
             AlwaysDownloadUsers = true,
-            GatewayIntents = GatewayIntents.All,
+            GatewayIntents = GatewayIntents.All ^ GatewayIntents.GuildPresences,
             LogGatewayIntentWarnings = false,
             DefaultRetryMode = RetryMode.RetryRatelimit
         });
