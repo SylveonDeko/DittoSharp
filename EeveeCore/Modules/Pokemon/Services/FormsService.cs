@@ -123,6 +123,11 @@ public class FormsService(
                 return (false, "You do not have a Pokemon selected!\nSelect one with `/pokemon select` first.");
 
             var pokemonName = selectedPokemon.PokemonName;
+            
+            var name = pokemonName.ToLower().Split('-')[0];
+            var originalFormInfo = await mongo.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
+            if (originalFormInfo == null)
+                return (false, "This Pokemon is not in a form that can be deformed!");
 
             // Handle special Tauros forms
             if (pokemonName.ToLower() == "tauros-blaze-paldea" || pokemonName.ToLower() == "tauros-aqua-paldea")

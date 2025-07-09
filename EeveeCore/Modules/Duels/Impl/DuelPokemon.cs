@@ -3232,6 +3232,7 @@ public class DuelPokemon
         if (!IsFormVariant(pn)) return formInfo.PokemonId;
         var name = pn.ToLower().Split('-')[0];
         var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
+        if (originalFormInfo == null) return formInfo.PokemonId;
         return originalFormInfo.PokemonId;
     }
 
