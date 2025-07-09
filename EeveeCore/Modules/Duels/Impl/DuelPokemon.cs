@@ -1,6 +1,7 @@
 using EeveeCore.Modules.Duels.Utils;
 using EeveeCore.Services.Impl;
 using MongoDB.Driver;
+using Serilog;
 
 namespace EeveeCore.Modules.Duels.Impl;
 
@@ -3227,6 +3228,7 @@ public class DuelPokemon
 
     private static async Task<int> GetBasePokemonId(string? pn, dynamic formInfo, IMongoService mongoService)
     {
+        Log.Information($"Pokemon name is {pn}");
         if (!IsFormVariant(pn)) return formInfo.PokemonId;
         var name = pn.ToLower().Split('-')[0];
         var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
