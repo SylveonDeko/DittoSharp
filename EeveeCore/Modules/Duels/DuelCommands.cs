@@ -2,6 +2,7 @@ using System.Text.Json;
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Duels.Impl;
+using EeveeCore.Modules.Duels.Impl.DuelPokemon;
 using EeveeCore.Modules.Duels.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;

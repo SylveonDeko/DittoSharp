@@ -11,7 +11,7 @@ public partial class Move
     ///     Checks if the move hits a semi-invulnerable pokemon.
     /// </summary>
     /// <returns>True if this move hits, False otherwise.</returns>
-    public bool CheckSemiInvulnerable(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public bool CheckSemiInvulnerable(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         if (!TargetsOpponent()) return true;
 
@@ -39,7 +39,7 @@ public partial class Move
     ///     A tuple (boolean, string) where the boolean indicates if the move hits, and the string is a message to add to
     ///     the battle log.
     /// </returns>
-    public (bool, string) CheckProtect(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public (bool, string) CheckProtect(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
         // Moves that don't target the opponent can't be protected by the target.
@@ -127,7 +127,7 @@ public partial class Move
     ///     Checks if this move hits based on accuracy.
     /// </summary>
     /// <returns>True if this move hits, False otherwise.</returns>
-    public bool CheckHit(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public bool CheckHit(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var micleBerryUsed = attacker.MicleBerryAte;
         attacker.MicleBerryAte = false;
@@ -242,7 +242,7 @@ public partial class Move
     ///     Checks if a move has an effect on a pokemon.
     /// </summary>
     /// <returns>True if a move has an effect on a pokemon.</returns>
-    public bool CheckEffective(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public bool CheckEffective(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         // What if I :flushed: used Hold Hands :flushed: in a double battle :flushed: with you? :flushed:
         // (and you weren't protected by Crafty Shield or in the semi-invulnerable turn of a move like Fly or Dig)
@@ -318,7 +318,7 @@ public partial class Move
     ///     Returns True if the move can be executed, False otherwise.
     ///     Checks different requirements for moves that can make them fail.
     /// </summary>
-    public bool CheckExecutable(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public bool CheckExecutable(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         if (attacker.Taunt.Active() && DamageClass == DamageClass.STATUS) return false;
 

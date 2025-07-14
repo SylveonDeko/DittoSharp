@@ -6,7 +6,7 @@ public partial class Move
     ///     Attacks the defender using this move.
     /// </summary>
     /// <returns>A string of formatted results of this attack and the number of hits this move did.</returns>
-    public (string, int) Attack(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public (string, int) Attack(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         // https://bulbapedia.bulbagarden.net/wiki/Damage
         var msg = "";
@@ -454,7 +454,7 @@ public partial class Move
     /// <summary>
     ///     Get the power of this move.
     /// </summary>
-    public int? GetPower(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public int? GetPower(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var currentType = GetType(attacker, defender, battle);
         int? power = null;

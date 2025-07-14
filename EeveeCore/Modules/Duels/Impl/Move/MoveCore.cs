@@ -6,7 +6,7 @@ public partial class Move
     ///     Sets up anything this move needs to do prior to normal move execution.
     /// </summary>
     /// <returns>A formatted message.</returns>
-    public string Setup(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public string Setup(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
         if (Effect == 129 && (defender.Owner.SelectedAction.IsSwitch ||
@@ -31,7 +31,7 @@ public partial class Move
     ///     Calculates the element type this move will be.
     /// </summary>
     /// <returns>The element type of this move, taking into account abilities and effects.</returns>
-    public ElementType GetType(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public ElementType GetType(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         // Abilities are first because those are intrinsic to the poke and would "apply" to the move first
         if (attacker.Ability() == Ability.REFRIGERATE && Type == ElementType.NORMAL) return ElementType.ICE;
@@ -250,7 +250,7 @@ public partial class Move
     ///     Calculates the priority value for this move.
     /// </summary>
     /// <returns>An int priority from -7 to 5.</returns>
-    public int GetPriority(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public int GetPriority(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var priority = Priority;
         var currentType = GetType(attacker, defender, battle);
@@ -272,7 +272,7 @@ public partial class Move
     ///     Gets the chance for secondary effects to occur.
     /// </summary>
     /// <returns>An int from 0-100.</returns>
-    public int? GetEffectChance(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public int? GetEffectChance(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         if (EffectChance == null) return 100;
 

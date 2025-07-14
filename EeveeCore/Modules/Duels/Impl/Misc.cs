@@ -162,7 +162,7 @@ public class Weather(Battle battle) : ExpiringEffect(0)
     /// <param name="weather">The weather type to set.</param>
     /// <param name="pokemon">The Pokémon initiating the weather change.</param>
     /// <returns>A formatted message describing the weather change and its effects.</returns>
-    public string Set(string weather, DuelPokemon pokemon)
+    public string Set(string weather, DuelPokemon.DuelPokemon pokemon)
     {
         var msg = "";
         int? turns = null;
@@ -363,7 +363,7 @@ public class Terrain(Battle battle) : ExpiringItem
     /// <param name="item">The terrain type to set ("electric", "grassy", "misty", or "psychic").</param>
     /// <param name="attacker">The Pokémon creating the terrain.</param>
     /// <returns>A formatted message describing the terrain change and its effects.</returns>
-    public string Set(string item, DuelPokemon attacker)
+    public string Set(string item, DuelPokemon.DuelPokemon attacker)
     {
         if (item == Item?.ToString())
             return $"There's already a {item} terrain!\n";
@@ -492,7 +492,7 @@ public class ExpiringWish() : ExpiringEffect(0)
 ///     Represents a Pokémon's non-volatile status condition (burn, poison, paralysis, sleep, or freeze).
 ///     Manages application, removal, and turn-by-turn effects of status conditions.
 /// </summary>
-public class NonVolatileEffect(DuelPokemon pokemon)
+public class NonVolatileEffect(DuelPokemon.DuelPokemon pokemon)
 {
     /// <summary>
     ///     Gets or sets the current status condition.
@@ -630,7 +630,7 @@ public class NonVolatileEffect(DuelPokemon pokemon)
     /// <param name="force">Whether to force the status application, bypassing some protections.</param>
     /// <param name="source">The source of the status condition for message formatting.</param>
     /// <returns>A formatted message describing the result of the status application attempt.</returns>
-    public string ApplyStatus(string status, Battle battle, DuelPokemon attacker = null, Move.Move move = null,
+    public string ApplyStatus(string status, Battle battle, DuelPokemon.DuelPokemon attacker = null, Move.Move move = null,
         int? turns = null, bool force = false, string source = "")
     {
         var msg = "";
@@ -862,7 +862,7 @@ public class Item(IDictionary<string, object> itemData)
 /// </summary>
 public class HeldItem
 {
-    private readonly DuelPokemon _owner;
+    private readonly DuelPokemon.DuelPokemon _owner;
     private Database.Models.Mongo.Pokemon.Item _item;
 
     /// <summary>
@@ -870,7 +870,7 @@ public class HeldItem
     /// </summary>
     /// <param name="itemData">The database item data for the held item.</param>
     /// <param name="owner">The Pokémon holding the item.</param>
-    public HeldItem(Database.Models.Mongo.Pokemon.Item itemData, DuelPokemon owner)
+    public HeldItem(Database.Models.Mongo.Pokemon.Item itemData, DuelPokemon.DuelPokemon owner)
     {
         _item = itemData;
         _owner = owner;
@@ -1062,7 +1062,7 @@ public class HeldItem
         EverHadItem = EverHadItem || _item != null;
     }
 
-    private bool _ShouldEatBerryUtil(DuelPokemon otherpoke = null)
+    private bool _ShouldEatBerryUtil(DuelPokemon.DuelPokemon otherpoke = null)
     {
         if (_owner.Hp == 0) return false;
         if (otherpoke != null && (
@@ -1080,7 +1080,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerryDamage(DuelPokemon otherpoke = null)
+    public bool ShouldEatBerryDamage(DuelPokemon.DuelPokemon otherpoke = null)
     {
         if (!_ShouldEatBerryUtil(otherpoke)) return false;
         if (_owner.Hp <= _owner.StartingHp / 4)
@@ -1109,7 +1109,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerryStatus(DuelPokemon otherpoke = null)
+    public bool ShouldEatBerryStatus(DuelPokemon.DuelPokemon otherpoke = null)
     {
         if (!_ShouldEatBerryUtil(otherpoke)) return false;
         var item = Get();
@@ -1133,7 +1133,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerry(DuelPokemon otherpoke = null)
+    public bool ShouldEatBerry(DuelPokemon.DuelPokemon otherpoke = null)
     {
         return ShouldEatBerryDamage(otherpoke) || ShouldEatBerryStatus(otherpoke);
     }
@@ -1149,7 +1149,7 @@ public class HeldItem
     /// <param name="attacker">The attacking Pokémon, if relevant to berry effects.</param>
     /// <param name="move">The move being used, if relevant to berry effects.</param>
     /// <returns>A formatted message describing the berry's effects.</returns>
-    public string EatBerry(DuelPokemon consumer = null, DuelPokemon attacker = null, Move.Move move = null)
+    public string EatBerry(DuelPokemon.DuelPokemon consumer = null, DuelPokemon.DuelPokemon attacker = null, Move.Move move = null)
     {
         var msg = "";
         if (!IsBerry()) return "";
@@ -1212,7 +1212,7 @@ public class HeldItem
                 msg += consumer.AppendSpeed(ripe * 1, attacker, move, "eating its berry");
                 break;
             case "starf-berry":
-                var funcs = new Func<int, DuelPokemon, Move.Move, string, bool, string>[]
+                var funcs = new Func<int, DuelPokemon.DuelPokemon, Move.Move, string, bool, string>[]
                 {
                     consumer.AppendAttack,
                     consumer.AppendDefense,
@@ -1373,7 +1373,7 @@ public class HeldItem
 ///     via the move Baton Pass. Stores stat changes, volatile status conditions, and
 ///     other transferable battle effects.
 /// </summary>
-public class BatonPass(DuelPokemon poke)
+public class BatonPass(DuelPokemon.DuelPokemon poke)
 {
     /// <summary>
     ///     Gets the Attack stage modifier (-6 to +6) from the original Pokémon.
@@ -1491,7 +1491,7 @@ public class BatonPass(DuelPokemon poke)
     ///     that can be passed via Baton Pass.
     /// </summary>
     /// <param name="poke">The Pokémon to apply the stored effects to.</param>
-    public void Apply(DuelPokemon poke)
+    public void Apply(DuelPokemon.DuelPokemon poke)
     {
         if (poke.Ability() != Ability.CURIOUS_MEDICINE)
         {

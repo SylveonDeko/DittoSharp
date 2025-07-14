@@ -2,6 +2,7 @@ using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Duels.Extensions;
 using EeveeCore.Modules.Duels.Impl;
+using EeveeCore.Modules.Duels.Impl.DuelPokemon;
 using EeveeCore.Modules.Duels.Impl.Helpers;
 using EeveeCore.Modules.Duels.Impl.Move;
 using EeveeCore.Modules.Duels.Services;

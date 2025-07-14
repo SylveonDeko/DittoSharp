@@ -6,7 +6,7 @@ public partial class Move
     ///     Uses this move as attacker on defender.
     /// </summary>
     /// <returns>A string of formatted results of the move.</returns>
-    public string Use(DuelPokemon attacker, DuelPokemon defender, Battle battle, bool usePP = true,
+    public string Use(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle, bool usePP = true,
         bool overrideSleep = false, bool bounced = false)
     {
         if (attacker.HasMoved && usePP) return "";

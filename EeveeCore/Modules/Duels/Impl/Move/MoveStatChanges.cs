@@ -6,7 +6,7 @@ public partial class Move
     ///     Applies stat changes from moves.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string ApplyStatChanges(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance)
+    private string ApplyStatChanges(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle, int? effectChance)
     {
         var msg = "";
 
@@ -289,7 +289,7 @@ public partial class Move
                 break;
             case 227:
             {
-                var validStats = new List<Func<int, DuelPokemon, Move, string, bool, string>>();
+                var validStats = new List<Func<int, DuelPokemon.DuelPokemon, Move, string, bool, string>>();
 
                 if (attacker.AttackStage < 6)
                     validStats.Add(attacker.AppendAttack);

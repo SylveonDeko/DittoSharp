@@ -6,7 +6,7 @@ public partial class Move
     ///     Checks status conditions that may prevent move usage.
     /// </summary>
     /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
-    private (string message, bool shouldAbort) CheckStatusConditions(DuelPokemon attacker, DuelPokemon defender,
+    private (string message, bool shouldAbort) CheckStatusConditions(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender,
         Battle battle, bool usePP,
         bool overrideSleep)
     {
@@ -101,7 +101,7 @@ public partial class Move
     ///     Handles stance change abilities like Aegislash's Form Change.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string HandleStanceChange(DuelPokemon attacker)
+    private string HandleStanceChange(DuelPokemon.DuelPokemon attacker)
     {
         var msg = "";
 
@@ -125,7 +125,7 @@ public partial class Move
     ///     Handles powder effects for fire-type moves.
     /// </summary>
     /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
-    private (string message, bool shouldAbort) HandlePowderEffects(DuelPokemon attacker, DuelPokemon defender,
+    private (string message, bool shouldAbort) HandlePowderEffects(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender,
         Battle battle, ElementType currentType)
     {
         var msg = "";
@@ -144,7 +144,7 @@ public partial class Move
     ///     Handles snatch effects for status moves.
     /// </summary>
     /// <returns>A tuple containing the formatted message and whether move execution should be aborted.</returns>
-    private (string message, bool shouldAbort) HandleSnatch(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    private (string message, bool shouldAbort) HandleSnatch(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
 

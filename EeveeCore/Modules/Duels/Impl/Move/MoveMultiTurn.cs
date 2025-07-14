@@ -6,7 +6,7 @@ public partial class Move
     ///     Sets up multi-turn moves.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string SetupMultiTurnMoves(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    private string SetupMultiTurnMoves(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
 

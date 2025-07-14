@@ -211,7 +211,7 @@ public partial class Move
     /// <param name="defender">The opposing Pokémon whose last move is being countered.</param>
     /// <param name="battle">The current battle context.</param>
     /// <returns>A random element type resistant to the defender's last move, or null if no valid type is found.</returns>
-    public static ElementType? GetConversion2(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    public static ElementType? GetConversion2(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         if (defender.LastMove == null) return null;
 

@@ -6,7 +6,7 @@ public partial class Move
     ///     Handles special effects (move locking, protection, weather, terrain, etc.).
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string HandleSpecialEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle, int? effectChance)
+    private string HandleSpecialEffects(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle, int? effectChance)
     {
         var msg = "";
 
@@ -201,7 +201,7 @@ public partial class Move
     ///     Handles swap effects.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string HandleSwapEffects(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    private string HandleSwapEffects(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
 
@@ -309,7 +309,7 @@ public partial class Move
     ///     Handles life orb damage.
     /// </summary>
     /// <returns>A string of formatted results.</returns>
-    private string HandleLifeOrb(DuelPokemon attacker, DuelPokemon defender, Battle battle)
+    private string HandleLifeOrb(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
 

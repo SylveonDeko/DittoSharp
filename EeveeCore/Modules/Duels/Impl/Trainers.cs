@@ -15,7 +15,7 @@ public class Trainer
     /// </summary>
     /// <param name="name">The name of the trainer.</param>
     /// <param name="party">The list of Pokémon in the trainer's party.</param>
-    public Trainer(string name, List<DuelPokemon> party)
+    public Trainer(string name, List<DuelPokemon.DuelPokemon> party)
     {
         Name = name;
         Party = party;
@@ -56,12 +56,12 @@ public class Trainer
     /// <summary>
     ///     Gets or sets the list of Pokémon in the trainer's party.
     /// </summary>
-    public List<DuelPokemon> Party { get; set; }
+    public List<DuelPokemon.DuelPokemon> Party { get; set; }
 
     /// <summary>
     ///     Gets or sets the trainer's currently active Pokémon.
     /// </summary>
-    public DuelPokemon CurrentPokemon { get; set; }
+    public DuelPokemon.DuelPokemon CurrentPokemon { get; set; }
 
     /// <summary>
     ///     Gets or sets the task completion source used for asynchronous action selection.
@@ -243,8 +243,8 @@ public class Trainer
         if (FutureSight.NextTurn() && CurrentPokemon != null)
         {
             msg += $"{CurrentPokemon.Name} took the future sight attack!\n";
-            var futureSightAttacker = ((Tuple<DuelPokemon, Move.Move>)futureSightData).Item1;
-            var futureSightMove = ((Tuple<DuelPokemon, Move.Move>)futureSightData).Item2;
+            var futureSightAttacker = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData).Item1;
+            var futureSightMove = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData).Item2;
             var futureSightResult = futureSightMove.Attack(futureSightAttacker, CurrentPokemon, battle);
             msg += futureSightResult.Item1;
         }
@@ -294,7 +294,7 @@ public class Trainer
     /// <returns>
     ///     A list of valid party indexes that can be switched to.
     /// </returns>
-    public List<int> ValidSwaps(DuelPokemon defender, Battle battle, bool checkTrap = true)
+    public List<int> ValidSwaps(DuelPokemon.DuelPokemon defender, Battle battle, bool checkTrap = true)
     {
         if (CurrentPokemon != null)
         {
@@ -337,7 +337,7 @@ public class Trainer
     ///     - ValidIndexes: A list of valid move indexes to choose from
     ///     - Struggle: When no moves can be used, and Struggle must be used instead
     /// </returns>
-    public ValidMovesResult ValidMoves(DuelPokemon defender)
+    public ValidMovesResult ValidMoves(DuelPokemon.DuelPokemon defender)
     {
         // Check if they are FORCED to use a certain move
         if (CurrentPokemon.LockedMove != null) return ValidMovesResult.Forced(CurrentPokemon.LockedMove.Move);
@@ -465,7 +465,7 @@ public class MemberTrainer : Trainer
     /// </summary>
     /// <param name="member">The Discord user representing this trainer.</param>
     /// <param name="party">The list of Pokémon in the trainer's party.</param>
-    public MemberTrainer(IUser member, List<DuelPokemon> party) : base(member.Username, party)
+    public MemberTrainer(IUser member, List<DuelPokemon.DuelPokemon> party) : base(member.Username, party)
     {
         Id = member.Id;
         Member = member;
@@ -505,7 +505,7 @@ public class NPCTrainer : Trainer
     ///     Uses a default trainer name "Trainer John".
     /// </summary>
     /// <param name="party">The list of Pokémon in the trainer's party.</param>
-    public NPCTrainer(List<DuelPokemon> party) : base("Trainer John", party)
+    public NPCTrainer(List<DuelPokemon.DuelPokemon> party) : base("Trainer John", party)
     {
     }
 
@@ -515,7 +515,7 @@ public class NPCTrainer : Trainer
     /// </summary>
     /// <param name="defender">The opposing Pokémon.</param>
     /// <param name="battle">The current battle context.</param>
-    public void Move(DuelPokemon defender, Battle battle)
+    public void Move(DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var moveResult = ValidMoves(defender);
 
@@ -549,7 +549,7 @@ public class NPCTrainer : Trainer
     /// <param name="midTurn">
     ///     Whether the switch is occurring in the middle of a turn rather than as a turn action.
     /// </param>
-    public void Swap(DuelPokemon defender, Battle battle, bool midTurn = false)
+    public void Swap(DuelPokemon.DuelPokemon defender, Battle battle, bool midTurn = false)
     {
         var validSwaps = ValidSwaps(defender, battle, false);
         var pokeIdx = validSwaps[new Random().Next(validSwaps.Count)];

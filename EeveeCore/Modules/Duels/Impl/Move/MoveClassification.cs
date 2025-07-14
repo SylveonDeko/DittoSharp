@@ -171,7 +171,7 @@ public partial class Move
     /// <summary>
     ///     Whether or not this move makes contact.
     /// </summary>
-    public bool MakesContact(DuelPokemon attacker)
+    public bool MakesContact(DuelPokemon.DuelPokemon attacker)
     {
         var makesContact = new[]
         {
