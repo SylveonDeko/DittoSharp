@@ -89,9 +89,12 @@ public partial class Move
         // Process move effects
         msg += ProcessMoveEffects(attacker, defender, battle, currentType, effectChance, bounced);
 
-        // Calculate damage if applicable
+        // Calculate damage if applicable (skip if move failed)
         var numHits = 0;
-        msg += CalculateDamage(attacker, defender, battle, currentType, ref numHits);
+        if (!attacker.LastMoveFailed)
+        {
+            msg += CalculateDamage(attacker, defender, battle, currentType, ref numHits);
+        }
 
         // Fusion Flare/Bolt effect tracking
         battle.LastMoveEffect = Effect;

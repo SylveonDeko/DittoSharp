@@ -135,6 +135,7 @@ public partial class Move
                     break;
             }
 
+            attacker.LastMoveFailed = true;
             return msg;
         }
 
