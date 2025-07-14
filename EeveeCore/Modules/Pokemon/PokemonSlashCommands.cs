@@ -134,7 +134,7 @@ public class PokemonSlashCommands(InteractiveService interactivity)
         [Choice("Normal", "normal")]
         [Choice("Compact", "compact")]
         [Choice("Detailed", "detailed")]
-        string viewMode = "normal",
+        string viewMode = "detailed",
         [Summary("search", "Search for specific Pokemon")]
         string search = null)
     {
