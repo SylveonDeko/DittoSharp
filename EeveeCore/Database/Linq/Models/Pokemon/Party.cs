@@ -72,4 +72,12 @@ public class Party
     [Column("quick")]
     [NotNull]
     public bool Quick { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether this is the user's current active party.
+    ///     Only one party per user should have this flag set to true.
+    /// </summary>
+    [Column("is_current_party")]
+    [NotNull]
+    public bool IsCurrentParty { get; set; }
 }

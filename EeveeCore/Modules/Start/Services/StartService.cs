@@ -39,8 +39,7 @@ public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedCl
             UserOrder = "kek",
             Visible = true,
             Inventory = "{\"nature-capsules\" : 5, \"honey\" : 1, \"battle-multiplier\": 1, \"shiny-multiplier\": 0 }",
-            Comp = true,
-            Party = [0, 0, 0, 0, 0, 0]
+            Comp = true
         };
 
         await db.InsertAsync(newUser);

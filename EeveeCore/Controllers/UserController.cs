@@ -86,12 +86,14 @@ public class UserController : ControllerBase
 
                 if (pokemon != null)
                 {
-                    // Read all Forms data for mapping (same as in GetPokemon)
-                    var allForms = await _mongoService.Forms
-                        .Find(_ => true)
-                        .ToListAsync();
-
-                    var formsLookup = allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
+                    // Read all Forms data for mapping with caching
+                    var formsLookup = await _redisCache.GetOrAddCachedDataAsync("pokemon:forms:lookup", async () =>
+                    {
+                        var allForms = await _mongoService.Forms
+                            .Find(_ => true)
+                            .ToListAsync();
+                        return allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
+                    }, TimeSpan.FromDays(2));
 
                     var pokemonName = pokemon.PokemonName.ToLower();
                     var pokemonId = 0;
@@ -400,13 +402,23 @@ public class UserController : ControllerBase
         // Use single query to get user data and counts efficiently
         var userDataQuery = from u in db.Users
                            where u.UserId == userId
-                           select new { u.Party, u.Selected };
+                           select new { u.Selected };
 
         var userData = await userDataQuery.FirstOrDefaultAsync();
         if (userData == null) return NotFound(new { error = "User not found" });
 
-        // Create party lookup set
-        var partyLookup = userData.Party?.Where(id => id != 0).Select(id => (ulong)id).ToHashSet() ?? new HashSet<ulong>();
+        // Create party lookup set from Parties table
+        var currentParty = await db.Parties
+            .Where(p => p.UserId == userId && p.IsCurrentParty)
+            .FirstOrDefaultAsync();
+
+        var partyLookup = currentParty != null
+            ? new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                     currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .ToHashSet()
+            : new HashSet<ulong>();
 
         // Build base query with simple joins
         var baseQuery = from ownership in db.UserPokemonOwnerships
@@ -484,9 +496,9 @@ public class UserController : ControllerBase
                         var nameValue = criterion.ValueText ?? "";
                         filteredQuery = criterion.Operator.ToLower() switch
                         {
-                            "contains" => filteredQuery.Where(p => p.Pokemon.PokemonName.Contains(nameValue)),
-                            "equals" => filteredQuery.Where(p => p.Pokemon.PokemonName == nameValue),
-                            "not_contains" => filteredQuery.Where(p => !p.Pokemon.PokemonName.Contains(nameValue)),
+                            "contains" => filteredQuery.Where(p => p.Pokemon.PokemonName.Contains(nameValue, StringComparison.OrdinalIgnoreCase)),
+                            "equals" => filteredQuery.Where(p => p.Pokemon.PokemonName.Equals(nameValue, StringComparison.OrdinalIgnoreCase)),
+                            "not_contains" => filteredQuery.Where(p => !p.Pokemon.PokemonName.Contains(nameValue, StringComparison.OrdinalIgnoreCase)),
                             _ => filteredQuery
                         };
                         break;
@@ -527,25 +539,31 @@ public class UserController : ControllerBase
             }
         }
 
-        // Use sequential count queries to avoid connection pool exhaustion
-        var filteredCount = await filteredQuery.CountAsync();
+        // Calculate all statistics in a single query to avoid multiple database round trips
+        var allFilteredPokemon = await filteredQuery.Select(p => new {
+            p.Pokemon.Shiny,
+            p.Pokemon.Radiant,
+            p.Pokemon.Skin,
+            p.Pokemon.Favorite,
+            p.Pokemon.Champion,
+            p.Pokemon.MarketEnlist,
+            p.Pokemon.Gender,
+            p.Pokemon.PokemonName
+        }).ToListAsync();
+
+        var filteredCount = allFilteredPokemon.Count;
+        var shinyCount = allFilteredPokemon.Count(p => p.Shiny == true);
+        var radiantCount = allFilteredPokemon.Count(p => p.Radiant == true);
+        var shadowCount = allFilteredPokemon.Count(p => p.Skin == "shadow");
+        var favoriteCount = allFilteredPokemon.Count(p => p.Favorite);
+        var championCount = allFilteredPokemon.Count(p => p.Champion);
+        var marketCount = allFilteredPokemon.Count(p => p.MarketEnlist);
+        var maleCount = allFilteredPokemon.Count(p => p.Gender == "-m");
+        var femaleCount = allFilteredPokemon.Count(p => p.Gender == "-f");
+        var genderlessCount = allFilteredPokemon.Count(p => p.Gender == "-x");
         
-        // Execute stat queries sequentially to avoid overwhelming the connection pool
-        var shinyCount = await filteredQuery.CountAsync(p => p.Pokemon.Shiny == true);
-        var radiantCount = await filteredQuery.CountAsync(p => p.Pokemon.Radiant == true);
-        var shadowCount = await filteredQuery.CountAsync(p => p.Pokemon.Skin == "shadow");
-        var favoriteCount = await filteredQuery.CountAsync(p => p.Pokemon.Favorite);
-        var championCount = await filteredQuery.CountAsync(p => p.Pokemon.Champion);
-        var marketCount = await filteredQuery.CountAsync(p => p.Pokemon.MarketEnlist);
-        var maleCount = await filteredQuery.CountAsync(p => p.Pokemon.Gender == "-m");
-        var femaleCount = await filteredQuery.CountAsync(p => p.Pokemon.Gender == "-f");
-        var genderlessCount = await filteredQuery.CountAsync(p => p.Pokemon.Gender == "-x");
-        
-        // Get distinct Pokemon names for legendary count
-        var distinctPokemonNames = await filteredQuery
-            .Select(p => p.Pokemon.PokemonName)
-            .Distinct()
-            .ToListAsync();
+        // Calculate legendary count from the same data
+        var distinctPokemonNames = allFilteredPokemon.Select(p => p.PokemonName).Distinct().ToList();
         var legendaryCount = distinctPokemonNames.Count(name => PokemonList.LegendList.Contains(name));
 
         var stats = new Dictionary<string, int>
@@ -568,8 +586,8 @@ public class UserController : ControllerBase
         if (!string.IsNullOrEmpty(search))
         {
             filteredQuery = filteredQuery.Where(p => 
-                p.Pokemon.PokemonName.Contains(search) || 
-                (p.Pokemon.Nickname != null && p.Pokemon.Nickname.Contains(search)));
+                p.Pokemon.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) || 
+                (p.Pokemon.Nickname != null && p.Pokemon.Nickname.Contains(search, StringComparison.OrdinalIgnoreCase)));
         }
 
         // Apply optimized sorting with database-level operations
@@ -594,12 +612,14 @@ public class UserController : ControllerBase
             .Take(pageSize)
             .ToListAsync();
 
-        // Read all Forms data once for mapping
-        var allForms = await _mongoService.Forms
-            .Find(_ => true)
-            .ToListAsync();
-
-        var formsLookup = allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
+        // Read all Forms data once for mapping with caching
+        var formsLookup = await _redisCache.GetOrAddCachedDataAsync("pokemon:forms:lookup", async () =>
+        {
+            var allForms = await _mongoService.Forms
+                .Find(_ => true)
+                .ToListAsync();
+            return allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
+        }, TimeSpan.FromDays(2));
 
         // Process each Pokemon to include form data and image paths
         var processedPokemon = pokemonData.Select(item =>
@@ -1412,4 +1432,75 @@ public class UserController : ControllerBase
     }
 
     #endregion
+
+    /// <summary>
+    ///     Sets the user's selected/current Pokemon.
+    /// </summary>
+    /// <param name="request">The request containing the Pokemon position to select.</param>
+    /// <returns>Success or error message.</returns>
+    [HttpPost("pokemon/select")]
+    public async Task<ActionResult> SetSelectedPokemon([FromBody] SetSelectedPokemonRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
+
+            if (request.Position <= 0)
+                return BadRequest(new { error = "Position must be greater than 0" });
+
+            await using var db = await _dbProvider.GetConnectionAsync();
+
+            // Find the Pokemon in the ownership table using position (1-based from frontend, 0-based in DB)
+            var position = request.Position - 1;
+            var ownership = await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId && o.Position == position)
+                .FirstOrDefaultAsync();
+
+            if (ownership == null)
+                return NotFound(new { error = "Pokemon not found at that position" });
+
+            var pokemon = await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == ownership.PokemonId);
+
+            if (pokemon == null)
+                return NotFound(new { error = "Pokemon data not found" });
+
+            // Update the user's selected Pokemon
+            await db.Users
+                .Where(u => u.UserId == userId)
+                .Set(u => u.Selected, (ulong?)pokemon.Id)
+                .UpdateAsync();
+
+            return Ok(new 
+            { 
+                success = true, 
+                message = $"Selected {pokemon.PokemonName}" + (pokemon.Nickname != "None" ? $" ({pokemon.Nickname})" : ""),
+                selectedPokemon = new
+                {
+                    pokemon.Id,
+                    pokemon.PokemonName,
+                    pokemon.Nickname,
+                    pokemon.Level,
+                    pokemon.Shiny,
+                    pokemon.Radiant,
+                    Position = request.Position
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error setting selected Pokemon for user {UserId}", GetCurrentUserId());
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+}
+
+/// <summary>
+///     Request model for setting selected Pokemon.
+/// </summary>
+public class SetSelectedPokemonRequest
+{
+    /// <summary>Gets or sets the position of the Pokemon to select (1-based).</summary>
+    public ulong Position { get; set; }
 }

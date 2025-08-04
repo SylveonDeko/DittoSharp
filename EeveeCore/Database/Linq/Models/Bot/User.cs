@@ -117,22 +117,6 @@ public class User
     [Column(Name = "selected")]
     public ulong? Selected { get; set; }
 
-    /// <summary>
-    ///     Internal storage for party as long[] for PostgreSQL compatibility
-    /// </summary>
-    [Column(Name = "party", DbType = "numeric(20,0)[]")]
-    internal long[] _party { get; set; } = [0, 0, 0, 0, 0, 0];
-
-    /// <summary>
-    ///     Gets or sets the array of Pokémon IDs in the user's active party.
-    ///     The party consists of up to 6 Pokémon used for battles and other activities.
-    /// </summary>
-    [NotColumn]
-    public ulong[]? Party 
-    { 
-        get => _party?.Select(x => (ulong)x).ToArray() ?? [0, 0, 0, 0, 0, 0];
-        set => _party = value?.Select(x => (long)x).ToArray() ?? [0, 0, 0, 0, 0, 0];
-    }
 
     /// <summary>
     ///     Gets or sets the number of Pokémon currently in the user's daycare.

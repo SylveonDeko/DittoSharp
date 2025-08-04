@@ -104,14 +104,18 @@ public class DuelService : INService
         try
         {
             await using var db = await _db.GetConnectionAsync();
-            // Get the user's party array directly
-            var user = await db.Users
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+            // Get the user's current party from Parties table
+            var currentParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-            if (user == null || user.Party == null) return duelPokemon; // Return empty list
+            if (currentParty == null) return duelPokemon; // Return empty list
 
-            // Filter out zeros from the party array
-            var partyIds = user.Party.Where(id => id > 0).ToList();
+            // Get party Pokemon IDs from slots
+            var partyIds = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                                  currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .ToList();
             if (!partyIds.Any()) return duelPokemon;
 
             // Fetch all Pokémon data for the party in a single query

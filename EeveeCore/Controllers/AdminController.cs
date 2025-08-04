@@ -42,15 +42,46 @@ public class AdminController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            var totalUsers = await db.Users.CountAsync();
-            var activeUsers = await db.Users.CountAsync(u => u.Active);
-            var bannedUsers = await db.Users.CountAsync(u => u.BotBanned == true);
-            var totalPokemon = await db.UserPokemon.CountAsync();
-            var shinyPokemon = await db.UserPokemon.CountAsync(p => p.Shiny == true);
-            var radiantPokemon = await db.UserPokemon.CountAsync(p => p.Radiant == true);
-            var championPokemon = await db.UserPokemon.CountAsync(p => p.Champion);
-            var recentTrades = await db.TradeLogs.CountAsync(t => t.Time > DateTime.UtcNow.AddDays(-7));
-            var totalTrades = await db.TradeLogs.CountAsync();
+            var userStats = await db.Users
+                .GroupBy(u => 1)
+                .Select(g => new {
+                    Total = g.Count(),
+                    Active = g.Sum(u => u.Active ? 1 : 0),
+                    Banned = g.Sum(u => u.BotBanned == true ? 1 : 0)
+                })
+                .FirstOrDefaultAsync();
+            
+            var totalUsers = userStats?.Total ?? 0;
+            var activeUsers = userStats?.Active ?? 0;
+            var bannedUsers = userStats?.Banned ?? 0;
+
+            // Use database-level aggregation for Pokemon statistics
+            var pokemonStats = await db.UserPokemon
+                .GroupBy(p => 1)
+                .Select(g => new {
+                    Total = g.Count(),
+                    Shiny = g.Sum(p => p.Shiny == true ? 1 : 0),
+                    Radiant = g.Sum(p => p.Radiant == true ? 1 : 0),
+                    Champion = g.Sum(p => p.Champion ? 1 : 0)
+                })
+                .FirstOrDefaultAsync();
+            
+            var totalPokemon = pokemonStats?.Total ?? 0;
+            var shinyPokemon = pokemonStats?.Shiny ?? 0;
+            var radiantPokemon = pokemonStats?.Radiant ?? 0;
+            var championPokemon = pokemonStats?.Champion ?? 0;
+
+            // Use database-level aggregation for trade statistics
+            var tradeStats = await db.TradeLogs
+                .GroupBy(t => 1)
+                .Select(g => new {
+                    Total = g.Count(),
+                    Recent = g.Sum(t => t.Time > DateTime.UtcNow.AddDays(-7) ? 1 : 0)
+                })
+                .FirstOrDefaultAsync();
+            
+            var totalTrades = tradeStats?.Total ?? 0;
+            var recentTrades = tradeStats?.Recent ?? 0;
 
             // Count eggs using the ownership table and Pokemon table
             var totalEggs = await db.UserPokemonOwnerships
@@ -253,13 +284,21 @@ public class AdminController : ControllerBase
                 return NotFound(new { error = "User not found" });
             }
 
-            var pokemonCount = await db.UserPokemonOwnerships.CountAsync(o => o.UserId == userId);
-            var shinyCount = await db.UserPokemonOwnerships
-                .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => p)
-                .CountAsync(p => p.Shiny == true);
-            var radiantCount = await db.UserPokemonOwnerships
-                .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => p)
-                .CountAsync(p => p.Radiant == true);
+            // Use database-level aggregation for user Pokemon statistics
+            var userPokemonStats = await (from o in db.UserPokemonOwnerships
+                                        join p in db.UserPokemon on o.PokemonId equals p.Id
+                                        where o.UserId == userId
+                                        group p by 1 into g
+                                        select new {
+                                            Total = g.Count(),
+                                            Shiny = g.Sum(p => p.Shiny == true ? 1 : 0),
+                                            Radiant = g.Sum(p => p.Radiant == true ? 1 : 0)
+                                        })
+                                        .FirstOrDefaultAsync();
+            
+            var pokemonCount = userPokemonStats?.Total ?? 0;
+            var shinyCount = userPokemonStats?.Shiny ?? 0;
+            var radiantCount = userPokemonStats?.Radiant ?? 0;
             
             var recentTrades = await db.TradeLogs
                 .Where(t => t.SenderId == userId || t.ReceiverId == userId)

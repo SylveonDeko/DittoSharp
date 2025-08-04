@@ -99,22 +99,25 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
         // If party doesn't exist, try to register it from user's current party
         if (party == null)
         {
-            var firstUser = await db.Users
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+            // Get current party from Parties table
+            var currentParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-            if (firstUser?.Party == null) return (null, null, null, null, null);
+            if (currentParty == null) return (null, null, null, null, null);
 
-            // Create a new party save
+            // Create a new party save from current party
             party = new Party
             {
                 UserId = userId,
                 Name = partyName,
-                Slot1 = firstUser.Party[0],
-                Slot2 = firstUser.Party[1],
-                Slot3 = firstUser.Party[2],
-                Slot4 = firstUser.Party[3],
-                Slot5 = firstUser.Party[4],
-                Slot6 = firstUser.Party[5]
+                Slot1 = currentParty.Slot1,
+                Slot2 = currentParty.Slot2,
+                Slot3 = currentParty.Slot3,
+                Slot4 = currentParty.Slot4,
+                Slot5 = currentParty.Slot5,
+                Slot6 = currentParty.Slot6,
+                IsCurrentParty = false,
+                Quick = false
             };
 
             await db.InsertAsync(party);
@@ -194,21 +197,32 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
         // If no party name is provided, display the current active party
         if (string.IsNullOrEmpty(partyName))
         {
-            var user = await db.Users
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+            // Get current party from Parties table
+            var currentParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-            if (user == null || user.Party == null) return null;
+            if (currentParty == null) return null;
 
-            for (var i = 0; i < user.Party.Length; i++)
+            var partySlots = new[]
             {
-                var pokemonId = user.Party[i];
+                currentParty.Slot1,
+                currentParty.Slot2,
+                currentParty.Slot3,
+                currentParty.Slot4,
+                currentParty.Slot5,
+                currentParty.Slot6
+            };
+
+            for (var i = 0; i < partySlots.Length; i++)
+            {
+                var pokemonId = partySlots[i];
                 var pokemonName = "None";
                 int? pokemonIndex = null;
 
-                if (pokemonId > 0)
+                if (pokemonId.HasValue && pokemonId.Value > 0)
                 {
                     var pokemon = await db.UserPokemon
-                        .FirstOrDefaultAsync(p => p.Id == pokemonId);
+                        .FirstOrDefaultAsync(p => p.Id == pokemonId.Value);
 
                     if (pokemon != null)
                     {
@@ -216,7 +230,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
 
                         // Find the Pokemon's index by querying the ownership table
                         var ownership = await db.UserPokemonOwnerships
-                            .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
+                            .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId.Value);
 
                         if (ownership != null)
                             pokemonIndex = (int)(ownership.Position + 1); // Convert to 1-based indexing
@@ -297,62 +311,103 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     /// </returns>
     public async Task<(bool Success, string Message)> AddPokemonToParty(ulong userId, int slot, int pokeIndex = 0)
     {
-        // Adjust slot for zero-based indexing
-        var slotIndex = slot - 1;
-
-        await using var db = await dbProvider.GetConnectionAsync();
-
-        // Check if user exists
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
-
-        if (user == null || user.Party == null) return (false, "You have not started!\nStart with `/start` first!");
-
-        // Determine which Pokemon to add
-        ulong pokemonId;
-        if (pokeIndex > 0)
+        try
         {
-            // Use the specified Pokemon index - convert from 1-based to 0-based
-            var position = pokeIndex - 1;
+            // Adjust slot for zero-based indexing
+            var slotIndex = slot - 1;
 
-            // Find the Pokemon using the ownership table
-            var ownership = await db.UserPokemonOwnerships
-                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == (ulong)position);
+            await using var db = await dbProvider.GetConnectionAsync();
 
-            if (ownership == null)
-                return (false, "Invalid Pokemon ID. You don't have that many Pokemon.");
+            // Get or create current party
+            var currentParty = await db.Parties
+                .Where(p => p.UserId == userId && p.IsCurrentParty)
+                .FirstOrDefaultAsync();
 
-            pokemonId = ownership.PokemonId;
+            if (currentParty == null)
+            {
+                // Create current party if it doesn't exist
+                currentParty = new Party
+                {
+                    UserId = userId,
+                    Name = "Current Party",
+                    IsCurrentParty = true,
+                    Quick = false
+                };
+                await db.InsertAsync(currentParty);
+            }
+
+            // Determine which Pokemon to add
+            ulong pokemonId;
+            if (pokeIndex > 0)
+            {
+                // Use the specified Pokemon index - convert from 1-based to 0-based
+                var position = pokeIndex - 1;
+
+                // Find the Pokemon using the ownership table
+                var ownership = await db.UserPokemonOwnerships
+                    .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == (ulong)position);
+
+                if (ownership == null)
+                    return (false, "Invalid Pokemon ID. You don't have that many Pokemon.");
+
+                pokemonId = ownership.PokemonId;
+            }
+            else
+            {
+                // Use the currently selected Pokemon
+                var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+                if (user?.Selected == null || user.Selected.Value <= 0)
+                    return (false, "You don't have a Pokemon selected. Select one first or specify an ID.");
+                pokemonId = user.Selected.Value;
+            }
+
+            // Check if the Pokemon exists and isn't an egg
+            var pokemon = await db.UserPokemon
+                .FirstOrDefaultAsync(p => p.Id == pokemonId);
+
+            if (pokemon == null) return (false, "You do not have that Pokemon!");
+
+            if (pokemon.PokemonName.Equals("Egg", StringComparison.OrdinalIgnoreCase))
+                return (false, "You cannot add an Egg to your party! Use `/hatchery` commands instead!");
+
+            // Check if this Pokemon is already in the current party
+            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                               currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
+            if (slots.Any(s => s.HasValue && s.Value == pokemonId))
+                return (false, "That Pokemon already occupies a Team Slot!");
+
+            // Update the specific slot in the current party
+            switch (slot)
+            {
+                case 1:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot1, pokemonId).UpdateAsync();
+                    break;
+                case 2:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot2, pokemonId).UpdateAsync();
+                    break;
+                case 3:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot3, pokemonId).UpdateAsync();
+                    break;
+                case 4:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot4, pokemonId).UpdateAsync();
+                    break;
+                case 5:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot5, pokemonId).UpdateAsync();
+                    break;
+                case 6:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot6, pokemonId).UpdateAsync();
+                    break;
+                default:
+                    return (false, "Invalid slot number. Must be between 1 and 6.");
+            }
+
+            return (true, $"Your {pokemon.PokemonName} is now on your party, Slot number {slot}");
         }
-        else
+        catch (Exception e)
         {
-            // Use the currently selected Pokemon
-            if (!user.Selected.HasValue || user.Selected.Value <= 0)
-                return (false, "You don't have a Pokemon selected. Select one first or specify an ID.");
-            pokemonId = user.Selected.Value;
+            Console.WriteLine(e);
+            throw;
         }
-
-        // Check if the Pokemon exists and isn't an egg
-        var pokemon = await db.UserPokemon
-            .FirstOrDefaultAsync(p => p.Id == pokemonId);
-
-        if (pokemon == null) return (false, "You do not have that Pokemon!");
-
-        if (pokemon.PokemonName.Equals("Egg", StringComparison.OrdinalIgnoreCase))
-            return (false, "You cannot add an Egg to your party! Use `/hatchery` commands instead!");
-
-        // Check if this Pokemon is already in the party
-        if (user.Party.Contains(pokemonId)) return (false, "That Pokemon already occupies a Team Slot!");
-
-        // Update party array
-        var updatedParty = user.Party.ToArray();
-        updatedParty[slotIndex] = pokemonId;
-
-        await db.Users.Where(u => u.UserId == userId)
-            .Set(u => u.Party, updatedParty)
-            .UpdateAsync();
-
-        return (true, $"Your {pokemon.PokemonName} is now on your party, Slot number {slot}");
     }
 
     /// <summary>
@@ -367,34 +422,52 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     /// </returns>
     public async Task<(bool Success, string Message)> RemovePokemonFromParty(ulong userId, int slot)
     {
-        // Adjust slot for zero-based indexing
-        var slotIndex = slot - 1;
-
         await using var db = await dbProvider.GetConnectionAsync();
 
+        // Get or create current party
+        var currentParty = await db.Parties
+            .Where(p => p.UserId == userId && p.IsCurrentParty)
+            .FirstOrDefaultAsync();
 
-        // Check if user exists and has started
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
+        if (currentParty == null) return (false, "You have not started!\nStart with `/start` first!");
 
-        if (user == null || user.Party == null) return (false, "You have not started!\nStart with `/start` first!");
+        // Get the Pokemon to remove from the specified slot
+        var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                           currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
+        var pokemonId = slots[slot - 1];
 
-        // Get the Pokemon to remove
-        var pokemonId = user.Party[slotIndex];
+        if (!pokemonId.HasValue || pokemonId.Value == 0)
+            return (false, "No Pokemon in that slot.");
+
         var pokemon = await db.UserPokemon
-            .FirstOrDefaultAsync(p => p.Id == pokemonId);
+            .FirstOrDefaultAsync(p => p.Id == pokemonId.Value);
 
-        // Update party array
-        var updatedParty = user.Party.ToArray();
-        updatedParty[slotIndex] = 0;
+        // Clear the specific slot in the current party
+        switch (slot)
+        {
+            case 1:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot1, (ulong?)null).UpdateAsync();
+                break;
+            case 2:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot2, (ulong?)null).UpdateAsync();
+                break;
+            case 3:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot3, (ulong?)null).UpdateAsync();
+                break;
+            case 4:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot4, (ulong?)null).UpdateAsync();
+                break;
+            case 5:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot5, (ulong?)null).UpdateAsync();
+                break;
+            case 6:
+                await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot6, (ulong?)null).UpdateAsync();
+                break;
+            default:
+                return (false, "Invalid slot number. Must be between 1 and 6.");
+        }
 
-        await db.Users.Where(u => u.UserId == userId)
-            .Set(u => u.Party, updatedParty)
-            .UpdateAsync();
-
-        if (pokemon == null) return (false, "No Pokemon in that slot.");
-
-        return (true, $"You have successfully removed {pokemon.PokemonName} from Pokemon Number {slot} In your Party!");
+        return (true, $"You have successfully removed {pokemon?.PokemonName ?? "Pokemon"} from Pokemon Number {slot} In your Party!");
     }
 
     /// <summary>
@@ -411,11 +484,11 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Check if user exists
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
+        // Get current party from Parties table
+        var currentParty = await db.Parties
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-        if (user == null || user.Party == null) return (false, "You have not started!\nStart with `/start` first.");
+        if (currentParty == null) return (false, "You have not started!\nStart with `/start` first.");
 
         // Check if a party with this name already exists
         var existingParty = await db.Parties
@@ -423,29 +496,31 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
 
         if (existingParty != null)
         {
-            // Update existing party
+            // Update existing party with current party data
             await db.Parties.Where(p => p.UserId == userId && p.Name == partyName)
-                .Set(p => p.Slot1, user.Party[0])
-                .Set(p => p.Slot2, user.Party[1])
-                .Set(p => p.Slot3, user.Party[2])
-                .Set(p => p.Slot4, user.Party[3])
-                .Set(p => p.Slot5, user.Party[4])
-                .Set(p => p.Slot6, user.Party[5])
+                .Set(p => p.Slot1, currentParty.Slot1)
+                .Set(p => p.Slot2, currentParty.Slot2)
+                .Set(p => p.Slot3, currentParty.Slot3)
+                .Set(p => p.Slot4, currentParty.Slot4)
+                .Set(p => p.Slot5, currentParty.Slot5)
+                .Set(p => p.Slot6, currentParty.Slot6)
                 .UpdateAsync();
             return (true, $"Successfully updated party save {partyName}");
         }
 
-        // Create new party
+        // Create new party from current party
         var newParty = new Party
         {
             UserId = userId,
             Name = partyName,
-            Slot1 = user.Party[0],
-            Slot2 = user.Party[1],
-            Slot3 = user.Party[2],
-            Slot4 = user.Party[3],
-            Slot5 = user.Party[4],
-            Slot6 = user.Party[5]
+            Slot1 = currentParty.Slot1,
+            Slot2 = currentParty.Slot2,
+            Slot3 = currentParty.Slot3,
+            Slot4 = currentParty.Slot4,
+            Slot5 = currentParty.Slot5,
+            Slot6 = currentParty.Slot6,
+            IsCurrentParty = false,
+            Quick = false
         };
 
         await db.InsertAsync(newParty);
@@ -507,36 +582,51 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     /// </returns>
     public async Task<(bool Success, string Message)> LoadParty(ulong userId, string partyName)
     {
-        await using var db = await dbProvider.GetConnectionAsync();
-
-        // Find the party
-        var party = await db.Parties
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == partyName);
-
-        if (party == null) return (false, "You don't have a party registered with that name.");
-
-        // Find the user
-        var user = await db.Users
-            .FirstOrDefaultAsync(u => u.UserId == userId);
-
-        if (user == null || user.Party == null) return (false, "You have not started!\nStart with `/start` first!");
-
-        // Load party into user's active party
-        var updatedParty = new ulong[6]
+        try
         {
-            party.Slot1 ?? 0,
-            party.Slot2 ?? 0,
-            party.Slot3 ?? 0,
-            party.Slot4 ?? 0,
-            party.Slot5 ?? 0,
-            party.Slot6 ?? 0
-        };
+            await using var db = await dbProvider.GetConnectionAsync();
 
-        await db.Users.Where(u => u.UserId == userId)
-            .Set(u => u.Party, updatedParty)
-            .UpdateAsync();
+            // Find the saved party to load
+            var savedParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == partyName);
 
-        return (true, "Successfully, updated current party from saved data.");
+            if (savedParty == null) return (false, "You don't have a party registered with that name.");
+
+            // Get or create current party
+            var currentParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
+
+            if (currentParty == null)
+            {
+                // Create current party if it doesn't exist
+                currentParty = new Party
+                {
+                    UserId = userId,
+                    Name = "Current Party",
+                    IsCurrentParty = true,
+                    Quick = false
+                };
+                await db.InsertAsync(currentParty);
+            }
+
+            // Load saved party data into current party
+            await db.Parties
+                .Where(p => p.PartyId == currentParty.PartyId)
+                .Set(p => p.Slot1, savedParty.Slot1)
+                .Set(p => p.Slot2, savedParty.Slot2)
+                .Set(p => p.Slot3, savedParty.Slot3)
+                .Set(p => p.Slot4, savedParty.Slot4)
+                .Set(p => p.Slot5, savedParty.Slot5)
+                .Set(p => p.Slot6, savedParty.Slot6)
+                .UpdateAsync();
+
+            return (true, "Successfully, updated current party from saved data.");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     /// <summary>
@@ -552,7 +642,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
         await using var db = await dbProvider.GetConnectionAsync();
 
         var parties = await db.Parties
-            .Where(p => p.UserId == userId)
+            .Where(p => p.UserId == userId && !p.IsCurrentParty)
             .Select(p => p.Name)
             .ToListAsync();
 

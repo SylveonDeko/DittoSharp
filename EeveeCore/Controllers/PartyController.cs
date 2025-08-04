@@ -1,7 +1,10 @@
+using EeveeCore.Database.Linq.Models.Pokemon;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using EeveeCore.Modules.Parties.Services;
+using EeveeCore.Services.Impl;
 using LinqToDB;
+using MongoDB.Driver;
 using Serilog;
 
 namespace EeveeCore.Controllers;
@@ -16,16 +19,19 @@ public class PartyController : ControllerBase
 {
     private readonly PartyService _partyService;
     private readonly LinqToDbConnectionProvider _dbProvider;
+    private readonly IMongoService _mongoService;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="PartyController"/> class.
     /// </summary>
     /// <param name="partyService">The party service.</param>
     /// <param name="dbProvider">The database connection provider.</param>
-    public PartyController(PartyService partyService, LinqToDbConnectionProvider dbProvider)
+    /// <param name="mongoService">The MongoDB service for accessing Pokemon forms data.</param>
+    public PartyController(PartyService partyService, LinqToDbConnectionProvider dbProvider, IMongoService mongoService)
     {
         _partyService = partyService;
         _dbProvider = dbProvider;
+        _mongoService = mongoService;
     }
 
     /// <summary>
@@ -41,64 +47,137 @@ public class PartyController : ControllerBase
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            var user = await db.Users
-                .Where(u => u.UserId == userId)
-                .Select(u => u.Party)
+            
+            // Get current party from Parties table
+            var currentParty = await db.Parties
+                .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
 
-            if (user == null)
-                return NotFound(new { error = "User not found" });
+            // If no current party exists, create an empty one
+            if (currentParty == null)
+            {
+                currentParty = new Party
+                {
+                    UserId = userId,
+                    Name = "Current Party",
+                    IsCurrentParty = true,
+                    Quick = false
+                };
+                await db.InsertAsync(currentParty);
+            }
 
-            // Parse party array and get Pokemon details
-            var partyPokemonIds = user ?? [];
+            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                               currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
+
+            // Get all party Pokemon IDs that are not null/zero
+            var partyPokemonIds = slots
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .ToList();
+
             var partyPokemon = new List<object>();
 
-            for (var i = 0; i < partyPokemonIds.Length && i < 6; i++)
+            if (partyPokemonIds.Count != 0)
             {
-                var pokemonId = partyPokemonIds[i];
-                if (pokemonId == 0)
-                {
-                    partyPokemon.Add(new { SlotNumber = i + 1, IsEmpty = true });
-                    continue;
-                }
+                // Fetch all party Pokemon data in a single query with ownership info
+                var pokemonData = await (from ownership in db.UserPokemonOwnerships
+                                        join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
+                                        where ownership.UserId == userId && partyPokemonIds.Contains(pokemon.Id)
+                                        select new { Pokemon = pokemon, ownership.Position })
+                    .ToListAsync();
 
-                var pokemon = await (from ownership in db.UserPokemonOwnerships
-                                   join p in db.UserPokemon on ownership.PokemonId equals p.Id
-                                   where ownership.UserId == userId && p.Id == pokemonId
-                                   select new
-                                   {
-                                       p.Id,
-                                       p.PokemonName,
-                                       p.Level,
-                                       p.Shiny,
-                                       p.Radiant,
-                                       p.Nature,
-                                       p.HeldItem,
-                                       p.Champion,
-                                       Position = ownership.Position + 1,
-                                       IVTotal = p.HpIv + p.AttackIv + p.DefenseIv + 
-                                                p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
-                                   }).FirstOrDefaultAsync();
+                // Read Forms data once for all Pokemon
+                var allForms = await _mongoService.Forms
+                    .Find(_ => true)
+                    .ToListAsync();
+                var formsLookup = allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
 
-                if (pokemon != null)
+                // Create a lookup for quick access
+                var pokemonLookup = pokemonData.ToDictionary(p => p.Pokemon.Id, p => p);
+
+                // Build party slots in correct order
+                for (var i = 0; i < 6; i++)
                 {
-                    partyPokemon.Add(new
+                    var pokemonId = slots[i];
+                    if (!pokemonId.HasValue || pokemonId.Value == 0)
                     {
-                        SlotNumber = i + 1,
-                        IsEmpty = false,
-                        pokemon.Id,
-                        pokemon.PokemonName,
-                        pokemon.Level,
-                        pokemon.Shiny,
-                        pokemon.Radiant,
-                        pokemon.Nature,
-                        pokemon.HeldItem,
-                        pokemon.Champion,
-                        pokemon.Position,
-                        pokemon.IVTotal
-                    });
+                        partyPokemon.Add(new { SlotNumber = i + 1, IsEmpty = true });
+                        continue;
+                    }
+
+                    if (pokemonLookup.TryGetValue(pokemonId.Value, out var pokemonEntry))
+                    {
+                        var pokemon = pokemonEntry.Pokemon;
+
+                        var pokemonName = pokemon.PokemonName.ToLower();
+                        var pokemonIdForImage = 0;
+                        var formId = 0;
+                        var imagePath = "/images/regular/133-0-.png";
+
+                        // Find form info
+                        if (formsLookup.TryGetValue(pokemonName, out var identifier))
+                        {
+                            var suffix = identifier.FormIdentifier;
+
+                            if (!string.IsNullOrEmpty(suffix) && pokemonName.EndsWith(suffix))
+                            {
+                                formId = (int)(identifier.FormOrder - 1)!;
+                                var formName = pokemonName[..^(suffix.Length + 1)];
+
+                                if (formsLookup.TryGetValue(formName, out var pokemonIdentifier))
+                                    pokemonIdForImage = pokemonIdentifier.PokemonId;
+                            }
+                            else
+                            {
+                                pokemonIdForImage = identifier.PokemonId;
+                            }
+
+                            // Build image path
+                            var pathSegments = new List<string> { "/images", "regular" };
+
+                            if (pokemon.Radiant == true) pathSegments.Add("radiant");
+                            if (pokemon.Shiny == true) pathSegments.Add("shiny");
+                            if (!string.IsNullOrEmpty(pokemon.Skin) && pokemon.Skin != "None" && pokemon.Skin != "NULL")
+                                pathSegments.Add(pokemon.Skin.TrimEnd('/'));
+
+                            var fileType = "png";
+                            if (!string.IsNullOrEmpty(pokemon.Skin) && pokemon.Skin.EndsWith("_gif"))
+                                fileType = "gif";
+
+                            var fileName = $"{pokemonIdForImage}-{formId}-.{fileType}";
+                            pathSegments.Add(fileName);
+
+                            imagePath = string.Join("/", pathSegments);
+                        }
+
+                        partyPokemon.Add(new
+                        {
+                            SlotNumber = i + 1,
+                            IsEmpty = false,
+                            pokemon.Id,
+                            pokemon.PokemonName,
+                            pokemon.Level,
+                            pokemon.Shiny,
+                            pokemon.Radiant,
+                            pokemon.Nature,
+                            pokemon.HeldItem,
+                            pokemon.Champion,
+                            Position = pokemonEntry.Position + 1,
+                            IVTotal = pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv + 
+                                     pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv,
+                            ImagePath = imagePath
+                        });
+                    }
+                    else
+                    {
+                        partyPokemon.Add(new { SlotNumber = i + 1, IsEmpty = true });
+                    }
                 }
-                else
+            }
+            else
+            {
+                // No Pokemon in party, create 6 empty slots
+                for (var i = 0; i < 6; i++)
                 {
                     partyPokemon.Add(new { SlotNumber = i + 1, IsEmpty = true });
                 }
@@ -131,22 +210,53 @@ public class PartyController : ControllerBase
             var userId = GetCurrentUserId();
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
-            // Note: This would require checking how saved parties are stored in the system
-            // The PartyService has methods like DoesPartyExist, but we need to see how parties are persisted
+            await using var db = await _dbProvider.GetConnectionAsync();
             
-            var savedParties = new
-            {
-                Message = "Saved parties can be managed through Discord commands.",
-                AvailableCommands = new[]
-                {
-                    "/party register <name> - Save current party configuration",
-                    "/party load <name> - Load a saved party",
-                    "/party list - View saved parties"
-                },
-                Note = "Party management through web interface is not currently supported."
-            };
+            // Get all saved parties for the user with full data in single query
+            var parties = await db.Parties
+                .Where(p => p.UserId == userId)
+                .OrderBy(p => p.Name)
+                .ToListAsync();
 
-            return Ok(new { success = true, savedParties });
+            // Get all unique Pokemon IDs from all parties
+            var allPokemonIds = parties
+                .SelectMany(p => new[] { p.Slot1, p.Slot2, p.Slot3, p.Slot4, p.Slot5, p.Slot6 })
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            // Fetch all Pokemon names in a single query
+            var pokemonLookup = allPokemonIds.Any()
+                ? await db.UserPokemon
+                    .Where(p => allPokemonIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.PokemonName)
+                : new Dictionary<ulong, string>();
+
+            // Build the response with Pokemon names
+            var savedPartiesWithDetails = parties.Select(party =>
+            {
+                var slots = new[] { party.Slot1, party.Slot2, party.Slot3, 
+                                   party.Slot4, party.Slot5, party.Slot6 };
+                
+                var pokemonNames = slots
+                    .Where(slot => slot.HasValue && slot.Value > 0)
+                    .Select(slot => pokemonLookup.TryGetValue(slot!.Value, out var name) ? name : null)
+                    .Where(name => name != null)
+                    .Cast<string>()
+                    .ToList();
+
+                return new
+                {
+                    party.Name,
+                    party.Quick,
+                    party.IsCurrentParty,
+                    PokemonCount = slots.Count(slot => slot.HasValue && slot.Value > 0),
+                    PokemonNames = pokemonNames
+                };
+            }).ToList();
+
+            return Ok(new { success = true, savedParties = savedPartiesWithDetails });
         }
         catch (Exception ex)
         {
@@ -168,15 +278,33 @@ public class PartyController : ControllerBase
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            var user = await db.Users
-                .Where(u => u.UserId == userId)
-                .Select(u => u.Party)
+            
+            // Get current party from Parties table
+            var currentParty = await db.Parties
+                .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
 
-            if (user == null)
-                return NotFound(new { error = "User not found" });
+            if (currentParty == null)
+            {
+                return Ok(new { 
+                    success = true, 
+                    stats = new { 
+                        PartySize = 0,
+                        AverageLevel = 0,
+                        TotalIVs = 0,
+                        ShinyCount = 0,
+                        ChampionCount = 0,
+                        Message = "No Pokemon in party"
+                    }
+                });
+            }
 
-            var partyPokemonIds = user?.Where(id => id != 0).ToList() ?? [];
+            // Get party Pokemon IDs from slots
+            var partyPokemonIds = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                                         currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .ToList();
             
             if (!partyPokemonIds.Any())
             {
@@ -193,17 +321,16 @@ public class PartyController : ControllerBase
                 });
             }
 
-            var partyStats = await (from ownership in db.UserPokemonOwnerships
-                                  join p in db.UserPokemon on ownership.PokemonId equals p.Id
-                                  where ownership.UserId == userId && partyPokemonIds.Contains(p.Id)
-                                  select new
-                                  {
-                                      p.Level,
-                                      p.Shiny,
-                                      p.Champion,
-                                      IVTotal = p.HpIv + p.AttackIv + p.DefenseIv + 
-                                               p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
-                                  }).ToListAsync();
+            var partyStats = await db.UserPokemon
+                .Where(p => partyPokemonIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Level,
+                    p.Shiny,
+                    p.Champion,
+                    IVTotal = p.HpIv + p.AttackIv + p.DefenseIv + 
+                             p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv
+                }).ToListAsync();
 
             var stats = new
             {
@@ -390,6 +517,100 @@ public class PartyController : ControllerBase
     }
 
     /// <summary>
+    ///     Creates a custom saved party by adding Pokemon to specific slots without affecting the current party.
+    /// </summary>
+    /// <param name="request">The create custom party request.</param>
+    /// <returns>Success or error message.</returns>
+    [HttpPost("create-custom")]
+    public async Task<ActionResult> CreateCustomParty([FromBody] CreateCustomPartyRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
+
+            if (string.IsNullOrWhiteSpace(request.PartyName))
+                return BadRequest(new { error = "Party name is required" });
+
+            if (request.PokemonSlots == null || !request.PokemonSlots.Any())
+                return BadRequest(new { error = "At least one Pokemon slot must be provided" });
+
+            if (request.PokemonSlots.Any(slot => slot.SlotNumber < 1 || slot.SlotNumber > 6))
+                return BadRequest(new { error = "All slot numbers must be between 1 and 6" });
+
+            if (request.PokemonSlots.Any(slot => slot.PokemonPosition <= 0))
+                return BadRequest(new { error = "All Pokemon positions must be greater than 0" });
+
+            // Check for duplicate slots
+            var slotNumbers = request.PokemonSlots.Select(s => s.SlotNumber).ToList();
+            if (slotNumbers.Count != slotNumbers.Distinct().Count())
+                return BadRequest(new { error = "Duplicate slot numbers are not allowed" });
+
+            await using var db = await _dbProvider.GetConnectionAsync();
+
+            // Check if party name already exists
+            var existingParty = await db.Parties
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == request.PartyName);
+
+            if (existingParty != null)
+                return BadRequest(new { error = $"A party with the name '{request.PartyName}' already exists" });
+
+            // Create empty party first
+            var newParty = new Party
+            {
+                UserId = userId,
+                Name = request.PartyName,
+                IsCurrentParty = false,
+                Quick = false,
+                Slot1 = null,
+                Slot2 = null,
+                Slot3 = null,
+                Slot4 = null,
+                Slot5 = null,
+                Slot6 = null
+            };
+
+            await db.InsertAsync(newParty);
+
+            // Add each Pokemon to their specified slots
+            var errors = new List<string>();
+            var successes = new List<string>();
+
+            foreach (var slot in request.PokemonSlots)
+            {
+                var result = await _partyService.AddPokemonToPartySlot(userId, slot.SlotNumber, (int)slot.PokemonPosition, request.PartyName);
+                
+                if (result.Success)
+                {
+                    successes.Add($"Slot {slot.SlotNumber}: {result.Message}");
+                }
+                else
+                {
+                    errors.Add($"Slot {slot.SlotNumber}: {result.Message}");
+                }
+            }
+
+            if (errors.Any())
+            {
+                // If there were errors, clean up the party and return the errors
+                await db.Parties.Where(p => p.UserId == userId && p.Name == request.PartyName).DeleteAsync();
+                return BadRequest(new { error = "Failed to create party", details = errors });
+            }
+
+            return Ok(new { 
+                success = true, 
+                message = $"Successfully created custom party '{request.PartyName}' with {successes.Count} Pokemon",
+                details = successes
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error creating custom party for user {UserId}", GetCurrentUserId());
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
     ///     Swaps two Pokemon positions in the party.
     /// </summary>
     /// <param name="request">The swap request.</param>
@@ -409,37 +630,66 @@ public class PartyController : ControllerBase
                 return BadRequest(new { error = "Cannot swap a slot with itself" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            var user = await db.Users
-                .Where(u => u.UserId == userId)
+            
+            // Get current party from Parties table
+            var currentParty = await db.Parties
+                .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
 
-            if (user == null)
-                return NotFound(new { error = "User not found" });
+            if (currentParty == null)
+                return NotFound(new { error = "User party not found" });
 
-            // Get current party
-            var party = user.Party ?? new ulong[6];
-            
-            // Ensure party array is at least 6 elements
-            if (party.Length < 6)
+            // Get current slot values
+            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+                               currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
+
+            var pokemon1 = slots[request.Slot1 - 1];
+            var pokemon2 = slots[request.Slot2 - 1];
+
+            // Perform the swap using individual slot updates
+            switch (request.Slot1)
             {
-                var newParty = new ulong[6];
-                for (var i = 0; i < Math.Min(party.Length, 6); i++)
-                {
-                    newParty[i] = party[i];
-                }
-                party = newParty;
+                case 1:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot1, pokemon2).UpdateAsync();
+                    break;
+                case 2:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot2, pokemon2).UpdateAsync();
+                    break;
+                case 3:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot3, pokemon2).UpdateAsync();
+                    break;
+                case 4:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot4, pokemon2).UpdateAsync();
+                    break;
+                case 5:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot5, pokemon2).UpdateAsync();
+                    break;
+                case 6:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot6, pokemon2).UpdateAsync();
+                    break;
             }
 
-            // Swap the Pokemon (adjust for 0-based indexing)
-            var temp = party[request.Slot1 - 1];
-            party[request.Slot1 - 1] = party[request.Slot2 - 1];
-            party[request.Slot2 - 1] = temp;
-
-            // Update in database
-            await db.Users
-                .Where(u => u.UserId == userId)
-                .Set(u => u.Party, party)
-                .UpdateAsync();
+            switch (request.Slot2)
+            {
+                case 1:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot1, pokemon1).UpdateAsync();
+                    break;
+                case 2:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot2, pokemon1).UpdateAsync();
+                    break;
+                case 3:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot3, pokemon1).UpdateAsync();
+                    break;
+                case 4:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot4, pokemon1).UpdateAsync();
+                    break;
+                case 5:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot5, pokemon1).UpdateAsync();
+                    break;
+                case 6:
+                    await db.Parties.Where(p => p.PartyId == currentParty.PartyId).Set(p => p.Slot6, pokemon1).UpdateAsync();
+                    break;
+            }
 
             return Ok(new { success = true, message = $"Swapped Pokemon in slots {request.Slot1} and {request.Slot2}" });
         }
@@ -501,6 +751,30 @@ public class PartyController : ControllerBase
         
         /// <summary>Gets or sets the second slot to swap.</summary>
         public int Slot2 { get; set; }
+    }
+
+    /// <summary>
+    ///     Request model for creating a custom party.
+    /// </summary>
+    public class CreateCustomPartyRequest
+    {
+        /// <summary>Gets or sets the name for the custom party.</summary>
+        public string PartyName { get; set; } = string.Empty;
+        
+        /// <summary>Gets or sets the Pokemon slots to add to the party.</summary>
+        public List<PokemonSlot> PokemonSlots { get; set; } = new();
+    }
+
+    /// <summary>
+    ///     Represents a Pokemon slot assignment for custom party creation.
+    /// </summary>
+    public class PokemonSlot
+    {
+        /// <summary>Gets or sets the party slot number (1-6).</summary>
+        public int SlotNumber { get; set; }
+        
+        /// <summary>Gets or sets the Pokemon position in the user's collection.</summary>
+        public ulong PokemonPosition { get; set; }
     }
 
     #endregion
