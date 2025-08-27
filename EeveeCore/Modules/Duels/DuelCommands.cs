@@ -6,6 +6,7 @@ using EeveeCore.Modules.Duels.Impl.DuelPokemon;
 using EeveeCore.Modules.Duels.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Modules.Duels;

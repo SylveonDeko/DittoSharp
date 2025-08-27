@@ -1,11 +1,9 @@
 using EeveeCore.Common.ModuleBehaviors;
-using EeveeCore.Database.Linq.Models.Bot;
-using EeveeCore.Database.Models.Mongo.Game;
 using EeveeCore.Modules.Achievements.Common;
 using EeveeCore.Modules.Achievements.Models;
 using EeveeCore.Services.Impl;
 using LinqToDB;
-using MongoDB.Driver;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Modules.Achievements.Services;

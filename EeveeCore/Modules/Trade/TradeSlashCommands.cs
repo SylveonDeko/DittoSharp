@@ -4,7 +4,7 @@ using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Trade.Models;
 using EeveeCore.Modules.Trade.Services;
 using Fergun.Interactive;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Modules.Trade;

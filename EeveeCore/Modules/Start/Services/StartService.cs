@@ -2,6 +2,7 @@ using EeveeCore.Database.Linq.Models.Bot;
 using EeveeCore.Database.Linq.Models.Pokemon;
 using EeveeCore.Modules.Spawn.Services;
 using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Modules.Start.Services;
 

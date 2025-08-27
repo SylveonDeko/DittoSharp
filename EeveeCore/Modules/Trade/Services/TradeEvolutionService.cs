@@ -1,5 +1,6 @@
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 

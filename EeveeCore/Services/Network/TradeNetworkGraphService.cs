@@ -1,5 +1,5 @@
-using LinqToDB;
 using EeveeCore.Database.Linq.Models.Game;
+using LinqToDB.Async;
 
 namespace EeveeCore.Services.Network;
 

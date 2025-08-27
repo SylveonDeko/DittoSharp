@@ -1,5 +1,5 @@
 using Discord.Interactions;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Common.AutoCompletes;

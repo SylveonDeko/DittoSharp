@@ -1,6 +1,6 @@
 using Discord.Interactions;
 using EeveeCore.Common.Enums;
-using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Common.Attributes.Interactions;
 

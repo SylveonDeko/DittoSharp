@@ -5,6 +5,7 @@ using EeveeCore.Modules.Achievements.Services;
 using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 using SkiaSharp;
@@ -93,7 +94,7 @@ public class BreedingService : INService
     }
 
     /// <summary>
-    ///     Clears the list of female Pokémon IDs for a user.
+    ///     Clears all breeding female flags for a user.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -101,12 +102,10 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Create an array of 10 nulls
-        var emptyFemales = new int?[10];
-
-        await db.Users
-            .Where(u => u.UserId == userId)
-            .Set(u => u.Females, emptyFemales)
+        // Clear all breeding female flags for this user
+        await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.IsBreedingFemale)
+            .Set(o => o.IsBreedingFemale, false)
             .UpdateAsync();
     }
 
@@ -170,45 +169,69 @@ public class BreedingService : INService
     }
 
     /// <summary>
-    ///     Updates a user's female Pokémon IDs.
+    ///     Updates a user's breeding female Pokémon using the ownership table.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
-    /// <param name="femaleIds">The list of female Pokémon IDs.</param>
+    /// <param name="femalePositions">The list of female Pokémon positions (0-based, already converted from user input).</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task UpdateUserFemalesAsync(ulong userId, List<ulong> femaleIds)
+    public async Task UpdateUserFemalesAsync(ulong userId, List<ulong> femalePositions)
     {
-        await using var db = await _dbContextProvider.GetConnectionAsync();
+        try
+        {
+            await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Convert the list to an array of the correct type
-        var newFemales = femaleIds.Select(id => (int?)id).ToArray();
+            // Single optimized update: set all to false first, then set specified ones to true
+            // This is faster than separate operations and avoids transaction issues
+            await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId)
+                .Set(o => o.IsBreedingFemale, o => femalePositions.Contains(o.Position))
+                .UpdateAsync();
 
-        await db.Users
-            .Where(u => u.UserId == userId)
-            .Set(u => u.Females, newFemales)
-            .UpdateAsync();
+            Log.Information("Updated breeding females for user {UserId}: {Positions} (0-based)", userId, string.Join(",", femalePositions));
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error updating breeding females for user {UserId}", userId);
+            throw;
+        }
     }
 
     /// <summary>
-    ///     Fetches the first female Pokémon ID for a user.
+    ///     Gets all breeding female Pokémon positions for a user.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
-    /// <returns>The first female Pokémon ID, or null if none exists.</returns>
+    /// <returns>A list of female Pokémon positions (1-based).</returns>
+    public async Task<List<ulong>> GetUserFemalesAsync(ulong userId)
+    {
+        await using var db = await _dbContextProvider.GetConnectionAsync();
+
+        return await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.IsBreedingFemale)
+            .OrderBy(o => o.Position)
+            .Select(o => o.Position + 1) // Convert to 1-based positions
+            .ToListAsync();
+    }
+
+    /// <summary>
+    ///     Fetches the first breeding female Pokémon position for a user.
+    /// </summary>
+    /// <param name="userId">The user's Discord ID.</param>
+    /// <returns>The first female Pokémon position (1-based), or null if none exists.</returns>
     public async Task<ulong?> FetchFirstFemaleAsync(ulong userId)
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var females = await db.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => u.Females)
+        var firstFemale = await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.IsBreedingFemale)
+            .OrderBy(o => o.Position)
+            .Select(o => o.Position + 1) // Convert to 1-based position
             .FirstOrDefaultAsync();
 
-        if (females == null || females.Length == 0) return null;
-
-        return (ulong?)females[0];
+        return firstFemale == 0 ? null : firstFemale;
     }
 
     /// <summary>
-    ///     Removes the first female Pokémon ID from a user's list.
+    ///     Removes the first breeding female flag from a user's list.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -216,18 +239,18 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        var females = await db.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => u.Females)
+        // Find the first breeding female (by position order)
+        var firstFemale = await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && o.IsBreedingFemale)
+            .OrderBy(o => o.Position)
             .FirstOrDefaultAsync();
 
-        if (females == null || females.Length == 0) return;
+        if (firstFemale == null) return;
 
-        var newFemales = females.Skip(1).ToArray();
-
-        await db.Users
-            .Where(u => u.UserId == userId)
-            .Set(u => u.Females, newFemales)
+        // Remove the breeding female flag
+        await db.UserPokemonOwnerships
+            .Where(o => o.Id == firstFemale.Id)
+            .Set(o => o.IsBreedingFemale, false)
             .UpdateAsync();
     }
 
@@ -963,80 +986,75 @@ public class BreedingService : INService
         try
         {
             await using var db = await _dbContextProvider.GetConnectionAsync();
-            await using var transaction = await db.BeginTransactionAsync();
 
-            try
+            // Create new egg Pokémon
+            var eggPokemon = new Database.Linq.Models.Pokemon.Pokemon
             {
-                // Create new egg Pokémon
-                var eggPokemon = new Database.Linq.Models.Pokemon.Pokemon
-                {
-                    PokemonName = "Egg",
-                    HpIv = child.Hp,
-                    AttackIv = child.Attack,
-                    DefenseIv = child.Defense,
-                    SpecialAttackIv = child.SpAtk,
-                    SpecialDefenseIv = child.SpDef,
-                    SpeedIv = child.Speed,
-                    HpEv = 0,
-                    AttackEv = 0,
-                    DefenseEv = 0,
-                    SpecialAttackEv = 0,
-                    SpecialDefenseEv = 0,
-                    SpeedEv = 0,
-                    Level = 5,
-                    Moves = ["tackle", "tackle", "tackle", "tackle"],
-                    HeldItem = "None",
-                    Experience = 1,
-                    Nature = child.Nature,
-                    ExperienceCap = 35,
-                    Nickname = "None",
-                    Price = 0,
-                    MarketEnlist = false,
-                    Happiness = 0,
-                    Favorite = false,
-                    AbilityIndex = child.AbilityId,
-                    Counter = counter,
-                    Name = child.Name,
-                    Gender = child.Gender,
-                    CaughtBy = userId,
-                    Shiny = child.Shiny,
-                    Skin = isShadow ? "shadow" : null,
-                    Breedable = true,
-                    Owner = userId,
-                    Timestamp = DateTime.UtcNow
-                };
+                PokemonName = "Egg",
+                HpIv = child.Hp,
+                AttackIv = child.Attack,
+                DefenseIv = child.Defense,
+                SpecialAttackIv = child.SpAtk,
+                SpecialDefenseIv = child.SpDef,
+                SpeedIv = child.Speed,
+                HpEv = 0,
+                AttackEv = 0,
+                DefenseEv = 0,
+                SpecialAttackEv = 0,
+                SpecialDefenseEv = 0,
+                SpeedEv = 0,
+                Level = 5,
+                Moves = ["tackle", "tackle", "tackle", "tackle"],
+                HeldItem = "None",
+                Experience = 1,
+                Nature = child.Nature,
+                ExperienceCap = 35,
+                Nickname = "None",
+                Price = 0,
+                MarketEnlist = false,
+                Happiness = 0,
+                Favorite = false,
+                AbilityIndex = child.AbilityId,
+                Counter = counter,
+                Name = child.Name,
+                Gender = child.Gender,
+                CaughtBy = userId,
+                Shiny = child.Shiny,
+                Skin = isShadow ? "shadow" : null,
+                Breedable = true,
+                Tradable = true,
+                Champion = false,
+                Temporary = false,
+                Voucher = false,
+                Owner = userId,
+                Timestamp = DateTime.UtcNow
+            };
 
-                // Save the egg to get its ID
-                eggPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(eggPokemon);
+            // Save the egg to get its ID (no transaction to avoid LinqToDB ID issues)
+            eggPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(eggPokemon);
 
-                // Find the highest position for this user's Pokémon
-                var highestPosition = await db.UserPokemonOwnerships
-                    .Where(o => o.UserId == userId)
-                    .OrderByDescending(o => o.Position)
-                    .Select(o => (int?)o.Position)
-                    .FirstOrDefaultAsync() ?? -1;
+            // Find the highest position for this user's Pokémon
+            var highestPosition = await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.Position)
+                .Select(o => (int?)o.Position)
+                .FirstOrDefaultAsync() ?? -1;
 
-                // Add a new ownership entry with the next position
-                var ownership = new UserPokemonOwnership
-                {
-                    UserId = userId,
-                    PokemonId = eggPokemon.Id,
-                    Position = (ulong)(highestPosition + 1)
-                };
-
-                await db.InsertAsync(ownership);
-
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
+            // Add a new ownership entry with the next position
+            var ownership = new UserPokemonOwnership
             {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                UserId = userId,
+                PokemonId = eggPokemon.Id,
+                Position = (ulong)(highestPosition + 1),
+                IsBreedingFemale = false // Eggs are not breeding females
+            };
+
+            await db.InsertAsync(ownership);
         }
         catch (Exception e)
         {
             Log.Error(e, "Error inserting egg for user {UserId}", userId);
+            throw; // Re-throw so the caller can handle the error properly
         }
     }
 
@@ -1258,42 +1276,104 @@ public class BreedingService : INService
     }
 
     /// <summary>
-    ///     Validates if a Pokémon ID belongs to a female Pokémon or Ditto.
+    ///     Validates multiple Pokémon IDs in a single batch operation.
+    /// </summary>
+    /// <param name="userId">The user's Discord ID.</param>
+    /// <param name="pokemonIds">The list of Pokémon IDs to validate (1-based).</param>
+    /// <returns>A dictionary mapping each ID to whether it's valid for breeding.</returns>
+    public async Task<Dictionary<ulong, bool>> ValidateFemaleBatchAsync(ulong userId, List<ulong> pokemonIds)
+    {
+        try
+        {
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+
+            // Convert to 0-based positions for database lookup
+            var positions = pokemonIds.Select(id => id - 1).ToList();
+
+            // Single query to get all Pokemon data at once
+            var pokemonData = await db.UserPokemonOwnerships
+                .Where(o => o.UserId == userId && positions.Contains(o.Position))
+                .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new 
+                { 
+                    Position = o.Position + 1, // Convert back to 1-based
+                    p.Gender, 
+                    p.PokemonName 
+                })
+                .ToListAsync();
+
+            // Create result dictionary
+            var results = new Dictionary<ulong, bool>();
+            
+            foreach (var id in pokemonIds)
+            {
+                var pokemon = pokemonData.FirstOrDefault(p => p.Position == id);
+                if (pokemon == null)
+                {
+                    results[id] = false;
+                }
+                else
+                {
+                    // Valid if the Pokémon is female or a Ditto
+                    results[id] = pokemon.Gender == "-f" || pokemon.PokemonName.ToLower() == "ditto";
+                }
+            }
+
+            return results;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error batch validating females for user {UserId}", userId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Gets breeding female Pokémon data in a single batch query for performance.
+    /// </summary>
+    /// <param name="userId">The user's Discord ID.</param>
+    /// <param name="femalePositions">List of female Pokémon positions (1-based).</param>
+    /// <returns>A list of Pokemon with their actual positions maintained.</returns>
+    public async Task<List<(Database.Linq.Models.Pokemon.Pokemon Pokemon, ulong Position)>> GetBreedingFemalesBatch(ulong userId, List<ulong> femalePositions)
+    {
+        await using var db = await _dbContextProvider.GetConnectionAsync();
+
+        // Convert to 0-based positions for database lookup
+        var zeroBasedPositions = femalePositions.Select(p => p - 1).ToList();
+
+        // Single query with JOIN to get all Pokemon data at once
+        var pokemonWithPositions = await db.UserPokemonOwnerships
+            .Where(o => o.UserId == userId && zeroBasedPositions.Contains(o.Position))
+            .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new 
+            { 
+                Pokemon = p,
+                Position = o.Position + 1 // Convert back to 1-based for display
+            })
+            .ToListAsync();
+
+        // Maintain the original order based on femalePositions
+        var result = new List<(Database.Linq.Models.Pokemon.Pokemon, ulong)>();
+        foreach (var position in femalePositions)
+        {
+            var match = pokemonWithPositions.FirstOrDefault(p => p.Position == position);
+            if (match != null)
+            {
+                result.Add((match.Pokemon, position));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Validates if a single Pokémon ID belongs to a female Pokémon or Ditto.
     /// </summary>
     /// <param name="userId">The user's Discord ID.</param>
     /// <param name="pokemonId">The ID of the Pokémon to validate.</param>
     /// <returns>True if the Pokémon is female or a Ditto, false otherwise.</returns>
     public async Task<bool> ValidateFemaleIdAsync(ulong userId, ulong pokemonId)
     {
-        try
-        {
-            await using var db = await _dbContextProvider.GetConnectionAsync();
-
-            // Convert from 1-based UI indexing to 0-based database indexing
-            var position = pokemonId - 1;
-
-            // Get the ownership record to find the actual Pokemon ID
-            var ownership = await db.UserPokemonOwnerships
-                .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
-
-            if (ownership == null) return false;
-
-            // Get the actual Pokémon from the database
-            var pokemon = await db.UserPokemon
-                .Where(p => p.Id == ownership.PokemonId)
-                .Select(p => new { p.Gender, p.PokemonName })
-                .FirstOrDefaultAsync();
-
-            if (pokemon == null) return false;
-
-            // Valid if the Pokémon is female or a Ditto
-            return pokemon.Gender == "-f" || pokemon.PokemonName.ToLower() == "ditto";
-        }
-        catch (Exception e)
-        {
-            Log.Information("{Exception}", e);
-            throw;
-        }
+        var results = await ValidateFemaleBatchAsync(userId, [pokemonId]);
+        return results.GetValueOrDefault(pokemonId, false);
     }
 
     /// <summary>

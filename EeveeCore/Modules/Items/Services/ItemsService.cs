@@ -2,6 +2,7 @@ using System.Text.Json;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 using ChestStore = EeveeCore.Database.Linq.Models.Game.ChestStore;

@@ -1,8 +1,7 @@
-using EeveeCore.Database;
 using EeveeCore.Modules.Vouchers.Common;
 using EeveeCore.Modules.Vouchers.Models;
-using EeveeCore.Services;
 using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Modules.Vouchers.Services;

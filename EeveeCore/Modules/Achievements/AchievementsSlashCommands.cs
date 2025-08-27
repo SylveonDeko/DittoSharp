@@ -1,10 +1,9 @@
-using System.Text;
 using Discord.Interactions;
 using EeveeCore.Common.Collections;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Achievements.Common;
 using EeveeCore.Modules.Achievements.Services;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Modules.Achievements;

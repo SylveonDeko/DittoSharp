@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.AuthHandlers;

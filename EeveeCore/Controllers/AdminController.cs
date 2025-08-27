@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LinqToDB;
 using System.Text.Json;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Controllers;

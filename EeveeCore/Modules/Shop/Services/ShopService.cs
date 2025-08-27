@@ -1,16 +1,14 @@
 using System.Text.Json;
-using EeveeCore.Database;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Shop.Common;
 using EeveeCore.Modules.Shop.Models;
-using EeveeCore.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 using ChestStore = EeveeCore.Database.Linq.Models.Game.ChestStore;
 using RedeemStore = EeveeCore.Database.Linq.Models.Game.RedeemStore;
-using MongoShopItem = EeveeCore.Database.Models.Mongo.Game.ShopItem;
 
 namespace EeveeCore.Modules.Shop.Services;
 

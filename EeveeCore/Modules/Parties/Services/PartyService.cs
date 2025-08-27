@@ -1,6 +1,7 @@
 using System.Text;
 using EeveeCore.Database.Linq.Models.Pokemon;
 using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Modules.Parties.Services;
 

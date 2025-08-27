@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using EeveeCore.Modules.Breeding.Services;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 
 namespace EeveeCore.Controllers;

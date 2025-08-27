@@ -5,6 +5,7 @@ using EeveeCore.Common.ModuleBases;
 using EeveeCore.Database.Linq.Models.Game;
 using EeveeCore.Modules.Trade.Services;
 using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Modules.Trade;
 

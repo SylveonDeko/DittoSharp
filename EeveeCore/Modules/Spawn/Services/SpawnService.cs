@@ -10,6 +10,7 @@ using EeveeCore.Modules.Achievements.Services;
 using EeveeCore.Modules.Missions.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 using StackExchange.Redis;

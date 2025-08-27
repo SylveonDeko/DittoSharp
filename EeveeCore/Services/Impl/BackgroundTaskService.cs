@@ -1,6 +1,7 @@
 using EeveeCore.Database.Models.Mongo.Game;
 using MongoDB.Driver;
 using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Services.Impl;
 

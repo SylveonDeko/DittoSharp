@@ -1,8 +1,11 @@
 using Discord.Interactions;
+using EeveeCore.Common.AutoCompletes;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Breeding.Services;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Modules.Missions.Services;
+using Fergun.Interactive;
+using Fergun.Interactive.Pagination;
 
 namespace EeveeCore.Modules.Breeding;
 
@@ -10,9 +13,10 @@ namespace EeveeCore.Modules.Breeding;
 ///     Module containing Pokémon breeding commands and interactions.
 /// </summary>
 [Group("breeding", "Commands for Pokémon breeding")]
-public class BreedingModule(PokemonService pkServ, MissionService missionService) : EeveeCoreSlashModuleBase<BreedingService>
+public class BreedingModule(PokemonService pkServ, MissionService missionService, InteractiveService interactivity) : EeveeCoreSlashModuleBase<BreedingService>
 {
     private readonly MissionService _missionService = missionService;
+    private readonly PokemonService _pokemonService = pkServ;
     private static readonly HashSet<ulong> AllowedUserIds = [790722073248661525];
 
     /// <summary>
@@ -44,8 +48,8 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             .Where(id => !string.IsNullOrEmpty(id))
             .ToList();
 
-        // Validate IDs
-        var validatedIds = new List<ulong>();
+        // Parse all IDs first
+        var parsedIds = new List<ulong>();
         var invalidIds = new List<string>();
 
         foreach (var idStr in idStrings)
@@ -55,28 +59,68 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 invalidIds.Add(idStr);
                 continue;
             }
-
-            // Check if the Pokémon exists and is female or Ditto
-            var isValid = await Service.ValidateFemaleIdAsync(ctx.User.Id, id);
-
-            if (isValid)
-                validatedIds.Add(id);
-            else
-                invalidIds.Add(idStr);
+            parsedIds.Add(id);
         }
 
-        // Update the user's females list
-        if (validatedIds.Any()) await Service.UpdateUserFemalesAsync(ctx.User.Id, validatedIds);
+        // Batch validate all IDs at once - much faster!
+        var validationResults = await Service.ValidateFemaleBatchAsync(ctx.User.Id, parsedIds);
 
-        // Build response message
+        // Separate valid and invalid based on batch results
+        var validatedZeroBasedIds = new List<ulong>();
+        var validatedOriginalIds = new List<ulong>();
+
+        foreach (var id in parsedIds)
+        {
+            if (validationResults.GetValueOrDefault(id, false))
+            {
+                validatedZeroBasedIds.Add(id - 1); // For database storage
+                validatedOriginalIds.Add(id); // For display
+            }
+            else
+            {
+                invalidIds.Add(id.ToString());
+            }
+        }
+
+        // Update the user's females list with 0-based positions
+        if (validatedZeroBasedIds.Any()) 
+            await Service.UpdateUserFemalesAsync(ctx.User.Id, validatedZeroBasedIds);
+
+        // Build response message using original user input
         var responseMessage =
-            $"Your female Pokémon list has been updated with valid IDs: {string.Join(", ", validatedIds)}";
+            $"Your female Pokémon list has been updated with valid IDs: {string.Join(", ", validatedOriginalIds)}";
 
         if (invalidIds.Any())
             responseMessage += $"\nInvalid or non-female IDs detected: {string.Join(", ", invalidIds)}.";
 
         // Send as an embedded response
         await ctx.Interaction.SendConfirmFollowupAsync(responseMessage);
+
+        // Show breeding stats using original user input
+        if (validatedOriginalIds.Any())
+        {
+            await ShowFemaleBreedingStats(validatedOriginalIds);
+        }
+    }
+
+    /// <summary>
+    ///     Shows detailed breeding statistics for the user's selected female Pokémon.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [SlashCommand("showfemales", "Show detailed breeding stats for your selected female Pokémon")]
+    public async Task ShowFemales()
+    {
+        await DeferAsync();
+        
+        // Get the user's current female list from the breeding service
+        var user = await Service.GetUserFemalesAsync(ctx.User.Id);
+        if (user == null || !user.Any())
+        {
+            await ctx.Interaction.SendErrorFollowupAsync("You have no female Pokémon set for breeding. Use `/breeding setfemales` to set your breeding list first.");
+            return;
+        }
+
+        await ShowFemaleBreedingStats(user);
     }
 
     /// <summary>
@@ -85,11 +129,22 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     /// <param name="maleId">The ID of the male Pokémon to breed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("breed", "Breed a male pokemon with a female from your breeding list")]
-    public async Task Breed([Summary("male_id", "ID of the male Pokémon")] int maleId)
+    public async Task Breed(
+        [Summary("male_id", "ID of the male Pokémon")] 
+        [Autocomplete(typeof(BreedingMaleAutocompleteHandler))]
+        string maleId)
     {
         await DeferAsync();
-        var message = await ctx.Interaction.SendConfirmFollowupAsync("Breeding in progress...");
-        await BreedPokemon((ulong)maleId, ctx.Interaction);
+
+        // Parse the male ID
+        if (!int.TryParse(maleId, out var parsedMaleId) || parsedMaleId < 1)
+        {
+            await ctx.Interaction.SendErrorFollowupAsync("Invalid male Pokémon ID provided.");
+            return;
+        }
+
+        await ctx.Interaction.SendConfirmFollowupAsync("Breeding in progress...");
+        await BreedPokemon((ulong)parsedMaleId, ctx.Interaction);
     }
 
     /// <summary>
@@ -416,5 +471,195 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         Service.SetAutoBreedState(ctx.User.Id, null);
 
         await RespondAsync("I will no longer automatically attempt to breed these pokes.", ephemeral: true);
+    }
+
+    /// <summary>
+    ///     Shows detailed breeding statistics for female Pokémon using ComponentsV2 pagination.
+    /// </summary>
+    /// <param name="femalePositions">List of female Pokémon positions to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task ShowFemaleBreedingStats(List<ulong> femalePositions)
+    {
+        try
+        {
+            // Get all female Pokémon details in a single batch query - much faster!
+            var femalePokemons = await Service.GetBreedingFemalesBatch(ctx.User.Id, femalePositions);
+
+            if (!femalePokemons.Any())
+            {
+                await ctx.Interaction.SendErrorFollowupAsync("No valid female Pokémon found in your breeding list.");
+                return;
+            }
+
+            const int itemsPerPage = 3; // Fewer items for detailed breeding view
+            var totalPages = (femalePokemons.Count - 1) / itemsPerPage + 1;
+
+            var paginator = new ComponentPaginatorBuilder()
+                .AddUser(ctx.User)
+                .WithPageFactory(GenerateBreedingStatsPage)
+                .WithPageCount(totalPages)
+                .Build();
+
+            await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10),
+                InteractionResponseType.DeferredChannelMessageWithSource);
+
+            IPage GenerateBreedingStatsPage(IComponentPaginator p)
+            {
+                var pageItems = femalePokemons
+                    .Skip(p.CurrentPageIndex * itemsPerPage)
+                    .Take(itemsPerPage)
+                    .ToList();
+
+                var fileAttachments = new List<FileAttachment>();
+                var attachmentCounter = 0;
+                var containerComponents = new List<IMessageComponentBuilder>();
+
+                // Add title
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"# Your Breeding Females\n**Breeding Statistics View**"));
+
+                containerComponents.Add(new SeparatorBuilder());
+
+                foreach (var (pokemon, position) in pageItems)
+                {
+                    var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
+                    var gender = GetGenderEmoji(pokemon.Gender);
+                    var favorite = pokemon.Favorite ? "⭐ " : "";
+                    var champion = pokemon.Champion ? "🏆 " : "";
+
+                    // Calculate IV percentage and total IVs for breeding
+                    var ivTotal = pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv + 
+                                  pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv;
+                    var ivPercentage = ivTotal / 186.0 * 100;
+
+                    // Use the position from the tuple
+                    var breedingText = $"**{emoji}{favorite}{champion}{pokemon.PokemonName.Capitalize()}** {gender}\n" +
+                                      $"**Position** #{position} | **Level** {pokemon.Level}\n" +
+                                      $"**IV Total** {ivTotal}/186 ({ivPercentage:F2}%) | **Nature** {pokemon.Nature}\n" +
+                                      $"**Breeding Stats:**\n" +
+                                      $"• HP: {pokemon.HpIv}/31 • ATK: {pokemon.AttackIv}/31 • DEF: {pokemon.DefenseIv}/31\n" +
+                                      $"• SP.ATK: {pokemon.SpecialAttackIv}/31 • SP.DEF: {pokemon.SpecialDefenseIv}/31 • SPD: {pokemon.SpeedIv}/31\n" +
+                                      $"**Held Item** {pokemon.HeldItem ?? "None"}";
+
+                    if (!string.IsNullOrEmpty(pokemon.Nickname) && pokemon.Nickname != pokemon.PokemonName)
+                        breedingText += $"\n**Nickname** {pokemon.Nickname}";
+
+                    // Add breeding status
+                    var breedingFlags = new List<string>();
+                    if (!pokemon.Breedable) breedingFlags.Add("Not Breedable");
+                    if (pokemon.PokemonName.ToLower() == "ditto") breedingFlags.Add("Ditto (Universal Breeder)");
+                    
+                    if (breedingFlags.Any())
+                        breedingText += $"\n**Status** {string.Join(", ", breedingFlags)}";
+
+                    // Create section
+                    var sectionBuilder = new SectionBuilder()
+                        .WithComponents(new List<IMessageComponentBuilder>
+                        {
+                            new TextDisplayBuilder().WithContent(breedingText)
+                        });
+
+                    // Add Pokemon image as thumbnail
+                    var (_, imagePath) = _pokemonService.GetPokemonFormInfo(
+                        pokemon.PokemonName,
+                        pokemon.Shiny == true,
+                        pokemon.Radiant == true,
+                        pokemon.Skin ?? "").Result;
+
+                    if (File.Exists(imagePath))
+                    {
+                        var imageFileName = $"pokemon_{attachmentCounter}.png";
+                        var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
+                        fileAttachments.Add(new FileAttachment(fileStream, imageFileName));
+
+                        sectionBuilder.WithAccessory(new ThumbnailBuilder()
+                            .WithMedia(new UnfurledMediaItemProperties
+                            {
+                                Url = $"attachment://{imageFileName}"
+                            }));
+
+                        attachmentCounter++;
+                    }
+
+                    containerComponents.Add(sectionBuilder);
+
+                    // Add separator between Pokemon
+                    if ((pokemon, position) != pageItems.Last())
+                    {
+                        containerComponents.Add(new SeparatorBuilder());
+                    }
+                }
+
+                // Add navigation and footer
+                containerComponents.Add(new SeparatorBuilder());
+                
+                var navigationRow = new ActionRowBuilder()
+                    .AddPreviousButton(p, style: ButtonStyle.Secondary)
+                    .AddNextButton(p, style: ButtonStyle.Secondary)
+                    .AddStopButton(p);
+
+                containerComponents.Add(navigationRow);
+
+                containerComponents.Add(new TextDisplayBuilder()
+                    .WithContent($"Page {p.CurrentPageIndex + 1}/{p.PageCount} • {femalePokemons.Count} Breeding Females"));
+
+                // Create main container
+                var mainContainer = new ContainerBuilder()
+                    .WithComponents(containerComponents)
+                    .WithAccentColor(Color.Purple);
+
+                var componentsV2 = new ComponentBuilderV2()
+                    .AddComponent(mainContainer);
+
+                var pageBuilder = new PageBuilder()
+                    .WithComponents(componentsV2.Build());
+
+                if (fileAttachments.Count > 0)
+                {
+                    pageBuilder.WithAttachmentsFactory(() => new ValueTask<IEnumerable<FileAttachment>?>(fileAttachments));
+                }
+
+                return pageBuilder.Build();
+            }
+        }
+        catch (Exception ex)
+        {
+            await ctx.Interaction.SendErrorFollowupAsync($"An error occurred while displaying breeding stats: {ex.Message}");
+        }
+    }
+
+
+    /// <summary>
+    ///     Gets the emoji for a Pokemon based on its variant.
+    /// </summary>
+    /// <param name="shiny">Whether the Pokemon is shiny.</param>
+    /// <param name="radiant">Whether the Pokemon is radiant.</param>
+    /// <param name="skin">The skin of the Pokemon, if any.</param>
+    /// <returns>The emoji representation of the Pokemon's variant.</returns>
+    private string GetPokemonEmoji(bool? shiny, bool? radiant, string skin)
+    {
+        if (radiant == true) return "<:radiant:1057764536456966275>";
+        if (shiny == true) return "<a:shiny:1057764628349853786>";
+        return skin switch
+        {
+            "glitch" => "<:glitch:1057764553091534859>",
+            "shadow" => "<:shadow:1057764584954568775>",
+            _ => "<:blank:1338358271706136648>"
+        };
+    }
+
+    /// <summary>
+    ///     Gets the emoji for a Pokemon's gender.
+    /// </summary>
+    /// <param name="gender">The gender of the Pokemon.</param>
+    /// <returns>The emoji representation of the Pokemon's gender.</returns>
+    private string GetGenderEmoji(string gender)
+    {
+        return gender?.ToLower() switch
+        {
+            "-m" or "male" => "♂️ ",
+            "-f" or "female" => "♀️ ",
+            _ => ""
+        };
     }
 }

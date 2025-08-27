@@ -25,5 +25,5 @@ public class Levels
     ///     Gets or sets additional level requirement mappings not explicitly defined in the schema.
     /// </summary>
     [BsonExtraElements]
-    public IDictionary<string, int> LevelRequirements { get; set; }
+    public IDictionary<string, object> LevelRequirements { get; set; }
 }

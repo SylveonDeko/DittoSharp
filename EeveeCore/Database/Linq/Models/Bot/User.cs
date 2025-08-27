@@ -130,22 +130,6 @@ public class User
     [Column(Name = "daycarelimit")]
     public int? DaycareLimit { get; set; } = 1;
 
-    /// <summary>
-    ///     Internal storage for females as int[] for PostgreSQL compatibility
-    /// </summary>
-    [Column(Name = "females", DbType = "integer[]")]
-    internal int[]? _females { get; set; }
-
-    /// <summary>
-    ///     Gets or sets the array of female Pokémon indices in the user's collection.
-    /// </summary>
-    [NotColumn]
-    public int?[]? Females 
-    { 
-        get => _females?.Select(x => (int?)x).ToArray();
-        set => _females = value?.Where(x => x.HasValue).Select(x => x!.Value).ToArray();
-    }
-
     #endregion
 
     #region User Settings

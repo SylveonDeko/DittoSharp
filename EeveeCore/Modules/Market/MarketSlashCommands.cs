@@ -6,7 +6,7 @@ using EeveeCore.Modules.Market.Services;
 using EeveeCore.Modules.Pokemon.Services;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
-using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Modules.Market;
 

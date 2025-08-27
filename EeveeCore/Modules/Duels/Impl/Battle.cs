@@ -223,6 +223,7 @@ public class Battle
         var moves = await _mongoService.Moves.AsQueryable()
             .Where(m => !ignoredIds.Contains(m.MoveId))
             .ToListAsync();
+        
         // Convert to dynamic list for compatibility with existing code
         MetronomeMoves = moves.Cast<dynamic>().ToList();
 

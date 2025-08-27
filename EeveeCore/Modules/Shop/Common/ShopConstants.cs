@@ -1,5 +1,3 @@
-using Discord;
-
 namespace EeveeCore.Modules.Shop.Common;
 
 /// <summary>

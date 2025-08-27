@@ -4,6 +4,7 @@ using EeveeCore.Database.Models.Mongo.Game;
 using EeveeCore.Modules.Missions.Common;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 
@@ -358,9 +359,9 @@ public class MissionService(
             var newLevel = currentLevel;
             var workingXp = currentXp;
 
-            while (xpRequirements.ContainsKey(newLevel.ToString()) && workingXp >= xpRequirements[newLevel.ToString()])
+            while (xpRequirements.ContainsKey(newLevel.ToString()) && workingXp >= Convert.ToInt32(xpRequirements[newLevel.ToString()]))
             {
-                workingXp -= xpRequirements[newLevel.ToString()];
+                workingXp -= Convert.ToInt32(xpRequirements[newLevel.ToString()]);
                 newLevel++;
                 
                 // Fire level up event
@@ -372,9 +373,9 @@ public class MissionService(
             var finalXp = workingXp + xpToAdd;
 
             // Check for more level-ups after adding XP
-            while (xpRequirements.ContainsKey(newLevel.ToString()) && finalXp >= xpRequirements[newLevel.ToString()])
+            while (xpRequirements.ContainsKey(newLevel.ToString()) && finalXp >= Convert.ToInt32(xpRequirements[newLevel.ToString()]))
             {
-                finalXp -= xpRequirements[newLevel.ToString()];
+                finalXp -= Convert.ToInt32(xpRequirements[newLevel.ToString()]);
                 newLevel++;
                 
                 // Fire level up event

@@ -1,7 +1,7 @@
 using EeveeCore.Modules.Duels.Impl;
 using EeveeCore.Modules.Duels.Impl.DuelPokemon;
 using EeveeCore.Services.Impl;
-using LinqToDB;
+using LinqToDB.Async;
 using Serilog;
 using StackExchange.Redis;
 

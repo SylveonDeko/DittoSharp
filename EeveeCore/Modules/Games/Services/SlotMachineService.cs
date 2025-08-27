@@ -1,6 +1,5 @@
 using EeveeCore.Modules.Games.Common;
 using EeveeCore.Modules.Games.Models;
-using EeveeCore.Services;
 
 namespace EeveeCore.Modules.Games.Services;
 

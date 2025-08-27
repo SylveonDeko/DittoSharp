@@ -1,6 +1,7 @@
 using EeveeCore.Database.Linq.Models.Bot;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using LinqToDB.Data;
 using Serilog;
 

@@ -38,4 +38,12 @@ public class UserPokemonOwnership
     [Column("position")]
     [NotNull]
     public ulong Position { get; set; }
+
+    /// <summary>
+    ///     Gets or sets whether this Pokémon is in the user's breeding female list.
+    ///     Used for breeding operations to track which Pokémon are available for breeding.
+    /// </summary>
+    [Column("is_breeding_female")]
+    [NotNull]
+    public bool IsBreedingFemale { get; set; } = false;
 }

@@ -9,6 +9,7 @@ using EeveeCore.Modules.Extras.Services;
 using EeveeCore.Modules.Pokemon.Services;
 using EeveeCore.Services.Impl;
 using LinqToDB;
+using LinqToDB.Async;
 using MongoDB.Driver;
 using Serilog;
 
@@ -563,100 +564,111 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [SlashCommand("bal", "Lists credits, redeems, EV points, upvote points, and selected fishing rod")]
     public async Task Balance(IUser user = null, bool hidden = false)
     {
-        user ??= ctx.User;
-        _hidden = hidden;
-
-        await using var db = await _dbContextProvider.GetConnectionAsync();
-
-        var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
-        if (details == null)
+        try
         {
-            await RespondAsync($"{user.Username} has not started!");
-            return;
+            user ??= ctx.User;
+            _hidden = hidden;
+
+            await using var db = await _dbContextProvider.GetConnectionAsync();
+
+            var details = await db.Users.FirstOrDefaultAsync(u => u.UserId == user.Id);
+            if (details == null)
+            {
+                await RespondAsync($"{user.Username} has not started!");
+                return;
+            }
+
+            if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+            {
+                await RespondAsync(
+                    $"You are not permitted to see the Trainer card of {user.Username}",
+                    ephemeral: hidden
+                );
+                return;
+            }
+
+            var voteStreak = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - details.LastVote > 36 * 60 * 60
+                ? 0
+                : details.VoteStreak;
+
+            var trainerNick = details.TrainerNickname ?? user.Username;
+            var region = details.Region;
+            var heldItem = details.HeldItem;
+            var staffRank = details.Staff;
+
+            // Create Components V2 container
+            var containerComponents = new List<IMessageComponentBuilder>();
+
+            // Add title with staff indicators
+            var titleText = staffRank.ToLower() switch
+            {
+                "gym" => $"**{trainerNick}** - *Official Gym Leader*",
+                "user" => $"**{trainerNick}** - *Trainer Information*",
+                _ => $"**{trainerNick}** - *Official Staff Member ({staffRank})*"
+            };
+
+            containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
+
+            // Add main balance section
+            var balanceText = $"## Balances\n" +
+                              $"**Credits:** {details.MewCoins:N0}\n" +
+                              $"**Redeems:** {details.Redeems}\n" +
+                              $"**Mystery Tokens:** {details.MysteryToken}\n" +
+                              $"**[Dittopia](https://discord.gg/eeveecore) Rep.:** {details.OsRep}";
+
+            containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
+
+            // Add game progress section  
+            var energy = details.Energy ?? 10;
+            var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) +
+                            string.Concat(Enumerable.Repeat("⚫", 10 - energy));
+            var progressText = $"## Game Progress\n" +
+                               $"**Energy:** {energyBar} ({energy}/10)\n" +
+                               $"**EV Points:** {details.EvPoints}\n" +
+                               $"**Upvote Points:** {details.UpvotePoints}\n" +
+                               $"**Vote Streak:** {voteStreak}\n" +
+                               $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
+                               $"**Region:** {region.Capitalize()}";
+
+            if (details.Voucher > 0)
+            {
+                progressText += $"\n**Unused Vouchers:** {details.Voucher}";
+            }
+
+            containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
+
+            // Add navigation buttons
+            var navigationRow = new ActionRowBuilder()
+                .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
+                .WithButton("Details", "misc_button", ButtonStyle.Secondary)
+                .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
+
+            containerComponents.Add(navigationRow);
+
+            // Create the main container
+            var accentColor = staffRank.ToLower() switch
+            {
+                "gym" => Color.Orange,
+                "user" => new Color(0xFFB6C1),
+                _ => Color.Gold
+            };
+
+            var mainContainer = new ContainerBuilder()
+                .WithComponents(containerComponents)
+                .WithAccentColor(accentColor);
+
+            var componentsV2 = new ComponentBuilderV2()
+                .AddComponent(mainContainer);
+
+            var attach = new FileAttachment("filename", description: "This is an alt text.");
+            await ctx.Channel.SendFileAsync(attach);
+            await RespondAsync(components: componentsV2.Build(), flags: MessageFlags.ComponentsV2, ephemeral: hidden);
         }
-
-        if (!details.Visible.GetValueOrDefault() && user.Id != ctx.User.Id)
+        catch (Exception e)
         {
-            await RespondAsync(
-                $"You are not permitted to see the Trainer card of {user.Username}",
-                ephemeral: hidden
-            );
-            return;
+            Console.WriteLine(e);
+            throw;
         }
-
-        var voteStreak = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - details.LastVote > 36 * 60 * 60
-            ? 0
-            : details.VoteStreak;
-
-        var trainerNick = details.TrainerNickname ?? user.Username;
-        var region = details.Region;
-        var heldItem = details.HeldItem;
-        var staffRank = details.Staff;
-
-        // Create Components V2 container
-        var containerComponents = new List<IMessageComponentBuilder>();
-
-        // Add title with staff indicators
-        var titleText = staffRank.ToLower() switch
-        {
-            "gym" => $"**{trainerNick}** - *Official Gym Leader*",
-            "user" => $"**{trainerNick}** - *Trainer Information*",
-            _ => $"**{trainerNick}** - *Official Staff Member ({staffRank})*"
-        };
-
-        containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
-
-        // Add main balance section
-        var balanceText = $"## Balances\n" +
-                         $"**Credits:** {details.MewCoins:N0}\n" +
-                         $"**Redeems:** {details.Redeems}\n" +
-                         $"**Mystery Tokens:** {details.MysteryToken}\n" +
-                         $"**[Dittopia](https://discord.gg/eeveecore) Rep.:** {details.OsRep}";
-
-        containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
-
-        // Add game progress section  
-        var energy = details.Energy ?? 10;
-        var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) + string.Concat(Enumerable.Repeat("⚫", 10 - energy));
-        var progressText = $"## Game Progress\n" +
-                          $"**Energy:** {energyBar} ({energy}/10)\n" +
-                          $"**EV Points:** {details.EvPoints}\n" +
-                          $"**Upvote Points:** {details.UpvotePoints}\n" +
-                          $"**Vote Streak:** {voteStreak}\n" +
-                          $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
-                          $"**Region:** {region.Capitalize()}";
-
-        if (details.Voucher > 0)
-        {
-            progressText += $"\n**Unused Vouchers:** {details.Voucher}";
-        }
-
-        containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
-
-        // Add navigation buttons
-        var navigationRow = new ActionRowBuilder()
-            .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
-            .WithButton("Details", "misc_button", ButtonStyle.Secondary)
-            .WithButton("Tokens", "tokens_button", ButtonStyle.Secondary);
-
-        containerComponents.Add(navigationRow);
-
-        // Create the main container
-        var accentColor = staffRank.ToLower() switch
-        {
-            "gym" => Color.Orange,
-            "user" => new Color(0xFFB6C1),
-            _ => Color.Gold
-        };
-
-        var mainContainer = new ContainerBuilder()
-            .WithComponents(containerComponents)
-            .WithAccentColor(accentColor);
-
-        var componentsV2 = new ComponentBuilderV2()
-            .AddComponent(mainContainer);
-
-        await RespondAsync(components: componentsV2.Build(), flags: MessageFlags.ComponentsV2, ephemeral: hidden);
     }
 
     /// <summary>

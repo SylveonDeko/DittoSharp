@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using EeveeCore.Modules.Market.Services;
 using EeveeCore.Common.Constants;
+using LinqToDB.Async;
 using Serilog;
-using LinqToDB;
 
 namespace EeveeCore.Controllers;
 

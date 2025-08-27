@@ -1,5 +1,5 @@
 using Discord.Interactions;
-using LinqToDB;
+using LinqToDB.Async;
 
 namespace EeveeCore.Common.AutoCompletes;
 
