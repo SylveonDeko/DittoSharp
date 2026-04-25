@@ -1735,14 +1735,18 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateRedirectChannel(ulong guildId, ulong channelId, bool add)
     {
+        await _mongoDb.Guilds.UpdateOneAsync(
+            g => g.GuildId == guildId && (g.Redirects == null || !g.Redirects.Any()),
+            Builders<Guild>.Update.Set(g => g.Redirects, new List<ulong>()),
+            new UpdateOptions { IsUpsert = true });
+
         var update = add
             ? Builders<Guild>.Update.AddToSet(g => g.Redirects, channelId)
             : Builders<Guild>.Update.Pull(g => g.Redirects, channelId);
 
         await _mongoDb.Guilds.UpdateOneAsync(
             g => g.GuildId == guildId,
-            update,
-            new UpdateOptions { IsUpsert = true });
+            update);
 
         return new EmbedBuilder()
             .WithColor(Color.Green)
