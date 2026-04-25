@@ -9,10 +9,10 @@ DittoSharp is a Discord bot project focused on Pokemon collection and interactio
 ## Technology Stack
 
 - **.NET 9.0** with ASP.NET Core for web API
-- **Discord.NET 3.18.0-beta.3** for Discord integration (sharded client)
-- **LinqToDB 6.0.0-preview.4** for PostgreSQL database operations
-- **MongoDB 3.4.0** for static game data storage
-- **Redis (StackExchange.Redis 2.8.41)** for high-performance caching
+- **Discord.Net 3.18.0** for Discord integration (sharded client)
+- **LinqToDB 6.0.0-rc.3** for PostgreSQL database operations
+- **MongoDB.Driver 3.4.3** for static game data storage
+- **Redis (StackExchange.Redis 2.9.11)** for high-performance caching
 - **Serilog** for structured logging
 - **JWT authentication** for web API access
 - **DbUp-PostgreSQL** for database migrations
@@ -144,7 +144,8 @@ var client = new DiscordShardedClient(new DiscordSocketConfig
 {
     MessageCacheSize = 15,
     LogLevel = LogSeverity.Debug,
-    GatewayIntents = GatewayIntents.All,
+    GatewayIntents = GatewayIntents.All ^ GatewayIntents.GuildPresences,
+    AlwaysDownloadUsers = true,
     DefaultRetryMode = RetryMode.RetryRatelimit
 });
 ```
@@ -158,7 +159,9 @@ services.Scan(scan => scan.FromAssemblyOf<IReadyExecutor>()
     .AddClasses(classes => classes.AssignableToAny(
         typeof(INService),
         typeof(IEarlyBehavior),
-        typeof(ILateBlocker)))
+        typeof(ILateBlocker),
+        typeof(IInputTransformer),
+        typeof(ILateExecutor)))
     .AsSelfWithInterfaces()
     .WithSingletonLifetime());
 ```
@@ -175,7 +178,7 @@ services.Scan(scan => scan.FromAssemblyOf<IReadyExecutor>()
 The Discord commands are organized into logical modules under `/Modules/`:
 
 - **Pokemon/**: Core Pokemon collection management
-- **Spawn/**: Pokemon spawning system  
+- **Spawn/**: Pokemon spawning system
 - **Start/**: User onboarding and starter selection
 - **Breeding/**: Pokemon breeding mechanics
 - **Duels/**: Pokemon battle system
@@ -185,6 +188,12 @@ The Discord commands are organized into logical modules under `/Modules/`:
 - **Parties/**: Pokemon party management
 - **Fishing/**: Fishing game mechanics
 - **Missions/**: Mission/quest system
+- **Achievements/**: Achievement tracking and rewards
+- **Games/**: Mini-games
+- **Shop/**: In-game shop
+- **Vouchers/**: Voucher/redemption codes
+- **Help/**: Help and info commands
+- **Extras/**: Miscellaneous commands
 
 Each module follows the pattern:
 - `{Module}SlashCommands.cs` - Discord slash command definitions
@@ -258,7 +267,7 @@ public class UserController : ControllerBase
 
 ## Important Configuration Notes
 
-- **Gateway Intents**: Uses `GatewayIntents.All` - requires Discord application permissions
+- **Gateway Intents**: Uses `GatewayIntents.All ^ GatewayIntents.GuildPresences` (presences excluded) - requires privileged intents in the Discord developer portal
 - **Sharding**: Automatically handles multiple shards based on guild count
 - **Connection Strings**: All database connections configured via config.json
 - **JWT Configuration**: Requires secure JWT secret for API authentication
