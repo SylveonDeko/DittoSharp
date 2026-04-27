@@ -67,7 +67,7 @@ public partial class Move
                     break;
                 // 2-3 turn moves
                 case 28:
-                    attacker.LockedMove = new LockedMove(this, new Random().Next(2, 4));
+                    attacker.LockedMove = new LockedMove(this, Random.Shared.Next(2, 4));
                     break;
             }
 
@@ -75,7 +75,7 @@ public partial class Move
             {
                 // 2-5 turn moves
                 case 160:
-                    attacker.LockedMove = new LockedMove(this, new Random().Next(2, 6));
+                    attacker.LockedMove = new LockedMove(this, Random.Shared.Next(2, 6));
                     break;
                 // Semi-invulnerable
                 case 256:
@@ -146,7 +146,7 @@ public partial class Move
         // Turn 3 hit moves
         else if (Effect == 27)
         {
-            if (attacker.LockedMove.Turn != 2)
+            if (attacker!.LockedMove!.Turn != 2)
             {
                 msg += "It's storing energy!\n";
                 return msg;

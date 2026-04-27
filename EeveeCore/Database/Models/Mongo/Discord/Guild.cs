@@ -13,7 +13,7 @@ public class Guild
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the Discord guild identifier.
@@ -25,7 +25,7 @@ public class Guild
     ///     Gets or sets the command prefix used in this guild.
     /// </summary>
     [BsonElement("prefix")]
-    public string Prefix { get; set; }
+    public string? Prefix { get; set; }
 
     /// <summary>
     ///     Gets or sets the list of channel IDs where bot commands are disabled.
@@ -97,7 +97,7 @@ public class Guild
     ///     Gets or sets the locale/language setting for this guild.
     /// </summary>
     [BsonElement("locale")]
-    public string Locale { get; set; }
+    public string? Locale { get; set; }
 
     /// <summary>
     ///     Gets or sets a value indicating whether the guild has completed initial setup.

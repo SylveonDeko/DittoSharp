@@ -22,7 +22,7 @@ public partial class DuelPokemon
     /// <param name="statStage">The stat stage modifier (-6 to +6).</param>
     /// <param name="crop">Optional parameter to crop stat stages ("bottom" or "top").</param>
     /// <returns>The modified stat value.</returns>
-    public static double CalculateStat(double stat, int statStage, string crop = null)
+    public static double CalculateStat(double stat, int statStage, string? crop = null)
     {
         switch (crop)
         {
@@ -162,8 +162,8 @@ public partial class DuelPokemon
     /// <param name="attacker">The attacking Pokemon for ability calculations.</param>
     /// <param name="move">The move being used for ability calculations.</param>
     /// <returns>The final defense value including all modifiers.</returns>
-    public int GetDefense(Battle battle, bool critical = false, bool ignoreStages = false, DuelPokemon attacker = null,
-        Move.Move move = null)
+    public int GetDefense(Battle battle, bool critical = false, bool ignoreStages = false, DuelPokemon? attacker = null,
+        Move.Move? move = null)
     {
         double defense;
         if (battle.WonderRoom.Active())
@@ -256,8 +256,8 @@ public partial class DuelPokemon
     /// <param name="attacker">The attacking Pokemon for ability calculations.</param>
     /// <param name="move">The move being used for ability calculations.</param>
     /// <returns>The final special defense value including all modifiers.</returns>
-    public int GetSpDef(Battle battle, bool critical = false, bool ignoreStages = false, DuelPokemon attacker = null,
-        Move.Move move = null)
+    public int GetSpDef(Battle battle, bool critical = false, bool ignoreStages = false, DuelPokemon? attacker = null,
+        Move.Move? move = null)
     {
         double spdef;
         if (battle.WonderRoom.Active())

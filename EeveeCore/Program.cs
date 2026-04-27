@@ -2,11 +2,12 @@
 using Discord.Commands;
 using Discord.Interactions;
 using EeveeCore.AuthHandlers;
+using EeveeCore.Common.Mongo;
 using EeveeCore.Common.ModuleBehaviors;
 using EeveeCore.Services.Impl;
 using Fergun.Interactive;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Serilog;
@@ -26,23 +27,21 @@ public class Program
     /// </summary>
     static Program()
     {
-        // Configure MongoDB to ignore unknown elements globally for all classes
-        // This prevents deserialization errors when MongoDB documents contain fields
-        // that don't exist in the C# models (common during schema evolution)
+        BsonSerializer.TryRegisterSerializer(typeof(int?), new NullableIntSerializer());
+
         BsonClassMap.RegisterClassMap<Database.Models.Mongo.Discord.Guild>(cm =>
         {
             cm.AutoMap();
             cm.SetIgnoreExtraElements(true);
         });
-        
-        // Set global convention to ignore extra elements for all MongoDB models
+
         var conventionPack = new MongoDB.Bson.Serialization.Conventions.ConventionPack
         {
             new MongoDB.Bson.Serialization.Conventions.IgnoreExtraElementsConvention(true)
         };
         MongoDB.Bson.Serialization.Conventions.ConventionRegistry.Register(
-            "IgnoreExtraElements", 
-            conventionPack, 
+            "IgnoreExtraElements",
+            conventionPack,
             t => t.Namespace?.StartsWith("EeveeCore.Database.Models.Mongo") == true);
     }
     /// <summary>
@@ -145,34 +144,14 @@ public class Program
                 });
 
                 // Add security requirements for both schemes
-                x.AddSecurityRequirement(new OpenApiSecurityRequirement
+                x.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
                 {
-                    {
-                        new OpenApiSecurityScheme
-                        {
-                            Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = "ApiKeyHeader"
-                            }
-                        },
-                        []
-                    }
+                    { new OpenApiSecuritySchemeReference("ApiKeyHeader", doc, null), new List<string>() }
                 });
 
-                x.AddSecurityRequirement(new OpenApiSecurityRequirement
+                x.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
                 {
-                    {
-                        new OpenApiSecurityScheme
-                        {
-                            Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = "Bearer"
-                            }
-                        },
-                        []
-                    }
+                    { new OpenApiSecuritySchemeReference("Bearer", doc, null), new List<string>() }
                 });
             });
 
@@ -241,7 +220,7 @@ public class Program
         var client = new DiscordShardedClient(new DiscordSocketConfig
         {
             MessageCacheSize = 15,
-            LogLevel = LogSeverity.Debug,
+            LogLevel = LogSeverity.Verbose,
             ConnectionTimeout = int.MaxValue,
             AlwaysDownloadUsers = true,
             GatewayIntents = GatewayIntents.All ^ GatewayIntents.GuildPresences,

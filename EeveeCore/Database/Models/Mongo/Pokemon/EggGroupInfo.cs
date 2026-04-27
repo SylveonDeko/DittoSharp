@@ -13,7 +13,7 @@ public class EggGroupInfo
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier of the egg group.
@@ -25,5 +25,5 @@ public class EggGroupInfo
     ///     Gets or sets the string identifier or name of the egg group.
     /// </summary>
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string Identifier { get; set; } = null!;
 }

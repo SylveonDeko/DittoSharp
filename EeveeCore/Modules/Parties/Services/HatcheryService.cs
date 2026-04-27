@@ -35,7 +35,7 @@ public class HatcheryService(
     private readonly EventHandler _eventHandler = eventHandler;
     private readonly MissionService _missionService = missionService;
     private readonly PokemonService _pokemonService = pokemonService;
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
 
     /// <summary>
     ///     Cache for user message cooldowns to prevent spam
@@ -76,7 +76,7 @@ public class HatcheryService(
     {
         if (_pagedResults.TryGetValue(userId, out var result)) return Task.FromResult(result);
 
-        return Task.FromResult<(List<EmbedBuilder> Pages, int CurrentPage)>((null, 0));
+        return Task.FromResult<(List<EmbedBuilder> Pages, int CurrentPage)>((new List<EmbedBuilder>(), 0));
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public class HatcheryService(
         var slotIds = new[] { hatchery.Slot1, hatchery.Slot2, hatchery.Slot3, hatchery.Slot4, hatchery.Slot5, 
                              hatchery.Slot6, hatchery.Slot7, hatchery.Slot8, hatchery.Slot9, hatchery.Slot10 }
             .Where(id => id.HasValue)
-            .Select(id => id.Value)
+            .Select(id => id!.Value)
             .ToList();
 
         if (slotIds.Count == 0) return hatchedEggs;
@@ -385,7 +385,7 @@ public class HatcheryService(
     public async Task<EmbedBuilder> GetHatcheryViewEmbed(ulong userId, short group)
     {
         // Validate group number
-        if (group < 1 || group > 3) return null;
+        if (group < 1 || group > 3) return null!;
 
         // Get user's Patreon tier to determine available slots
         var patreonTier = await GetPatreonTier(userId);
@@ -398,7 +398,7 @@ public class HatcheryService(
 
         // Get egg data from the hatchery group
         var eggData = await GetHatcheryData(userId, group, patreonTier);
-        if (eggData.Item3.Count == 0) return null;
+        if (eggData.Item3.Count == 0) return null!;
 
         var (slots, maxSlots, slotData) = eggData;
 
@@ -810,8 +810,8 @@ public class HatcheryService(
                 .Where(h => h.UserId == userId)
                 .ToListAsync();
 
-            EggHatchery hatchery1 = null;
-            EggHatchery hatchery2 = null;
+            EggHatchery? hatchery1 = null;
+            EggHatchery? hatchery2 = null;
             var egg1Slot = 0;
             var egg2Slot = 0;
             short? egg1Group = 0;
@@ -1167,7 +1167,7 @@ public class HatcheryService(
                         .FirstOrDefaultAsync();
 
                     var pokemonIndex = ownership != null ? (int)(ownership.Position + 1) : -1; // Convert to 1-based if found
-                    slotData.Add((slotNumber, pokemon.Name, pokemonIndex, pokemon.Counter ?? 0));
+                    slotData.Add((slotNumber, pokemon.Name ?? "Unknown", pokemonIndex, pokemon.Counter ?? 0));
                 }
                 else
                 {

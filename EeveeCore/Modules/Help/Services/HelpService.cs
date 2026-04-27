@@ -1,302 +1,310 @@
+using System.Text;
 using Discord.Interactions;
 using EeveeCore.Common.Attributes.Interactions;
-using MoreLinq;
 
 namespace EeveeCore.Modules.Help.Services;
 
 /// <summary>
-///     A service for handling help commands.
+///     A service for handling help commands. Owns the curated module catalog used to render
+///     friendly category labels and descriptions in place of raw class names.
 /// </summary>
 public class HelpService : INService
 {
-    private readonly DiscordShardedClient client;
-    private readonly GuildSettingsService guildSettings;
-    private readonly InteractionService interactionService;
+    /// <summary>
+    ///     Curated catalog of user-facing categories. Keyed by the top-level module class name
+    ///     (Discord.Net's <c>Module.GetTopLevelModule().Name</c>).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, CategoryInfo> Catalog = new Dictionary<string, CategoryInfo>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["PokemonSlashCommands"] = new("Pokémon", "View, manage, and inspect your Pokémon collection."),
+        ["StartModule"] = new("Getting Started", "Pick your starter and learn the basics."),
+        ["SpawnSlashCommands"] = new("Spawn", "Configure where and how Pokémon spawn in your server."),
+        ["BreedingModule"] = new("Breeding", "Breed Pokémon to produce eggs and inherit traits."),
+        ["PokemonBattleModule"] = new("Duels", "Battle your Pokémon against other trainers or NPCs."),
+        ["ItemSlashCommands"] = new("Items", "Manage and use items from your bag."),
+        ["MarketSlashCommands"] = new("Market", "Browse and trade Pokémon on the global market."),
+        ["TradeSlashCommands"] = new("Trading", "Direct trades with other trainers."),
+        ["GiftSlashCommands"] = new("Gifting", "Send and receive gifts."),
+        ["TradeAdminSlashCommands"] = new("Trade Admin", "Trade fraud-detection tools (staff only)."),
+        ["PartyModule"] = new("Parties", "Build and manage your active Pokémon parties."),
+        ["HatcheryModule"] = new("Hatchery", "Manage your eggs and the hatchery."),
+        ["AchievementsSlashCommands"] = new("Achievements", "Track your in-game achievements."),
+        ["FishingSlashCommands"] = new("Fishing", "Fish for Pokémon and rare encounters."),
+        ["MissionsSlashCommands"] = new("Missions", "Complete daily, weekly, and event missions."),
+        ["GamesSlashCommands"] = new("Mini-Games", "Casual games for in-game currency."),
+        ["SimpleGamesSlashCommands"] = new("Mini-Games", "Casual games for in-game currency."),
+        ["ShopSlashCommands"] = new("Shop", "Buy items, boosters, and skins."),
+        ["VoucherSlashCommands"] = new("Vouchers", "Redeem voucher codes for rewards."),
+        ["ExtrasSlashCommands"] = new("Extras", "Miscellaneous utilities and tools."),
+        ["HelpSlashCommand"] = new("Help", "Bot help and command reference.")
+    };
 
+    private readonly DiscordShardedClient client;
+    private readonly InteractionService interactionService;
 
     /// <summary>
     ///     Initializes a new instance of <see cref="HelpService" />.
     /// </summary>
-    /// <param name="client">The discord client</param>
-    /// <param name="interactionService">The discord interaction service</param>
-    /// <param name="guildSettings">Service to get guild configs</param>
-    /// <param name="eventHandler">The event handler Sylveon made because the events in dnet were single threaded.</param>
-    public HelpService(
-        DiscordShardedClient client,
-        InteractionService interactionService,
-        GuildSettingsService guildSettings, EventHandler eventHandler)
+    /// <param name="client">The Discord client.</param>
+    /// <param name="interactionService">The Discord interaction service.</param>
+    public HelpService(DiscordShardedClient client, InteractionService interactionService)
     {
         this.client = client;
-        eventHandler.MessageReceived += HandlePing;
-        eventHandler.JoinedGuild += HandleJoin;
         this.interactionService = interactionService;
-        this.guildSettings = guildSettings;
     }
 
-
     /// <summary>
-    ///     Builds the select menus for the modules
+    ///     Returns the categories that should appear in the help menu, in display order.
+    ///     Multiple top-level modules with the same catalog label are merged into one entry.
     /// </summary>
-    /// <param name="guild">The guild the help menu was executed in, may be null if in dm</param>
-    /// <param name="user">The user that executed the help menu</param>
-    /// <param name="descriptions">Whether descriptions are on or off</param>
-    /// <returns>A <see cref="ComponentBuilder" /> instance with the bots modules in it</returns>
-    public ComponentBuilder GetHelpComponents(IGuild? guild, IUser user, bool descriptions = true)
+    public IReadOnlyList<CategoryEntry> GetCategories()
     {
-        var modules = interactionService.SlashCommands.Select(x => x.Module).Where(x => !x.IsSubModule).Distinct();
-        var compBuilder = new ComponentBuilder();
-        var menuCount = (modules.Count() - 1) / 25 + 1;
+        var byLabel = new Dictionary<string, CategoryEntry>(StringComparer.OrdinalIgnoreCase);
 
-        for (var j = 0; j < menuCount; j++)
+        foreach (var cmd in interactionService.SlashCommands)
         {
-            var selMenu = new SelectMenuBuilder().WithCustomId($"helpselect:{j}");
-            foreach (var i in modules.Skip(j * 25).Take(25))
-                selMenu.Options.Add(new SelectMenuOptionBuilder()
-                    .WithLabel(i.Name).WithDescription(GetModuleDescription(i.Name, guild))
-                    .WithValue(i.Name.ToLower()));
+            var className = cmd.Module.GetTopLevelModule().Name;
+            var info = Catalog.TryGetValue(className, out var meta) ? meta : new CategoryInfo(className, "");
 
-            compBuilder.WithSelectMenu(selMenu); // add the select menu to the component builder
+            if (!byLabel.TryGetValue(info.Label, out var entry))
+            {
+                entry = new CategoryEntry(info.Label, info.Label, info.Description, 0, new List<string>());
+                byLabel[info.Label] = entry;
+            }
+
+            if (!entry.ClassNames.Contains(className, StringComparer.OrdinalIgnoreCase))
+                entry.ClassNames.Add(className);
+            entry.CommandCount += 1;
         }
 
-        compBuilder.WithButton("Toggle Descriptions", $"toggle-descriptions:{descriptions},{user.Id}");
-        return compBuilder;
+        return byLabel.Values
+            .OrderBy(e => e.Label, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
-
     /// <summary>
-    ///     Builds the help embed for the help menu
+    ///     Builds the home help embed listing all categories with their descriptions.
     /// </summary>
-    /// <param name="description">Whether descriptions for each module are on or off</param>
-    /// <param name="guild">The guild where the help menu was executed</param>
-    /// <param name="channel">The channel where the help menu was executed</param>
-    /// <param name="user">The user who executed the help menu</param>
-    /// <returns></returns>
-    public async Task<EmbedBuilder> GetHelpEmbed(bool description, IGuild? guild, IMessageChannel channel, IUser user)
+    /// <param name="user">The user requesting help.</param>
+    public EmbedBuilder GetHelpEmbed(IUser user)
     {
-        var prefix = await guildSettings.GetPrefix(guild);
-        EmbedBuilder embed = new();
-        embed.WithAuthor(new EmbedAuthorBuilder().WithName("EeveeCore Help")
-            .WithIconUrl(client.CurrentUser.GetAvatarUrl()));
-        embed.WithOkColor();
+        var categories = GetCategories();
+        var lines = categories
+            .Select(c => string.IsNullOrEmpty(c.Description)
+                ? Format.Bold(c.Label)
+                : $"{Format.Bold(c.Label)}: {c.Description}");
 
-        var modules = interactionService.SlashCommands.Select(x => x.Module)
-            .Where(x => !x.IsSubModule).Distinct();
-        var count = 0;
-        if (description)
-            foreach (var mod in modules)
-                embed.AddField(mod.Name,
-                    $">>> {GetModuleDescription(mod.Name, guild)}", true);
-        else
-            foreach (var i in modules.Batch(modules.Count() / 2))
-            {
-                var categoryStrings = i.Select(x =>
-                    Format.Bold(x.Name)
-                );
+        var description =
+            "Pick a category from the menu below to see its commands.\n" +
+            "Use `/help search` to look up a specific command by name.\n\n" +
+            string.Join("\n", lines);
 
-                embed.AddField(
-                    count == 0 ? "Categories" : "_ _",
-                    string.Join("\n", categoryStrings),
-                    true
-                );
-                count++;
-            }
+        if (description.Length > 4000)
+            description = description[..3997] + "…";
+
+        var embed = new EmbedBuilder()
+            .WithAuthor(client.CurrentUser.Username, client.CurrentUser.GetAvatarUrl())
+            .WithTitle("Help")
+            .WithDescription(description)
+            .WithFooter($"Requested by {user.Username}", user.GetAvatarUrl())
+            .WithOkColor();
 
         return embed;
     }
 
-
-    private string? GetModuleDescription(string module, IGuild? guild)
+    /// <summary>
+    ///     Builds the category dropdown for the home help message.
+    /// </summary>
+    public ComponentBuilder GetHelpComponents()
     {
-        return module.ToLower() switch
+        var categories = GetCategories();
+        var components = new ComponentBuilder();
+
+        foreach (var batch in categories.Chunk(25).Select((b, i) => (Index: i, Items: b)))
         {
-            _ => null
-        };
-    }
+            var menu = new SelectMenuBuilder()
+                .WithCustomId($"helpselect:{batch.Index}")
+                .WithPlaceholder("Pick a category…");
 
-    private async Task HandlePing(SocketMessage msg)
-    {
-        if (msg.Content == $"<@{client.CurrentUser.Id}>" || msg.Content == $"<@!{client.CurrentUser.Id}>")
-            if (msg.Channel is ITextChannel chan)
+            foreach (var entry in batch.Items)
             {
-                var eb = new EmbedBuilder();
-                eb.WithOkColor();
-                eb.WithDescription(
-                    "Hi there!");
-                eb.WithThumbnailUrl("https://cdn.discordapp.com/emojis/914307922287276052.gif");
-                eb.WithFooter(new EmbedFooterBuilder().WithText(client.CurrentUser.Username)
-                    .WithIconUrl(client.CurrentUser.GetAvatarUrl()));
-                await chan.SendMessageAsync(embed: eb.Build()).ConfigureAwait(false);
+                var description = string.IsNullOrEmpty(entry.Description)
+                    ? $"{entry.CommandCount} command(s)"
+                    : Truncate(entry.Description, 100);
+                menu.AddOption(entry.Label, entry.Key, description);
             }
-    }
 
-    private async Task HandleJoin(IGuild guild)
-    {
-        var cb = new ComponentBuilder();
-        var e = await guild.GetDefaultChannelAsync();
-        var px = await guildSettings.GetPrefix(guild);
-        var eb = new EmbedBuilder
-        {
-            Description =
-                $"Hi, thanks for inviting EeveeCore! I hope you like the bot, and discover all its features! The default prefix is `{px}.` This can be changed with the prefix command."
-        };
-        eb.AddField("How to look for commands",
-            $"1) Use the {px}cmds command to see all the categories\n2) use {px}cmds with the category name to glance at what commands it has. ex: `{px}cmds mod`\n3) Use {px}h with a command name to view its help. ex: `{px}h purge`");
-        eb.AddField("Have any questions, or need my invite link?",
-            "Support Server: https://discord.gg/mewdeko \nInvite Link: https://mewdeko.tech/invite");
-        eb.AddField("Youtube Channel", "https://youtube.com/channel/UCKJEaaZMJQq6lH33L3b_sTg");
-        eb.WithThumbnailUrl(
-            "https://cdn.discordapp.com/emojis/968564817784877066.gif");
-        eb.WithOkColor();
-        await e.SendMessageAsync(embed: eb.Build())
-            .ConfigureAwait(false);
+            components.WithSelectMenu(menu);
+        }
+
+        return components;
     }
 
     /// <summary>
-    ///     Gets the help for a command
+    ///     Builds an embed listing all commands within a category.
     /// </summary>
-    /// <param name="com">The command in question</param>
-    /// <param name="guild">The guild where this was executed</param>
-    /// <param name="user">The user who executed the command</param>
-    /// <returns>A tuple containing a <see cref="ComponentBuilder" /> and <see cref="EmbedBuilder" /></returns>
-    public async Task<EmbedBuilder> GetCommandHelp(CommandInfo<SlashCommandParameterInfo> com, IGuild? guild,
-        IGuildUser user)
+    /// <param name="categoryKey">The top-level module class name to list.</param>
+    /// <param name="user">The user requesting help.</param>
+    /// <param name="permittedNames">
+    ///     Optional set of slash-command names the user is permitted to run.
+    ///     When supplied, commands not in this set are marked unavailable.
+    /// </param>
+    public EmbedBuilder GetCategoryEmbed(string categoryKey, IUser user, ISet<string>? permittedNames = null)
     {
-        var prefix = await guildSettings.GetPrefix(guild);
-        var potentialCommand = interactionService.SlashCommands.FirstOrDefault(x =>
-            string.Equals(x.Name, com.Name, StringComparison.CurrentCultureIgnoreCase));
-        var em = new EmbedBuilder().AddField(fb =>
-            fb.WithName(potentialCommand.Name).WithValue(potentialCommand.Description).WithIsInline(true));
+        var entry = GetCategories().FirstOrDefault(c =>
+            string.Equals(c.Key, categoryKey, StringComparison.OrdinalIgnoreCase));
 
-        var reqs = GetCommandRequirements(com);
-        var botReqs = GetCommandBotRequirements(com);
+        var info = entry is not null
+            ? new CategoryInfo(entry.Label, entry.Description)
+            : Catalog.TryGetValue(categoryKey, out var meta)
+                ? meta
+                : new CategoryInfo(categoryKey, "");
+
+        var classNames = entry?.ClassNames ?? new List<string> { categoryKey };
+
+        var commands = interactionService.SlashCommands
+            .Where(c => classNames.Contains(c.Module.GetTopLevelModule().Name, StringComparer.OrdinalIgnoreCase))
+            .DistinctBy(c => $"{GetSlashPath(c)}")
+            .OrderBy(c => GetSlashPath(c), StringComparer.Ordinal)
+            .ToList();
+
+        var embed = new EmbedBuilder()
+            .WithAuthor(client.CurrentUser.Username, client.CurrentUser.GetAvatarUrl())
+            .WithTitle(info.Label)
+            .WithFooter($"Requested by {user.Username}", user.GetAvatarUrl())
+            .WithOkColor();
+
+        if (!string.IsNullOrEmpty(info.Description))
+            embed.WithDescription(info.Description);
+
+        if (commands.Count == 0)
+        {
+            embed.AddField("Commands", "*No commands available.*");
+            return embed;
+        }
+
+        var sb = new StringBuilder();
+        foreach (var cmd in commands)
+        {
+            var allowed = permittedNames is null || permittedNames.Contains(cmd.Name);
+            var marker = allowed ? "•" : "✗";
+            var path = GetSlashPath(cmd);
+            var desc = string.IsNullOrWhiteSpace(cmd.Description) ? "*(no description)*" : cmd.Description;
+
+            var line = $"{marker} `/{path}`: {desc}\n";
+            if (sb.Length + line.Length > 1024)
+            {
+                embed.AddField("Commands", sb.ToString().TrimEnd());
+                sb.Clear();
+            }
+
+            sb.Append(line);
+        }
+
+        if (sb.Length > 0)
+            embed.AddField(embed.Fields.Count == 0 ? "Commands" : "​", sb.ToString().TrimEnd());
+
+        if (permittedNames is not null)
+            embed.AddField("Legend", "• you can run this  ·  ✗ you cannot run this", false);
+
+        return embed;
+    }
+
+    /// <summary>
+    ///     Builds an embed describing a single command.
+    /// </summary>
+    public EmbedBuilder GetCommandHelp(SlashCommandInfo cmd)
+    {
+        var path = GetSlashPath(cmd);
+        var topLevel = cmd.Module.GetTopLevelModule().Name;
+        var category = Catalog.TryGetValue(topLevel, out var meta) ? meta.Label : topLevel;
+
+        var embed = new EmbedBuilder()
+            .WithTitle($"/{path}")
+            .WithDescription(string.IsNullOrWhiteSpace(cmd.Description) ? "*(no description)*" : cmd.Description)
+            .AddField("Category", category, true)
+            .WithOkColor();
+
+        if (cmd.Parameters.Count > 0)
+        {
+            var paramLines = cmd.Parameters.Select(p =>
+            {
+                var name = p.Name;
+                var pdesc = string.IsNullOrWhiteSpace(p.Description) ? "" : $": {p.Description}";
+                var optional = p.IsRequired ? "" : " *(optional)*";
+                return $"`{name}`{optional}{pdesc}";
+            });
+            embed.AddField("Parameters", string.Join("\n", paramLines));
+        }
+
+        var reqs = GetCommandRequirements(cmd);
         if (reqs.Length > 0)
-            em.AddField("User Permissions", string.Join("\n", reqs));
-        if (botReqs.Length > 0)
-            em.AddField("Bot Permissions", string.Join("\n", botReqs));
+            embed.AddField("Requires", string.Join("\n", reqs));
 
-        if (potentialCommand is not null)
-        {
-            var globalCommands = await client.Rest.GetGlobalApplicationCommands();
-            var guildCommands = await client.Rest.GetGuildApplicationCommands(guild.Id);
-            var globalCommand = globalCommands.FirstOrDefault(x => x.Name == potentialCommand.Module.SlashGroupName);
-            var guildCommand = guildCommands.FirstOrDefault(x => x.Name == potentialCommand.Module.SlashGroupName);
-            if (globalCommand is not null)
-                em.AddField("Slash Command",
-                    potentialCommand == null
-                        ? "`None`"
-                        : $"</{potentialCommand.Module.SlashGroupName} {potentialCommand.Name}:{globalCommand.Id}>");
-            else if (guildCommand is not null)
-                em.AddField("Slash Command",
-                    potentialCommand == null
-                        ? "`None`"
-                        : $"</{potentialCommand.Module.SlashGroupName} {potentialCommand.Name}:{guildCommand.Id}>");
-        }
-
-        em
-            .WithFooter(
-                $"Module: {com.Module.GetTopLevelModule().Name} || Submodule: {com.Module.Name.Replace("Commands", "")} || Method Name: {com.MethodName}")
-            .WithColor(EeveeCore.OkColor);
-
-        return em;
+        return embed;
     }
 
-
-    private static string[] GetCommandRequirements(CommandInfo<SlashCommandParameterInfo> cmd,
-        GuildPermission? overrides = null)
+    private static string GetSlashPath(SlashCommandInfo cmd)
     {
-        var toReturn = new List<string>();
-
-        if (cmd.Preconditions.Any(x => x is RequireAdminAttribute))
-            toReturn.Add("Bot Owner Only");
-
-        var userPerm =
-            (RequireUserPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca =>
-                ca is RequireUserPermissionAttribute);
-
-        var userPermString = string.Empty;
-        if (userPerm is not null)
+        var parts = new List<string>();
+        for (var m = cmd.Module; m is not null; m = m.Parent)
         {
-            if (userPerm.ChannelPermission is { } cPerm)
-                userPermString = GetPreconditionString(cPerm);
-            if (userPerm.GuildPermission is { } gPerm)
-                userPermString = GetPreconditionString(gPerm);
+            if (!string.IsNullOrEmpty(m.SlashGroupName))
+                parts.Insert(0, m.SlashGroupName);
         }
 
-        if (overrides is null)
-        {
-            if (!string.IsNullOrWhiteSpace(userPermString))
-                toReturn.Add(userPermString);
-        }
-        else
-        {
-            if (!string.IsNullOrWhiteSpace(userPermString))
-                toReturn.Add(Format.Strikethrough(userPermString));
-
-            toReturn.Add(GetPreconditionString(overrides.Value));
-        }
-
-        return toReturn.ToArray();
+        parts.Add(cmd.Name);
+        return string.Join(" ", parts);
     }
 
-    private static string[] GetCommandBotRequirements(CommandInfo<SlashCommandParameterInfo> cmd)
+    private static string Truncate(string s, int max)
     {
-        var toReturn = new List<string>();
+        if (s.Length <= max) return s;
+        return s[..(max - 1)] + "…";
+    }
 
-        if (cmd.Preconditions.Any(x => x is RequireAdminAttribute))
-            toReturn.Add("Bot Owner Only");
+    private static string[] GetCommandRequirements(SlashCommandInfo cmd)
+    {
+        var list = new List<string>();
+        if (cmd.Preconditions.Any(p => p is RequireAdminAttribute))
+            list.Add("Bot Owner");
 
-        var botPerm =
-            (RequireBotPermissionAttribute)cmd.Preconditions.FirstOrDefault(ca => ca is RequireBotPermissionAttribute)!;
-
-        var botPermString = string.Empty;
-        if (botPerm is not null)
+        if (cmd.Preconditions.FirstOrDefault(p => p is RequireUserPermissionAttribute) is RequireUserPermissionAttribute up)
         {
-            if (botPerm.ChannelPermission is { } cPerm)
-                botPermString = GetPreconditionString(cPerm);
-            if (botPerm.GuildPermission is { } gPerm)
-                botPermString = GetPreconditionString(gPerm);
+            if (up.GuildPermission is { } gp) list.Add($"User: {gp} (server)");
+            if (up.ChannelPermission is { } cp) list.Add($"User: {cp} (channel)");
         }
 
-        if (!string.IsNullOrWhiteSpace(botPermString))
-            toReturn.Add(botPermString);
-
-        return toReturn.ToArray();
-    }
-
-    private static string FormatParameterType(Type type)
-    {
-        // Handle arrays
-        if (type.IsArray)
+        if (cmd.Preconditions.FirstOrDefault(p => p is RequireBotPermissionAttribute) is RequireBotPermissionAttribute bp)
         {
-            var elementType = type.GetElementType();
-            var formattedElementType = FormatParameterType(elementType);
-            // Use triple underscores for arrays
-            var underscores = new string('_', type.GetArrayRank() * 3);
-            return $"{formattedElementType}{underscores}";
+            if (bp.GuildPermission is { } gp) list.Add($"Bot: {gp} (server)");
+            if (bp.ChannelPermission is { } cp) list.Add($"Bot: {cp} (channel)");
         }
 
-        // Handle generic types
-        if (type.IsGenericType)
-        {
-            var genericTypeDef = type.GetGenericTypeDefinition();
-            var genericTypeName = genericTypeDef.FullName.Split('`')[0].Replace('+', '.').Replace('.', '_');
-            var genericArgs = string.Join("_", type.GetGenericArguments().Select(FormatParameterType));
-            return $"{genericTypeName}_{genericArgs}";
-        }
-
-        // Handle nested types and replace '+' with '.'
-        var fullName = type.FullName.Replace('+', '.').Replace('.', '_');
-        return fullName;
+        return list.ToArray();
     }
+}
 
+/// <summary>Curated metadata for a help category.</summary>
+/// <param name="Label">User-facing display name.</param>
+/// <param name="Description">One-line description of the category.</param>
+public record CategoryInfo(string Label, string Description);
 
-    private static string GetPreconditionString(ChannelPermission perm)
-    {
-        return (perm + " Channel Permission").Replace("Guild", "Server", StringComparison.InvariantCulture);
-    }
-
-    private static string GetPreconditionString(GuildPermission perm)
-    {
-        return (perm + " Server Permission").Replace("Guild", "Server", StringComparison.InvariantCulture);
-    }
+/// <summary>
+///     A category entry shown in the help menu. May aggregate multiple top-level modules under one label.
+/// </summary>
+/// <param name="Key">Stable lookup value (the label) used as the dropdown option value.</param>
+/// <param name="Label">User-facing display name.</param>
+/// <param name="Description">One-line description.</param>
+/// <param name="CommandCount">Number of distinct slash commands across all aggregated modules.</param>
+/// <param name="ClassNames">Top-level module class names that contribute commands to this category.</param>
+public record CategoryEntry(
+    string Key,
+    string Label,
+    string Description,
+    int CommandCount,
+    List<string> ClassNames)
+{
+    /// <summary>Mutable command count, incremented as commands are discovered.</summary>
+    public int CommandCount { get; set; } = CommandCount;
 }

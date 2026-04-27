@@ -202,14 +202,14 @@ public class CommandHandler : INService
         if (success)
         {
             await LogCommandExecution(usrMsg, channel as ITextChannel, command, true, execTime);
-            await CommandExecuted(usrMsg, command);
+            await CommandExecuted(usrMsg, command!);
             return;
         }
 
         if (!string.IsNullOrEmpty(error))
         {
             await LogCommandExecution(usrMsg, channel as ITextChannel, command, false, execTime, error);
-            if (guild != null) await CommandErrored(command, channel as ITextChannel, error, usrMsg.Author);
+            if (guild != null) await CommandErrored(command!, (channel as ITextChannel)!, error, usrMsg.Author);
         }
     }
 
@@ -360,11 +360,13 @@ public class CommandHandler : INService
     {
         if (!result.IsSuccess)
         {
-            await context.Interaction.RespondAsync(
-                $"Command failed: {result.ErrorReason}",
-                ephemeral: true);
+            if (!context.Interaction.HasResponded)
+                await context.Interaction.RespondAsync(
+                    $"Command failed: {result.ErrorReason}",
+                    ephemeral: true);
 
-            Log.Warning(
+            var ex = (result as Discord.Interactions.ExecuteResult?)?.Exception;
+            Log.Warning(ex,
                 "Slash Command Error\n" +
                 $"User: {context.User} [{context.User.Id}]\n" +
                 $"Guild: {context.Guild?.Name ?? "PRIVATE"} [{context.Guild?.Id}]\n" +

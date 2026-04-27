@@ -13,7 +13,7 @@ public class Ability
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier of the ability.
@@ -25,7 +25,7 @@ public class Ability
     ///     Gets or sets the string identifier or name of the ability.
     /// </summary>
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string Identifier { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the generation in which this ability was introduced.

@@ -42,19 +42,19 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
 
         // Add slot buttons - Row 1
         components.WithButton(customId: $"party:slot:1:{partyName}", emote: new Emoji("<:1:1013539737014907030>"),
-            label: pokemonNames[0], style: ButtonStyle.Secondary, row: 0);
+            label: pokemonNames![0]!, style: ButtonStyle.Secondary, row: 0);
         components.WithButton(customId: $"party:slot:2:{partyName}", emote: new Emoji("<:2:1013539739263041618>"),
-            label: pokemonNames[1], style: ButtonStyle.Secondary, row: 0);
+            label: pokemonNames![1]!, style: ButtonStyle.Secondary, row: 0);
         components.WithButton(customId: $"party:slot:3:{partyName}", emote: new Emoji("<:3:1013539741502812310>"),
-            label: pokemonNames[2], style: ButtonStyle.Secondary, row: 0);
+            label: pokemonNames![2]!, style: ButtonStyle.Secondary, row: 0);
 
         // Add slot buttons - Row 2
         components.WithButton(customId: $"party:slot:4:{partyName}", emote: new Emoji("<:4:1013539744027783208>"),
-            label: pokemonNames[3], style: ButtonStyle.Secondary, row: 1);
+            label: pokemonNames![3]!, style: ButtonStyle.Secondary, row: 1);
         components.WithButton(customId: $"party:slot:5:{partyName}", emote: new Emoji("<:5:1013539745692909740>"),
-            label: pokemonNames[4], style: ButtonStyle.Secondary, row: 1);
+            label: pokemonNames![4]!, style: ButtonStyle.Secondary, row: 1);
         components.WithButton(customId: $"party:slot:6:{partyName}", emote: new Emoji("<:6:1013539747517444208>"),
-            label: pokemonNames[5], style: ButtonStyle.Secondary, row: 1);
+            label: pokemonNames![5]!, style: ButtonStyle.Secondary, row: 1);
 
         // Add close button - Row 3
         components.WithButton(customId: "party:close", label: "Close Menu",
@@ -70,7 +70,7 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
     /// <param name="partyName">The name of the party to view, or null for the active party (autocompleted).</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("view", "View your loaded party or another party you have saved")]
-    public async Task PartyView([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName = null)
+    public async Task PartyView([Autocomplete(typeof(PartyNameAutocompleteHandler))] string? partyName = null)
     {
         var embed = await Service.GetPartyViewEmbed(ctx.User.Id, partyName);
 
@@ -242,8 +242,7 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
 ///     Processes button clicks, modals, and other interactive elements
 ///     related to party management.
 /// </summary>
-/// <param name="Service">The service that handles party data operations.</param>
-public class PartyInteractionModule(PartyService Service) : EeveeCoreSlashModuleBase<PartyService>
+public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
 {
     /// <summary>
     ///     Handles interactions with party slot buttons.
@@ -308,19 +307,19 @@ public class PartyInteractionModule(PartyService Service) : EeveeCoreSlashModule
 
             // Add slot buttons - Row 1
             components.WithButton(customId: $"party:slot:1:{partyName}", emote: new Emoji("<:1:1013539737014907030>"),
-                label: pokemonNames[0], style: ButtonStyle.Secondary, row: 0);
+                label: pokemonNames![0]!, style: ButtonStyle.Secondary, row: 0);
             components.WithButton(customId: $"party:slot:2:{partyName}", emote: new Emoji("<:2:1013539739263041618>"),
-                label: pokemonNames[1], style: ButtonStyle.Secondary, row: 0);
+                label: pokemonNames![1]!, style: ButtonStyle.Secondary, row: 0);
             components.WithButton(customId: $"party:slot:3:{partyName}", emote: new Emoji("<:3:1013539741502812310>"),
-                label: pokemonNames[2], style: ButtonStyle.Secondary, row: 0);
+                label: pokemonNames![2]!, style: ButtonStyle.Secondary, row: 0);
 
             // Add slot buttons - Row 2
             components.WithButton(customId: $"party:slot:4:{partyName}", emote: new Emoji("<:4:1013539744027783208>"),
-                label: pokemonNames[3], style: ButtonStyle.Secondary, row: 1);
+                label: pokemonNames![3]!, style: ButtonStyle.Secondary, row: 1);
             components.WithButton(customId: $"party:slot:5:{partyName}", emote: new Emoji("<:5:1013539745692909740>"),
-                label: pokemonNames[4], style: ButtonStyle.Secondary, row: 1);
+                label: pokemonNames![4]!, style: ButtonStyle.Secondary, row: 1);
             components.WithButton(customId: $"party:slot:6:{partyName}", emote: new Emoji("<:6:1013539747517444208>"),
-                label: pokemonNames[5], style: ButtonStyle.Secondary, row: 1);
+                label: pokemonNames![5]!, style: ButtonStyle.Secondary, row: 1);
 
             // Add close button - Row 3
             components.WithButton(customId: "party:close", label: "Close Menu",
@@ -371,7 +370,7 @@ public class AddPokemonModal : IModal
     /// </summary>
     [InputLabel("Pokemon Number from your pokemon list")]
     [ModalTextInput("pokemon", maxLength: 15)]
-    public string Pokemon { get; set; }
+    public string Pokemon { get; set; } = null!;
 
     /// <summary>
     ///     The title displayed at the top of the modal.

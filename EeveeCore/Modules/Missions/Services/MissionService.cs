@@ -866,7 +866,8 @@ public class MissionService(
 
             // Send level up notification
             var channel = client.GetChannel(MissionConstants.LevelUpChannelId) as ITextChannel;
-            await channel?.SendMessageAsync($"<@{userId}> is now level {newLevel}!");
+            if (channel != null)
+                await channel.SendMessageAsync($"<@{userId}> is now level {newLevel}!");
 
             if (XpGained != null)
                 await XpGained(userId, xpGained);

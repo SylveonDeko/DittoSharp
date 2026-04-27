@@ -167,7 +167,7 @@ public class VoucherInteractionModule(VoucherService voucherService)
                 .Build();
 
             // Create status management view
-            var statusView = new StatusManagementView(ctx.User.Id);
+            var statusView = new StatusManagementView();
 
             // Create the forum thread
             var thread = await forumChannel.CreatePostAsync(
@@ -406,8 +406,6 @@ public class VoucherInteractionModule(VoucherService voucherService)
             true);
 
         return embed.Build();
-
-        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -435,8 +433,7 @@ public class VoucherInteractionModule(VoucherService voucherService)
 /// <summary>
 ///     View for managing voucher request statuses by administrators.
 /// </summary>
-/// <param name="userId">The user ID who submitted the request.</param>
-public class StatusManagementView(ulong userId)
+public class StatusManagementView
 {
     /// <summary>
     ///     Builds the message components for status management.

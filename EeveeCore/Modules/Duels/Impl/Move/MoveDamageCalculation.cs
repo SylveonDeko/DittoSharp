@@ -39,9 +39,9 @@ public partial class Move
                 // Turn 3 hit moves
                 case 27:
                 {
-                    if (attacker.LockedMove.Turn == 2)
+                    if (attacker!.LockedMove!.Turn == 2)
                     {
-                        msg += defender.Damage(attacker.Bide.Value * 2, battle, this, currentType,
+                        msg += defender.Damage((attacker.Bide ?? 0) * 2, battle, this, currentType,
                             attacker);
                         attacker.Bide = null;
                         i = 1;
@@ -51,17 +51,17 @@ public partial class Move
                 }
                 // Counter attack moves
                 case 228:
-                    msg += defender.Damage((int)(1.5 * attacker.LastMoveDamage.Item1), battle, this,
+                    msg += defender.Damage((int)(1.5 * attacker!.LastMoveDamage!.Item1), battle, this,
                         currentType, attacker);
                     i = 1;
                     break;
                 case 145:
-                    msg += defender.Damage(2 * attacker.LastMoveDamage.Item1, battle, this, currentType,
+                    msg += defender.Damage(2 * attacker!.LastMoveDamage!.Item1, battle, this, currentType,
                         attacker);
                     i = 1;
                     break;
                 case 90:
-                    msg += defender.Damage(2 * attacker.LastMoveDamage.Item1, battle, this, currentType,
+                    msg += defender.Damage(2 * attacker!.LastMoveDamage!.Item1, battle, this, currentType,
                         attacker);
                     i = 1;
                     break;
@@ -81,7 +81,7 @@ public partial class Move
                 case 89:
                 {
                     // 0.5-1.5, increments of .1
-                    var scale = new Random().Next(0, 11) / 10.0 + 0.5;
+                    var scale = Random.Shared.Next(0, 11) / 10.0 + 0.5;
                     msg += defender.Damage((int)(attacker.Level * scale), battle, this, currentType,
                         attacker);
                     i = 1;
@@ -128,7 +128,7 @@ public partial class Move
                         {
                             if (!string.IsNullOrEmpty(poke.NonVolatileEffect.Current)) continue;
 
-                            var moveData = new Dictionary<string, object>
+                            var moveData = new Dictionary<string, object?>
                             {
                                 ["id"] = 251,
                                 ["identifier"] = "beat-up",

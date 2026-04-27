@@ -13,7 +13,7 @@ public class User
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the Discord user identifier.
@@ -25,5 +25,5 @@ public class User
     ///     Gets or sets a dictionary of user progression values, mapping achievement names to their progress values.
     /// </summary>
     [BsonElement("progress")]
-    public Dictionary<string, int> Progress { get; set; }
+    public Dictionary<string, int> Progress { get; set; } = null!;
 }

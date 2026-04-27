@@ -39,6 +39,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     private readonly LinqToDbConnectionProvider _db;
     private readonly IMongoService _mongoService;
     private readonly RedisCache _redis;
+    private readonly IGameDataCache _gameData;
 
     /// <summary>
     ///     Initializes a new instance of the PokemonBattleModule class with required dependencies.
@@ -47,16 +48,19 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     /// <param name="db">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown management.</param>
+    /// <param name="gameData">The in-memory static game data cache.</param>
     public PokemonBattleModule(
         IMongoService mongoService,
         LinqToDbConnectionProvider db,
         DiscordShardedClient client,
-        RedisCache redis)
+        RedisCache redis,
+        IGameDataCache gameData)
     {
         _mongoService = mongoService;
         _db = db;
         _client = client;
         _redis = redis;
+        _gameData = gameData;
     }
 
     /// <summary>
@@ -283,7 +287,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             }
 
             // Create loading embed with local GIF attachment
-            var selectedGifPath = PregameGifs[new Random().Next(PregameGifs.Length)];
+            var selectedGifPath = PregameGifs[Random.Shared.Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle loading...")
                 .WithDescription("Preparing your battle against an NPC trainer!")
@@ -330,18 +334,18 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             }
 
             // Randomly select one NPC Pokemon
-            var npcPokemon = npcPokemonList[new Random().Next(npcPokemonList.Count)];
+            var npcPokemon = npcPokemonList[Random.Shared.Next(npcPokemonList.Count)];
 
             // Create DuelPokemon objects
-            var playerPokemon = await DuelPokemon.Create(ctx, selectedPokemon, _mongoService);
-            var npcPokemonDuel = await DuelPokemon.Create(ctx, npcPokemon, _mongoService);
+            var playerPokemon = await DuelPokemon.Create(ctx, selectedPokemon, _mongoService, _gameData);
+            var npcPokemonDuel = await DuelPokemon.Create(ctx, npcPokemon, _mongoService, _gameData);
 
             // Create trainers
             var playerTrainer = new MemberTrainer(ctx.User, [playerPokemon]);
             var npcTrainer = new NPCTrainer([npcPokemonDuel]);
 
             // Create battle
-            var battle = new Battle(ctx, ctx.Channel, playerTrainer, npcTrainer, _mongoService);
+            var battle = new Battle(ctx, ctx.Channel, playerTrainer, npcTrainer, _mongoService, _gameData);
 
             // Register battle in Redis with 0 as opponent ID for NPC battles
             var battleId = ctx.Interaction.Id.ToString();
@@ -442,7 +446,7 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 battleMulti = 1;
             }
 
-            var creds = new Random().Next(100, 600);
+            var creds = Random.Shared.Next(100, 600);
             creds = (int)(creds * Math.Min(battleMulti, 50m));
 
             var desc = $"You received {creds} credits for winning the duel!\n\n";
@@ -542,9 +546,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             var duelReset = await db.StringGetAsync($"duelcooldowns:{userId}");
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            if (duelReset.HasValue && double.Parse(duelReset) > currentTime)
+            if (duelReset.HasValue && double.Parse(duelReset!) > currentTime)
             {
-                var resetInSeconds = (int)(double.Parse(duelReset) - currentTime);
+                var resetInSeconds = (int)(double.Parse(duelReset!) - currentTime);
                 await RespondAsync($"Command on cooldown for {resetInSeconds}s", ephemeral: true);
                 return false;
             }
@@ -633,9 +637,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             var duelReset = await db.StringGetAsync($"duelcooldowns:{userId}");
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            if (duelReset.HasValue && double.Parse(duelReset) > currentTime)
+            if (duelReset.HasValue && double.Parse(duelReset!) > currentTime)
             {
-                var resetInSeconds = (int)(double.Parse(duelReset) - currentTime);
+                var resetInSeconds = (int)(double.Parse(duelReset!) - currentTime);
                 await FollowupAsync($"Command on cooldown for {resetInSeconds}s");
                 return false;
             }

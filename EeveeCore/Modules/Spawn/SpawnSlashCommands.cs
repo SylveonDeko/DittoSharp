@@ -232,7 +232,7 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
     {
         var currentMessage = ctx.Interaction as IComponentInteraction;
 
-        var message = await ctx.Channel.GetMessageAsync(currentMessage.Message.Id);
+        var message = await ctx.Channel.GetMessageAsync(currentMessage!.Message.Id);
         if (message == null || message.Embeds.FirstOrDefault()?.Title == "Caught!")
         {
             await ctx.Interaction.SendEphemeralErrorAsync("This Pokemon has already been caught!");

@@ -30,7 +30,7 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         await DeferAsync(ephemeral: true);
 
         // Parse Pokemon positions (support multiple IDs separated by spaces or commas)
-        var positionsInput = modal.PokemonPosition.Trim().Replace(" ", ",");
+        var positionsInput = modal!.PokemonPosition!.Trim().Replace(" ", ",");
         var positions = new List<int>();
 
         foreach (var posStr in positionsInput.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -118,7 +118,7 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         await DeferAsync(ephemeral: true);
 
         // Parse Pokemon positions
-        var positionsInput = modal.PokemonPosition.Replace(" ", ",");
+        var positionsInput = modal!.PokemonPosition!.Replace(" ", ",");
         var positions = new List<ulong>();
 
         foreach (var posStr in positionsInput.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -261,14 +261,14 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         await DeferAsync(ephemeral: true);
 
         // Parse token type
-        if (!TokenTypeExtensions.TryParse(modal.TokenType, out var tokenType))
+        if (!TokenTypeExtensions.TryParse(modal.TokenType!, out var tokenType))
         {
             await FollowupAsync($"Invalid token type: {modal.TokenType}. Please enter a valid type like Fire, Water, etc.", ephemeral: true);
             return;
         }
 
         // Parse token count
-        if (!int.TryParse(modal.TokenCount.Trim(), out var tokenCount) || tokenCount <= 0)
+        if (!int.TryParse(modal!.TokenCount!.Trim(), out var tokenCount) || tokenCount <= 0)
         {
             await FollowupAsync("Invalid token count, please enter a positive number.", ephemeral: true);
             return;
@@ -311,14 +311,14 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         await DeferAsync(ephemeral: true);
 
         // Parse token type
-        if (!TokenTypeExtensions.TryParse(modal.TokenType, out var tokenType))
+        if (!TokenTypeExtensions.TryParse(modal.TokenType!, out var tokenType))
         {
             await FollowupAsync($"Invalid token type: {modal.TokenType}. Please enter a valid type like Fire, Water, etc.", ephemeral: true);
             return;
         }
 
         // Parse token count
-        if (!int.TryParse(modal.TokenCount.Trim(), out var tokenCount) || tokenCount <= 0)
+        if (!int.TryParse(modal!.TokenCount!.Trim(), out var tokenCount) || tokenCount <= 0)
         {
             await FollowupAsync("Invalid token count, please enter a positive number.", ephemeral: true);
             return;

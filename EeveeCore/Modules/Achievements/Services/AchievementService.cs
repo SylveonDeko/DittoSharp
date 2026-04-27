@@ -12,9 +12,7 @@ namespace EeveeCore.Modules.Achievements.Services;
 ///     Service for tracking achievements, milestones, and cross-system rewards.
 /// </summary>
 public class AchievementService(
-    IMongoService mongoService,
-    LinqToDbConnectionProvider dbProvider,
-    EventHandler eventHandler) : INService, IReadyExecutor
+    LinqToDbConnectionProvider dbProvider) : INService, IReadyExecutor
 {
 
     /// <summary>

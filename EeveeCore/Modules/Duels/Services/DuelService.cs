@@ -26,6 +26,7 @@ public class DuelService : INService
     private readonly LinqToDbConnectionProvider _db;
     private readonly IMongoService _mongoService;
     private readonly RedisCache _redis;
+    private readonly IGameDataCache _gameData;
     private DateTime? _duelResetTime;
 
     /// <summary>
@@ -36,16 +37,19 @@ public class DuelService : INService
     /// <param name="db">The database context provider for Entity Framework operations.</param>
     /// <param name="client">The Discord client for user and channel interactions.</param>
     /// <param name="redis">The Redis cache for cooldown and battle state persistence.</param>
+    /// <param name="gameData">The in-memory static game data cache.</param>
     public DuelService(
         IMongoService mongoService,
         LinqToDbConnectionProvider db,
         DiscordShardedClient client,
-        RedisCache redis)
+        RedisCache redis,
+        IGameDataCache gameData)
     {
         _mongoService = mongoService;
         _db = db;
         _client = client;
         _redis = redis;
+        _gameData = gameData;
 
         // Initialize Redis cooldown storage
         _ = InitializeAsync();
@@ -138,7 +142,7 @@ public class DuelService : INService
             foreach (var pokemon in partyPokemon)
             {
                 // Use the factory method to create a DuelPokemon object
-                var duelPoke = await DuelPokemon.Create(ctx, pokemon, _mongoService);
+                var duelPoke = await DuelPokemon.Create(ctx, pokemon, _mongoService, _gameData);
                 if (duelPoke != null) duelPokemon.Add(duelPoke);
             }
 
@@ -242,7 +246,7 @@ public class DuelService : INService
                 return battle;
         }
 
-        return null;
+        return null!;
     }
 
     /// <summary>
@@ -283,7 +287,7 @@ public class DuelService : INService
     /// <param name="battle">The Battle object to end.</param>
     /// <param name="battleId">The optional battle ID for Redis cleanup. If null, only local cleanup is performed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task EndBattle(Battle battle, string battleId = null)
+    public async Task EndBattle(Battle battle, string? battleId = null)
     {
         try
         {

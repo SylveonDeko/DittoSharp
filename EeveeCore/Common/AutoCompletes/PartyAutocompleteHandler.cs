@@ -40,7 +40,7 @@ public class PartyNameAutocompleteHandler(LinqToDbConnectionProvider _context) :
             );
 
         var filteredParties = userParties
-            .Where(p => p.Contains(currentValue, StringComparison.OrdinalIgnoreCase))
+            .Where(p => p!.Contains(currentValue, StringComparison.OrdinalIgnoreCase))
             .Take(25)
             .Select(p => new AutocompleteResult(p, p));
 

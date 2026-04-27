@@ -14,7 +14,7 @@ public class StatType
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier for this stat type.
@@ -33,7 +33,7 @@ public class StatType
     ///     Gets or sets the string identifier or name of the stat type.
     /// </summary>
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string Identifier { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets a value indicating whether this stat is only used in battles.
@@ -42,8 +42,9 @@ public class StatType
     public int IsBattleOnly { get; set; }
 
     /// <summary>
-    ///     Gets or sets the index of this stat type in game data.
+    ///     Gets or sets the index of this stat type in game data. Null for non-battlefield stats (accuracy, evasion).
     /// </summary>
     [BsonElement("game_index")]
-    public int GameIndex { get; set; }
+    [BsonSerializer(typeof(NullableIntSerializer))]
+    public int? GameIndex { get; set; }
 }

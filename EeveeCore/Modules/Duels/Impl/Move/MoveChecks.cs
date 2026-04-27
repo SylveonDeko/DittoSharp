@@ -166,7 +166,7 @@ public partial class Move
         if (Effect == 39)
         {
             var attackerLevel = 30 + (attacker.Level - defender.Level);
-            return new Random().NextDouble() * 100 <= attackerLevel;
+            return Random.Shared.NextDouble() * 100 <= attackerLevel;
         }
 
         // This does NOT allow OHKO moves to bypass accuracy checks
@@ -235,7 +235,7 @@ public partial class Move
 
         if (micleBerryUsed) accuracy *= 1.2;
 
-        return new Random().NextDouble() * 100 <= accuracy;
+        return Random.Shared.NextDouble() * 100 <= accuracy;
     }
 
     /// <summary>
@@ -382,9 +382,9 @@ public partial class Move
 
         if (new[] { 90, 145, 228, 408 }.Contains(Effect) && attacker.LastMoveDamage == null) return false;
 
-        if (Effect == 145 && attacker.LastMoveDamage.Item2 != DamageClass.SPECIAL) return false;
+        if (Effect == 145 && attacker!.LastMoveDamage!.Item2 != DamageClass.SPECIAL) return false;
 
-        if (new[] { 90, 408 }.Contains(Effect) && attacker.LastMoveDamage.Item2 != DamageClass.PHYSICAL) return false;
+        if (new[] { 90, 408 }.Contains(Effect) && attacker!.LastMoveDamage!.Item2 != DamageClass.PHYSICAL) return false;
 
         if (new[] { 10, 243 }.Contains(Effect) &&
             (defender.LastMove == null || !defender.LastMove.SelectableByMirrorMove()))
@@ -535,7 +535,7 @@ public partial class Move
         if (Effect == 341 && defender.Owner.StickyWeb) return false;
 
         if (sourceArray1.Contains(Effect) &&
-            new Random().Next(1, attacker.ProtectionChance + 1) != 1)
+            Random.Shared.Next(1, attacker.ProtectionChance + 1) != 1)
             return false;
 
         switch (Effect)

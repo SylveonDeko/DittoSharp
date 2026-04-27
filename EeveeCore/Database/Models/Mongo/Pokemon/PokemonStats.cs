@@ -13,7 +13,7 @@ public class PokemonStats
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the Pokémon identifier.
@@ -25,5 +25,5 @@ public class PokemonStats
     ///     Gets or sets the list of base stat values in order (HP, Attack, Defense, Sp.Attack, Sp.Defense, Speed).
     /// </summary>
     [BsonElement("stats")]
-    public List<int> Stats { get; set; }
+    public List<int> Stats { get; set; } = null!;
 }

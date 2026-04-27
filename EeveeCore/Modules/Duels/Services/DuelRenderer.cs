@@ -201,7 +201,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
             DrawPokemonWithShadow(canvas, sprite, pokemonX + 10, pokemonY + 5, 64, 64);
 
             // Sanitize the Pokémon name before drawing
-            var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 15);
+            var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name!, 15);
 
             // Draw Pokémon name and level in Pokémon style box
             DrawPokemonInfoBox(canvas, sanitizedName, pokemon.Level, pokemonX + 80, pokemonY + 20, 180, 50);
@@ -392,7 +392,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="height">The height of the canvas.</param>
     private static void DrawRainEffect(SKCanvas canvas, int width, int height)
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         // Draw rain drops
         using var rainPaint = new SKPaint();
@@ -465,7 +465,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="height">The height of the canvas.</param>
     private static void DrawSandstormEffect(SKCanvas canvas, int width, int height)
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         // Draw sand particles
         using var sandPaint = new SKPaint();
@@ -496,7 +496,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     /// <param name="height">The height of the canvas.</param>
     private static void DrawHailEffect(SKCanvas canvas, int width, int height)
     {
-        var random = new Random();
+        var random = Random.Shared;
 
         // Draw hail particles
         using var hailPaint = new SKPaint();
@@ -533,7 +533,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
         canvas.DrawRect(0, 0, width, height, fogPaint);
 
         // Draw fog patches
-        var random = new Random();
+        var random = Random.Shared;
         using var patchPaint = new SKPaint();
         patchPaint.Color = new SKColor(255, 255, 255, 70);
         patchPaint.IsAntialias = true;
@@ -717,7 +717,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
         canvas.DrawPath(boxPath, boxBorderPaint);
 
         // Sanitize the Pokémon name before drawing
-        var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 18);
+        var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name!, 18);
 
         // Draw name and gender symbol
         using var nameFont = new SKFont();
@@ -811,7 +811,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
     private static async Task<string> GetPokemonFileName(DuelPokemon pokemon, IMongoService mongo)
     {
         var identifier = await mongo.Forms
-            .Find(f => f.Identifier.Equals(pokemon._name.ToLower(), StringComparison.CurrentCultureIgnoreCase))
+            .Find(f => f.Identifier.Equals(pokemon!._name!.ToLower(), StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
 
         if (identifier == null)
@@ -821,7 +821,7 @@ public class DuelRenderer(IMongoService mongoService) : INService
         int pokemonId;
         var formId = 0;
 
-        if (!string.IsNullOrEmpty(suffix) && pokemon.FullName.EndsWith(suffix))
+        if (!string.IsNullOrEmpty(suffix) && pokemon!.FullName!.EndsWith(suffix))
         {
             formId = (int)(identifier.FormOrder - 1)!;
             var formName = pokemon.FullName[..^(suffix.Length + 1)];

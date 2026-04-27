@@ -133,7 +133,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     private readonly GuildSettingsService _guildSettingsService;
     private readonly IMongoService _mongoService;
     private readonly PokemonService _pokemonService;
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
     private bool _hidden;
 
     /// <summary>
@@ -167,7 +167,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var pokemonFiles = await _mongoService.PFile.Find(_ => true).ToListAsync();
         foreach (var pokemon in pokemonFiles)
             if (!string.IsNullOrEmpty(pokemon.Identifier))
-                TotalList.Add(pokemon.Identifier.Capitalize());
+                TotalList.Add(pokemon.Identifier.Capitalize()!);
     }
 
     /// <summary>
@@ -286,7 +286,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                           $"**EV Points:** {details.EvPoints}\n" +
                           $"**Upvote Points:** {details.UpvotePoints}\n" +
                           $"**Vote Streak:** {voteStreak}\n" +
-                          $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
+                          $"**Holding:** {heldItem!.Capitalize().Replace("-", " ")}\n" +
                           $"**Region:** {region.Capitalize()}";
 
         if (details.Voucher > 0)
@@ -422,7 +422,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     {
         pokemon = pokemon.Capitalize();
 
-        if (!TotalList.Contains(pokemon))
+        if (!TotalList.Contains(pokemon!))
         {
             await RespondAsync("You have chosen an invalid Pokemon.");
             return;
@@ -562,7 +562,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     /// <param name="hidden">Whether to show the balance as an ephemeral message.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     [SlashCommand("bal", "Lists credits, redeems, EV points, upvote points, and selected fishing rod")]
-    public async Task Balance(IUser user = null, bool hidden = false)
+    public async Task Balance(IUser? user = null, bool hidden = false)
     {
         try
         {
@@ -627,7 +627,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                                $"**EV Points:** {details.EvPoints}\n" +
                                $"**Upvote Points:** {details.UpvotePoints}\n" +
                                $"**Vote Streak:** {voteStreak}\n" +
-                               $"**Holding:** {heldItem.Capitalize().Replace("-", " ")}\n" +
+                               $"**Holding:** {heldItem!.Capitalize().Replace("-", " ")}\n" +
                                $"**Region:** {region.Capitalize()}";
 
             if (details.Voucher > 0)
@@ -1239,7 +1239,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         [SlashCommand("nature", "Uses a nature capsule to change your selected Pokemon's nature")]
         public async Task SetNature(string nature)
         {
-            if (!NatureList.Contains(nature.Capitalize()))
+            if (!NatureList.Contains(nature.Capitalize()!))
             {
                 await RespondAsync("That Nature does not exist!");
                 return;
@@ -1473,7 +1473,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             };
 
             var embed = new EmbedBuilder()
-                .WithTitle(move.Capitalize().Replace("-", " "))
+                .WithTitle(move!.Capitalize().Replace("-", " "))
                 .WithColor(new Color(_elements.GetValueOrDefault<string, uint>(type.ToLower(), 0x000001)))
                 .WithDescription($"**Damage Class:** `{dclass}` " +
                                  (power.HasValue ? $"| **Power:** `{power}`" : "") +
@@ -1515,7 +1515,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             // Build the embed
             var embed = new EmbedBuilder()
-                .WithTitle(ability.Capitalize().Replace("-", " "))
+                .WithTitle(ability!.Capitalize().Replace("-", " "))
                 .WithColor(new Color(0xF699CD));
 
             embed.AddField("Effect", "Effect information is stored in the database");
@@ -1536,7 +1536,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             {
                 var pokemonDesc = string.Join("\n", pokemonList.Select(p => p.Capitalize()));
                 var pokeEmbed = new EmbedBuilder()
-                    .WithTitle("Pokemon with " + ability.Capitalize().Replace("-", " "))
+                    .WithTitle("Pokemon with " + ability!.Capitalize().Replace("-", " "))
                     .WithColor(new Color(0xF699CD))
                     .WithDescription(pokemonDesc);
 
@@ -1556,7 +1556,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         /// <param name="type2">Optional second type to look up.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         [SlashCommand("type", "Look up type effectiveness information")]
-        public async Task LookupType(string type1, string type2 = null)
+        public async Task LookupType(string type1, string? type2 = null)
         {
             var typeIds = new Dictionary<int, string>
             {
@@ -1589,9 +1589,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                     typeEffectiveness[(damageType, targetType)] = te.DamageFactor / 100.0;
 
             type1 = type1.Capitalize();
-            List<string> types = [type1];
+            List<string> types = [type1!];
 
-            if (!string.IsNullOrEmpty(type2)) types.Add(type2.Capitalize());
+            if (!string.IsNullOrEmpty(type2)) types.Add(type2.Capitalize()!);
 
             // Validate types
             foreach (var t in types)
@@ -2010,7 +2010,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             foreach (var move in moves)
             {
-                var formattedMove = move.Capitalize().Replace("'", "");
+                var formattedMove = move!.Capitalize().Replace("'", "");
 
                 var lowercaseMove = move.ToLower();
                 var moveInfo = await _mongoService.Moves.Find(m => m.Identifier == lowercaseMove)

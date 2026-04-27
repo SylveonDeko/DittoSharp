@@ -37,25 +37,25 @@ public partial class Move
                 break;
             case 139 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += attacker.AppendDefense(1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += attacker.AppendDefense(1, attacker, this);
 
                 break;
             }
             case 140 or 375 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += attacker.AppendAttack(1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += attacker.AppendAttack(1, attacker, this);
 
                 break;
             }
             case 277 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += attacker.AppendSpAtk(1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += attacker.AppendSpAtk(1, attacker, this);
 
                 break;
             }
             case 433 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += attacker.AppendSpeed(1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += attacker.AppendSpeed(1, attacker, this);
 
                 break;
             }
@@ -95,7 +95,7 @@ public partial class Move
                 break;
             case 359 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += attacker.AppendDefense(2, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += attacker.AppendDefense(2, attacker, this);
 
                 break;
             }
@@ -127,44 +127,44 @@ public partial class Move
                 break;
             case 69 or 396 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendAttack(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendAttack(-1, attacker, this);
 
                 break;
             }
             case 70 or 397 or 435 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendDefense(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendDefense(-1, attacker, this);
 
                 break;
             }
             case 475:
             {
                 // This one has two different chance percents, one has to be hardcoded
-                if (new Random().Next(1, 101) <= 50) msg += defender.AppendDefense(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= 50) msg += defender.AppendDefense(-1, attacker, this);
 
                 break;
             }
             case 21 or 71 or 357 or 477 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendSpeed(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendSpeed(-1, attacker, this);
 
                 break;
             }
             case 72 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendSpAtk(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendSpAtk(-1, attacker, this);
 
                 break;
             }
             case 73 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendSpDef(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendSpDef(-1, attacker, this);
 
                 break;
             }
             case 74 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendAccuracy(-1, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendAccuracy(-1, attacker, this);
 
                 break;
             }
@@ -212,7 +212,7 @@ public partial class Move
                 break;
             case 272 or 297 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.AppendSpDef(-2, attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.AppendSpDef(-2, attacker, this);
 
                 break;
             }
@@ -252,7 +252,7 @@ public partial class Move
                 break;
             case 141 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                 {
                     msg += attacker.AppendAttack(1, attacker, this);
                     msg += attacker.AppendDefense(1, attacker, this);
@@ -309,7 +309,7 @@ public partial class Move
                 if (validStats.Count > 0)
                 {
                     var statRaiseFunc =
-                        validStats[new Random().Next(validStats.Count)];
+                        validStats[Random.Shared.Next(validStats.Count)];
                     msg += statRaiseFunc(2, attacker, this, "", false);
                 }
                 else

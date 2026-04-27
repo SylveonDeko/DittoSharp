@@ -13,7 +13,7 @@ public class Form
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the base identifier for the form.
@@ -25,7 +25,7 @@ public class Form
     ///     Gets or sets the string identifier for this specific form.
     /// </summary>
     [BsonElement("form_identifier")]
-    public string FormIdentifier { get; set; }
+    public string FormIdentifier { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the display order of this form relative to other forms.
@@ -43,7 +43,7 @@ public class Form
     ///     Gets or sets the string identifier or full name of this form.
     /// </summary>
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string Identifier { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the version group identifier in which this form was introduced.

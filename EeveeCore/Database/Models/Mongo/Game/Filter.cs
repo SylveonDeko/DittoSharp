@@ -13,17 +13,17 @@ public class Filter
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the filter argument or parameter name.
     /// </summary>
     [BsonElement("arg")]
-    public string Argument { get; set; }
+    public string? Argument { get; set; }
 
     /// <summary>
     ///     Gets or sets the filter value to apply when the argument is matched.
     /// </summary>
     [BsonElement("value")]
-    public string Value { get; set; }
+    public string? Value { get; set; }
 }

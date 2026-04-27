@@ -6,7 +6,7 @@ public partial class DuelPokemon
     
     private readonly string _nickname;
     private readonly string? _startingName;
-    private string _illusionDisplayName;
+    private string? _illusionDisplayName;
     private string? _illusionName;
 
     /// <summary>
@@ -40,14 +40,14 @@ public partial class DuelPokemon
     /// </summary>
     public string DisplayName
     {
-        get => Name;
+        get => Name!;
         set => Name = value;
     }
     
     /// <summary>
     ///     Gets the dictionary of base stats for each Pokémon species.
     /// </summary>
-    public Dictionary<string?, List<int>> BaseStats { get; }
+    public Dictionary<string, List<int>> BaseStats { get; }
 
     /// <summary>
     ///     Gets or sets the current hit points of the Pokémon.
@@ -348,7 +348,7 @@ public partial class DuelPokemon
     /// <summary>
     ///     Gets or sets the trainer that owns this Pokémon in battle.
     /// </summary>
-    public Trainer Owner { get; set; }
+    public Trainer Owner { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the number of turns this Pokémon has been active in battle.
@@ -588,7 +588,7 @@ public partial class DuelPokemon
     ///     Gets or sets the Pokémon that this Pokémon is infatuated with due to Attract.
     ///     Null when not infatuated.
     /// </summary>
-    public DuelPokemon Infatuated { get; set; }
+    public DuelPokemon? Infatuated { get; set; }
 
     /// <summary>
     ///     Gets or sets whether this Pokémon is under the effect of Aqua Ring.
@@ -969,7 +969,7 @@ public partial class DuelPokemon
     ///     Gets or sets the last berry eaten by this Pokémon.
     ///     Used for abilities like Cheek Pouch and items like Shell Bell.
     /// </summary>
-    public Database.Models.Mongo.Pokemon.Item LastBerry { get; set; }
+    public Database.Models.Mongo.Pokemon.Item? LastBerry { get; set; }
 
     /// <summary>
     ///     Gets or sets the Cud Chew effect on this Pokémon.

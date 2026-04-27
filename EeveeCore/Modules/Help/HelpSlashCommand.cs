@@ -1,219 +1,118 @@
 using Discord.Interactions;
 using EeveeCore.Common.ModuleBases;
 using EeveeCore.Modules.Help.Services;
-using Fergun.Interactive;
-using Fergun.Interactive.Pagination;
 
 namespace EeveeCore.Modules.Help;
 
 /// <summary>
-///     Slash command module for help commands.
+///     Slash command module for help.
 /// </summary>
-/// <param name="interactivity">The service for embed pagination</param>
-/// <param name="serviceProvider">Service provider</param>
-/// <param name="cmds">The command service</param>
-/// <param name="ch">The command handler (yes they are different now shut up)</param>
-/// <param name="guildSettings">The service to retrieve guildconfigs</param>
-[Group("help", "Help Commands, what else is there to say?")]
+/// <param name="serviceProvider">Service provider used to evaluate command preconditions.</param>
+/// <param name="cmds">The interaction service.</param>
+[Group("help", "Show what the bot can do")]
 public class HelpSlashCommand(
-    InteractiveService interactivity,
     IServiceProvider serviceProvider,
-    InteractionService cmds,
-    CommandHandler ch,
-    GuildSettingsService guildSettings)
+    InteractionService cmds)
     : EeveeCoreSlashModuleBase<HelpService>
 {
-    private static readonly ConcurrentDictionary<ulong, ulong> HelpMessages = new();
-
     /// <summary>
-    ///     Shows all modules as well as additional information.
+    ///     Shows the home help embed with category dropdown.
     /// </summary>
-    [SlashCommand("help", "Shows help on how to use the bot")]
-    public async Task Modules()
+    [SlashCommand("show", "Show the help menu")]
+    public async Task Show()
     {
-        var embed = await Service.GetHelpEmbed(false, ctx.Guild, ctx.Channel, ctx.User);
-        await RespondAsync(embed: embed.Build(), components: Service.GetHelpComponents(ctx.Guild, ctx.User).Build())
-            .ConfigureAwait(false);
+        var embed = Service.GetHelpEmbed(ctx.User);
+        var components = Service.GetHelpComponents();
+        await RespondAsync(embed: embed.Build(), components: components.Build()).ConfigureAwait(false);
     }
 
     /// <summary>
-    ///     Handles select menus for the help menu.
+    ///     Looks up a single command by name.
     /// </summary>
-    /// <param name="unused">Literally unused</param>
-    /// <param name="selected">The selected module</param>
-    [ComponentInteraction("helpselect:*", true)]
-    public async Task HelpSlash(string unused, string[] selected)
+    /// <param name="command">The command name (with or without slash).</param>
+    [SlashCommand("search", "Look up a specific command by name")]
+    public async Task SearchCommand(
+        [Summary("command", "The command to look up")]
+        string command)
     {
-        var currentmsg = new EeveeCoreMessage
+        var query = command.TrimStart('/').Trim();
+        var match = cmds.SlashCommands
+            .FirstOrDefault(c => string.Equals(c.Name, query, StringComparison.OrdinalIgnoreCase))
+            ?? cmds.SlashCommands.FirstOrDefault(c => c.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
         {
-            Content = "help", Author = ctx.User, Channel = ctx.Channel
-        };
-
-        if (HelpMessages.TryGetValue(ctx.Channel.Id, out var msgId))
-            try
-            {
-                await ctx.Channel.DeleteMessageAsync(msgId);
-                HelpMessages.TryRemove(ctx.Channel.Id, out _);
-            }
-
-            catch
-            {
-                // ignored
-            }
-
-        var module = selected.FirstOrDefault();
-        module = module?.Trim().ToUpperInvariant().Replace(" ", "");
-        if (string.IsNullOrWhiteSpace(module))
-        {
-            await Modules().ConfigureAwait(false);
+            await EphemeralReplyErrorAsync($"No command found matching `{command}`.").ConfigureAwait(false);
             return;
         }
 
-        var prefix = await guildSettings.GetPrefix(ctx.Guild);
-
-
-        var commandInfos = cmds.SlashCommands
-            .Where(c => c.Module.GetTopLevelModule().Name.ToUpperInvariant()
-                .StartsWith(module, StringComparison.InvariantCulture))
-            .Distinct()
-            .ToList();
-
-        if (!commandInfos.Any())
-        {
-            await ReplyErrorAsync("Module not found.").ConfigureAwait(false);
-            return;
-        }
-
-        // Check preconditions
-        var preconditionTasks = commandInfos.Select(async x =>
-        {
-            var pre = await x.CheckPreconditionsAsync(new InteractionContext(ctx.Client, ctx.Interaction),
-                serviceProvider);
-            return (Cmd: x, Succ: pre.IsSuccess);
-        });
-        var preconditionResults = await Task.WhenAll(preconditionTasks).ConfigureAwait(false);
-        var succ = new HashSet<SlashCommandInfo>(preconditionResults.Where(x => x.Succ).Select(x => x.Cmd));
-
-        // Group and sort commands, ensuring no duplicates
-        var seenCommands = new HashSet<string>();
-        var cmdsWithGroup = commandInfos
-            .GroupBy(c => c.Module.Name.Replace("Commands", "", StringComparison.InvariantCulture))
-            .Select(g => new
-            {
-                ModuleName = g.Key,
-                Commands = g.Where(c => seenCommands.Add(c.Name))
-                    .OrderBy(c => c.Name)
-                    .ToList()
-            })
-            .Where(g => g.Commands.Any())
-            .OrderBy(g => g.ModuleName)
-            .ToList();
-
-        var pageSize = 24;
-        var totalCommands = cmdsWithGroup.Sum(g => g.Commands.Count);
-        var totalPages = (int)Math.Ceiling(totalCommands / (double)pageSize);
-
-        var paginator = new LazyPaginatorBuilder()
-            .AddUser(ctx.User)
-            .WithPageFactory(PageFactory)
-            .WithFooter(PaginatorFooter.PageNumber | PaginatorFooter.Users)
-            .WithMaxPageIndex(totalPages - 1)
-            .WithDefaultEmotes()
-            .WithActionOnCancellation(ActionOnStop.DeleteMessage)
-            .Build();
-
-        await interactivity.SendPaginatorAsync(paginator, ctx.Interaction, TimeSpan.FromMinutes(60))
-            .ConfigureAwait(false);
-
-        Task<PageBuilder> PageFactory(int page)
-        {
-            var pageBuilder = new PageBuilder().WithOkColor();
-            var commandsOnPage = new List<string>();
-            var currentModule = "";
-            var commandCount = 0;
-
-            foreach (var group in cmdsWithGroup)
-            {
-                foreach (var cmd in group.Commands)
-                {
-                    if (commandCount >= page * pageSize && commandCount < (page + 1) * pageSize)
-                    {
-                        if (currentModule != group.ModuleName)
-                        {
-                            if (commandsOnPage.Any())
-                                pageBuilder.AddField(currentModule,
-                                    $"```css\n{string.Join("\n", commandsOnPage)}\n```");
-                            commandsOnPage.Clear();
-                            currentModule = group.ModuleName;
-                        }
-
-                        var cmdString =
-                            $"{(succ.Contains(cmd) ? "✅" : "❌")}" +
-                            $"/{cmd.Name}";
-                        commandsOnPage.Add(cmdString);
-                    }
-
-                    commandCount++;
-                    if (commandCount >= (page + 1) * pageSize) break;
-                }
-
-                if (commandCount >= (page + 1) * pageSize) break;
-            }
-
-            if (commandsOnPage.Any())
-                pageBuilder.AddField(currentModule, $"```css\n{string.Join("\n", commandsOnPage)}\n```");
-
-            pageBuilder.WithDescription("\u2705: You can use this command." +
-                                        "\n \u274c: You cannot use this command." +
-                                        "\n {0}: If you need any help don't hesitate to join [The Support Server](https://discord.gg/mewdeko)" +
-                                        "\nDo `/help commandname` to see info on that command");
-
-            return Task.FromResult(pageBuilder);
-        }
-    }
-
-    /// <summary>
-    ///     ALlows you to search for a command using the autocompleter. Can also show help for the command thats chosen from
-    ///     autocomplete.
-    /// </summary>
-    /// <param name="command">The command to search for or to get help for</param>
-    [SlashCommand("search", "get information on a specific command")]
-    public async Task SearchCommand
-    (
-        [Summary("command", "the command to get information about")]
-        string command
-    )
-    {
-        var com = cmds.SlashCommands.FirstOrDefault(x => x.Name.Contains(command));
-        if (com == null)
-        {
-            await Modules().ConfigureAwait(false);
-            return;
-        }
-
-        var embed = await Service.GetCommandHelp(com, ctx.Guild, (ctx.User as IGuildUser)!);
+        var embed = Service.GetCommandHelp(match);
         await RespondAsync(embed: embed.Build()).ConfigureAwait(false);
     }
 
     /// <summary>
-    ///     Toggles module descriptions in help.
+    ///     Handles category selection from the help dropdown.
     /// </summary>
-    /// <param name="sDesc">Bool thats parsed to either true or false to show the descriptions</param>
-    /// <param name="sId">The server id the button is ran in</param>
-    [ComponentInteraction("toggle-descriptions:*,*", true)]
-    public async Task ToggleHelpDescriptions(string sDesc, string sId)
+    [ComponentInteraction("helpselect:*", true)]
+    public async Task OnCategorySelected(string _, string[] selected)
     {
-        if (ctx.User.Id.ToString() != sId) return;
-
         await DeferAsync().ConfigureAwait(false);
-        var description = bool.TryParse(sDesc, out var desc) && desc;
-        var message = (ctx.Interaction as SocketMessageComponent)?.Message;
-        var embed = await Service.GetHelpEmbed(description, ctx.Guild, ctx.Channel, ctx.User);
 
-        await message.ModifyAsync(x =>
+        var key = selected.FirstOrDefault();
+        if (string.IsNullOrEmpty(key))
         {
-            x.Embed = embed.Build();
-            x.Components = Service.GetHelpComponents(ctx.Guild, ctx.User, !description).Build();
+            await ModifyOriginalResponseAsync(m =>
+            {
+                m.Embed = Service.GetHelpEmbed(ctx.User).Build();
+                m.Components = Service.GetHelpComponents().Build();
+            }).ConfigureAwait(false);
+            return;
+        }
+
+        var permitted = await GetPermittedCommandNamesAsync(key).ConfigureAwait(false);
+        var embed = Service.GetCategoryEmbed(key, ctx.User, permitted);
+
+        var components = Service.GetHelpComponents();
+        components.WithButton("Back to categories", "helpselect:back", ButtonStyle.Secondary);
+
+        await ModifyOriginalResponseAsync(m =>
+        {
+            m.Embed = embed.Build();
+            m.Components = components.Build();
         }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Returns to the home help view from a category.
+    /// </summary>
+    [ComponentInteraction("helpselect:back", true)]
+    public async Task OnBackToHome()
+    {
+        await DeferAsync().ConfigureAwait(false);
+        await ModifyOriginalResponseAsync(m =>
+        {
+            m.Embed = Service.GetHelpEmbed(ctx.User).Build();
+            m.Components = Service.GetHelpComponents().Build();
+        }).ConfigureAwait(false);
+    }
+
+    private async Task<HashSet<string>> GetPermittedCommandNamesAsync(string categoryKey)
+    {
+        var entry = Service.GetCategories().FirstOrDefault(c =>
+            string.Equals(c.Key, categoryKey, StringComparison.OrdinalIgnoreCase));
+        var classNames = entry?.ClassNames ?? new List<string> { categoryKey };
+
+        var commands = cmds.SlashCommands
+            .Where(c => classNames.Contains(c.Module.GetTopLevelModule().Name, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        var iCtx = new InteractionContext(ctx.Client, ctx.Interaction);
+        var results = await Task.WhenAll(commands.Select(async c =>
+        {
+            var pre = await c.CheckPreconditionsAsync(iCtx, serviceProvider).ConfigureAwait(false);
+            return (Cmd: c, Allowed: pre.IsSuccess);
+        })).ConfigureAwait(false);
+
+        return results.Where(r => r.Allowed).Select(r => r.Cmd.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 }

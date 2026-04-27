@@ -13,7 +13,7 @@ public class ShopItem
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the name or identifier of the item.
@@ -43,5 +43,5 @@ public class ShopItem
     ///     Gets or sets the description of the item and its effects.
     /// </summary>
     [BsonElement("description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = null!;
 }

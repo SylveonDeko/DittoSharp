@@ -10,7 +10,7 @@ public partial class DuelPokemon
     /// <summary>
     ///     Creates a new DuelPokemon object asynchronously using the raw data provided.
     /// </summary>
-    public static async Task<DuelPokemon> Create(IInteractionContext ctx, Database.Linq.Models.Pokemon.Pokemon pokemon, IMongoService mongoService)
+    public static async Task<DuelPokemon> Create(IInteractionContext ctx, Database.Linq.Models.Pokemon.Pokemon pokemon, IMongoService mongoService, IGameDataCache gameData)
     {
         // Initialize local variables from pokemon object
         var pn = pokemon.PokemonName;
@@ -42,7 +42,7 @@ public partial class DuelPokemon
         pn = NormalizeFormName(pn, plevel);
 
         // Prepare for potential mega evolution
-        string megaForm = null;
+        string? megaForm = null;
         if (pn != "Rayquaza")
             megaForm = hitem switch
             {
@@ -58,69 +58,36 @@ public partial class DuelPokemon
         if (megaForm != null)
             extraForms.Add(megaForm);
 
-        // Create a list of tasks for parallel execution
-        var tasks = new List<Task>();
+        if (!gameData.FormsByIdentifier.TryGetValue(pn!, out var formInfo))
+            throw new InvalidOperationException($"Form not found in cache: {pn}");
+        if (!gameData.NaturesByIdentifier.TryGetValue(pokemon.Nature ?? "", out var natureData))
+            throw new InvalidOperationException($"Nature not found in cache: {pokemon.Nature}");
 
-        // Get form information
-        var formInfoTask = mongoService.Forms.Find(f => f.Identifier == pn.ToLower()).FirstOrDefaultAsync();
-        tasks.Add(formInfoTask);
+        Database.Models.Mongo.Pokemon.Item? hitemData = null;
+        if (!string.IsNullOrEmpty(hitem))
+            gameData.ItemsByIdentifier.TryGetValue(hitem, out hitemData);
+        hitemData ??= gameData.ItemsByIdentifier.GetValueOrDefault("none")
+                      ?? throw new InvalidOperationException("'none' item missing from cache");
 
-        // Get nature data
-        var natureTask = mongoService.Natures.Find(n => n.Identifier == pokemon.Nature.ToLower()).FirstOrDefaultAsync();
-        tasks.Add(natureTask);
+        gameData.StatTypesById.TryGetValue(natureData.DecreasedStatId, out var decStat);
+        gameData.StatTypesById.TryGetValue(natureData.IncreasedStatId, out var incStat);
+        if (!gameData.PokemonTypesByPokemonId.TryGetValue(formInfo.PokemonId, out var typeData))
+            throw new InvalidOperationException($"Types not found for PokemonId {formInfo.PokemonId}");
+        if (!gameData.PokemonStatsByPokemonId.TryGetValue(formInfo.PokemonId, out var statsData))
+            throw new InvalidOperationException($"Stats not found for PokemonId {formInfo.PokemonId}");
+        var abilityRecords = gameData.PokeAbilitiesByPokemonId.TryGetValue(formInfo.PokemonId, out var abList)
+            ? abList.ToList()
+            : [];
 
-        // Get item data
-        var itemTask = mongoService.Items.Find(i => i.Identifier == hitem).FirstOrDefaultAsync();
-        tasks.Add(itemTask);
+        var pid = GetBasePokemonId(pn, formInfo, gameData);
+        var evoCheck = gameData.PFileByEvolvesFromSpeciesId.TryGetValue(pid, out var evoList) ? evoList[0] : null;
 
-        // Wait for these initial tasks to complete
-        await Task.WhenAll(tasks);
-
-        var formInfo = await formInfoTask;
-        var natureData = await natureTask;
-        var hitemData = await itemTask;
-
-        tasks.Clear();
-
-        // Get stat types for nature
-        var decStatTask = mongoService.StatTypes.Find(s => s.StatId == natureData.DecreasedStatId)
-            .FirstOrDefaultAsync();
-        var incStatTask = mongoService.StatTypes.Find(s => s.StatId == natureData.IncreasedStatId)
-            .FirstOrDefaultAsync();
-
-        // Get type data
-        var typeDataTask = mongoService.PokemonTypes.Find(pt => pt.PokemonId == formInfo.PokemonId)
-            .FirstOrDefaultAsync();
-
-        // Get stats data
-        var statsDataTask = mongoService.PokemonStats.Find(ps => ps.PokemonId == formInfo.PokemonId)
-            .FirstOrDefaultAsync();
-
-        // Get ability data
-        var abilityRecordsTask =
-            mongoService.PokeAbilities.Find(pa => pa.PokemonId == formInfo.PokemonId).ToListAsync();
-
-        // Check evolution
-        var pid = await GetBasePokemonId(pn, formInfo, mongoService);
-        var evoCheckTask = mongoService.PFile.Find(pf => pf.EvolvesFromSpeciesId == pid).FirstOrDefaultAsync();
-
-        // Wait for second batch of tasks
-        await Task.WhenAll(decStatTask, incStatTask, typeDataTask, statsDataTask, abilityRecordsTask, evoCheckTask);
-
-        var decStat = await decStatTask;
-        var incStat = await incStatTask;
-        var typeData = await typeDataTask;
-        var statsData = await statsDataTask;
-        var abilityRecords = await abilityRecordsTask;
-        var evoCheck = await evoCheckTask;
-
-        // Process stats
         var stats = statsData.Stats.ToList();
         var pokemonHp = stats[0];
 
         // Process nature
-        var decStatName = decStat.Identifier.Capitalize().Replace("-", " ");
-        var incStatName = incStat.Identifier.Capitalize().Replace("-", " ");
+        var decStatName = decStat!.Identifier.Capitalize().Replace("-", " ");
+        var incStatName = incStat!.Identifier.Capitalize().Replace("-", " ");
 
         // Initialize nature stat modifiers
         var natureStatDeltas = new Dictionary<string, double>
@@ -154,9 +121,9 @@ public partial class DuelPokemon
         }
 
         // Store base stats
-        var baseStats = new Dictionary<string?, List<int>>
+        var baseStats = new Dictionary<string, List<int>>
         {
-            { pn, stats }
+            { pn!, stats }
         };
 
         // Get type IDs
@@ -178,7 +145,7 @@ public partial class DuelPokemon
 
         // Process mega evolution data if applicable
         var megaAbilityId = 0;
-        List<ElementType> megaTypeIds = null;
+        List<ElementType>? megaTypeIds = null;
 
         if (megaForm != null)
         {
@@ -219,9 +186,9 @@ public partial class DuelPokemon
             natureStatDeltas,
             pokemon.Shiny.GetValueOrDefault(),
             pokemon.Radiant.GetValueOrDefault(),
-            pokemon.Skin,
+            pokemon.Skin!,
             typeIds,
-            megaTypeIds,
+            megaTypeIds!,
             id,
             hitemData,
             happiness,
@@ -318,22 +285,21 @@ public partial class DuelPokemon
         ];
     }
 
-    private static async Task<int> GetBasePokemonId(string? pn, dynamic formInfo, IMongoService mongoService)
+    private static int GetBasePokemonId(string? pn, dynamic formInfo, IGameDataCache gameData)
     {
-        Log.Information($"Pokemon name is {pn}");
         if (!IsFormVariant(pn)) return formInfo.PokemonId;
-        var name = pn.ToLower().Split('-')[0];
-        var originalFormInfo = await mongoService.Forms.Find(f => f.Identifier == name).FirstOrDefaultAsync();
-        if (originalFormInfo == null) return formInfo.PokemonId;
-        return originalFormInfo.PokemonId;
+        var name = pn!.Split('-')[0];
+        return gameData.FormsByIdentifier.TryGetValue(name, out var originalFormInfo)
+            ? originalFormInfo.PokemonId
+            : (int)formInfo.PokemonId;
     }
 
     private static bool IsFormVariant(string? pn)
     {
-        return pn.Contains('-');
+        return pn!.Contains('-');
     }
 
-    private static async Task<(int megaAbilityId, List<ElementType> megaTypeIds)> GetMegaData(string megaForm,
+    private static async Task<(int megaAbilityId, List<ElementType>? megaTypeIds)> GetMegaData(string megaForm,
         IMongoService mongoService)
     {
         var megaFormInfo = await mongoService.Forms.Find(f => f.Identifier == megaForm.ToLower())
@@ -375,7 +341,7 @@ public partial class DuelPokemon
         }
     }
 
-    private static async Task<(string formName, List<int> stats)> GetFormStats(string formName,
+    private static async Task<(string? formName, List<int> stats)> GetFormStats(string formName,
         IMongoService mongoService)
     {
         var formData = await mongoService.Forms.Find(f => f.Identifier == formName.ToLower()).FirstOrDefaultAsync();

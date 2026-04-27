@@ -37,7 +37,7 @@ public class BotCredentials : IBotCredentials
         OwnerIds =
         [
             ..config.GetSection(nameof(OwnerIds)).GetChildren()
-                .Select(c => ulong.Parse(c.Value))
+                .Select(c => ulong.Parse(c.Value!))
         ];
 
         IsDebug = bool.Parse(config[nameof(IsDebug)] ?? "false");
@@ -140,7 +140,7 @@ public class BotCredentials : IBotCredentials
     /// <summary>
     ///     Gets the API key for authentication.
     /// </summary>
-    public string ApiKey { get; }
+    public string? ApiKey { get; }
 
     /// <summary>
     ///     Gets or sets the collection of user IDs that have owner privileges.
@@ -220,7 +220,7 @@ public interface IBotCredentials
     /// <summary>
     ///     Gets the API key for authentication.
     /// </summary>
-    string ApiKey { get; }
+    string? ApiKey { get; }
 
     /// <summary>
     ///     Determines whether a user has owner privileges.
@@ -241,10 +241,10 @@ public class DbConfig
     /// <summary>
     ///     Gets or sets the connection string for the database.
     /// </summary>
-    public string ConnectionString { get; set; }
+    public string ConnectionString { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the friendly name of the database.
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }

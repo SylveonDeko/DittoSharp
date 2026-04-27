@@ -13,7 +13,7 @@ public class Evolution
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier for this evolution.
@@ -67,7 +67,7 @@ public class Evolution
     ///     Gets or sets the time of day when evolution can occur, if applicable.
     /// </summary>
     [BsonElement("time_of_day")]
-    public string TimeOfDay { get; set; }
+    public string? TimeOfDay { get; set; }
 
     /// <summary>
     ///     Gets or sets the move identifier that must be known for evolution, if applicable.
@@ -139,5 +139,5 @@ public class Evolution
     ///     Gets or sets the region where the evolution can occur, if region-specific.
     /// </summary>
     [BsonElement("region")]
-    public string Region { get; set; }
+    public string? Region { get; set; }
 }

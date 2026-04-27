@@ -23,14 +23,16 @@ namespace EeveeCore.Modules.Pokemon.Services;
 /// <param name="dbProvider">The database connection provider.</param>
 /// <param name="mongo">The MongoDB service.</param>
 /// <param name="redis">The Redis cache service.</param>
+/// <param name="gameData">The in-memory static game data cache.</param>
 public class PokemonService(
     DiscordShardedClient client,
     LinqToDbConnectionProvider dbProvider,
     IMongoService mongo,
-    RedisCache redis)
+    RedisCache redis,
+    IGameDataCache gameData)
     : INService
 {
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
 
     /// <summary>
     ///     Gets all Pokemon belonging to a specific user.
@@ -75,14 +77,14 @@ public class PokemonService(
     /// <param name="speciesId">The species ID to get descendants for.</param>
     /// <param name="prefix">The prefix to use for formatting.</param>
     /// <returns>A formatted string showing the evolution tree.</returns>
-    private async Task<string> GetKids(List<PokemonFile> rawEvos, int speciesId, string prefix = null)
+    private string GetKids(List<PokemonFile> rawEvos, int speciesId, string? prefix = null)
     {
         var result = "";
         foreach (var poke in rawEvos.Where(poke => poke.EvolvesFromSpeciesId == speciesId))
         {
-            var reqs = await GetReqs(poke.PokemonId.Value);
+            var reqs = GetReqs(poke.PokemonId ?? 0);
             result += $"{prefix}├─{poke.Identifier} {reqs}\n";
-            result += await GetKids(rawEvos, poke.PokemonId.Value, $"{prefix}│ ");
+            result += GetKids(rawEvos, poke.PokemonId ?? 0, $"{prefix}│ ");
         }
 
         return result;
@@ -93,33 +95,21 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokeId">The ID of the Pokemon.</param>
     /// <returns>A formatted string showing the evolution requirements.</returns>
-    private async Task<string> GetReqs(int pokeId)
+    private string GetReqs(int pokeId)
     {
         var reqs = new List<string>();
 
-        var evoReq = await mongo.Evolution
-            .Find(e => e.EvolvedSpeciesId == pokeId)
-            .FirstOrDefaultAsync();
+        if (!gameData.EvolutionsByEvolvedSpeciesId.TryGetValue(pokeId, out var evoList) || evoList.Count == 0)
+            return "";
+        var evoReq = evoList[0];
 
-        if (evoReq == null) return "";
+        if (evoReq.TriggerItemId.HasValue
+            && gameData.ItemsById.TryGetValue(evoReq.TriggerItemId.Value, out var triggerItem))
+            reqs.Add($"apply `{triggerItem.Identifier}`");
 
-        if (evoReq.TriggerItemId.HasValue)
-        {
-            var item = await mongo.Items
-                .Find(i => i.ItemId == evoReq.TriggerItemId)
-                .FirstOrDefaultAsync();
-            if (item != null)
-                reqs.Add($"apply `{item.Identifier}`");
-        }
-
-        if (evoReq.HeldItemId.HasValue)
-        {
-            var item = await mongo.Items
-                .Find(i => i.ItemId == evoReq.HeldItemId)
-                .FirstOrDefaultAsync();
-            if (item != null)
-                reqs.Add($"hold `{item.Identifier}`");
-        }
+        if (evoReq.HeldItemId.HasValue
+            && gameData.ItemsById.TryGetValue(evoReq.HeldItemId.Value, out var heldItem))
+            reqs.Add($"hold `{heldItem.Identifier}`");
 
         if (evoReq.GenderId > -1)
             reqs.Add($"is `{(evoReq.GenderId == 1 ? "female" : "male")}`");
@@ -127,14 +117,9 @@ public class PokemonService(
         if (evoReq.MinimumLevel.HasValue)
             reqs.Add($"lvl `{evoReq.MinimumLevel}`");
 
-        if (evoReq.KnownMoveId.HasValue)
-        {
-            var move = await mongo.Moves
-                .Find(m => m.MoveId == evoReq.KnownMoveId)
-                .FirstOrDefaultAsync();
-            if (move != null)
-                reqs.Add($"knows `{move.Identifier}`");
-        }
+        if (evoReq.KnownMoveId.HasValue
+            && gameData.MovesById.TryGetValue(evoReq.KnownMoveId.Value, out var knownMove))
+            reqs.Add($"knows `{knownMove.Identifier}`");
 
         if (evoReq.MinimumHappiness.HasValue)
             reqs.Add($"happiness `{evoReq.MinimumHappiness}`");
@@ -151,7 +136,7 @@ public class PokemonService(
         if (!string.IsNullOrEmpty(evoReq.Region))
             reqs.Add($"region `{evoReq.Region}`");
 
-        return reqs.Any() ? $"({string.Join(", ", reqs)})" : "";
+        return reqs.Count > 0 ? $"({string.Join(", ", reqs)})" : "";
     }
 
     /// <summary>
@@ -159,12 +144,11 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokemonName">The name of the Pokemon.</param>
     /// <returns>A formatted string showing the evolution line.</returns>
-    public async Task<string> GetEvolutionLine(string? pokemonName)
+    public Task<string> GetEvolutionLine(string? pokemonName)
     {
         try
         {
-            // Get base name using the same logic as Python
-            var formParts = pokemonName.ToLower().Split('-');
+            var formParts = pokemonName!.ToLower().Split('-');
             var formSuffix = formParts.Length > 1 ? formParts[^1] : "";
             var baseName = "";
 
@@ -185,25 +169,17 @@ public class PokemonService(
                     ? pokemonName.ToLower().Replace(formSuffix, "").TrimEnd('-')
                     : pokemonName.ToLower();
 
-            var pfile = await mongo.PFile
-                .Find(p => p.Identifier == baseName)
-                .FirstOrDefaultAsync();
+            if (!gameData.PFileByIdentifier.TryGetValue(baseName, out var pfile)
+                || !pfile.EvolutionChainId.HasValue
+                || !gameData.PFileByEvolutionChainId.TryGetValue(pfile.EvolutionChainId.Value, out var rawEvos))
+                return Task.FromResult("");
 
-            if (pfile == null)
-                return "";
-
-            var rawEvos = await mongo.PFile
-                .Find(p => p.EvolutionChainId == pfile.EvolutionChainId)
-                .ToListAsync();
-
-            // Get evolution line starting from the first in the chain (no evolves_from)
-            var evoLine = await GetKids(rawEvos, pfile.PokemonId.Value, "");
-            return evoLine;
+            return Task.FromResult(GetKids(rawEvos.ToList(), pfile.PokemonId ?? 0, ""));
         }
         catch (Exception e)
         {
             Log.Error(e, "Error getting evolution line for {PokemonName}", pokemonName);
-            return "";
+            return Task.FromResult("");
         }
     }
 
@@ -212,67 +188,48 @@ public class PokemonService(
     /// </summary>
     /// <param name="identifier">The identifier of the Pokemon.</param>
     /// <returns>A PokemonInfo object containing details about the Pokemon.</returns>
-    public async Task<PokemonInfo> GetPokemonInfo(string? identifier)
+    public Task<PokemonInfo> GetPokemonInfo(string? identifier)
     {
         try
         {
-            var formInfo = await mongo.Forms
-                .Find(f => f.Identifier.Equals(identifier, StringComparison.CurrentCultureIgnoreCase))
-                .FirstOrDefaultAsync();
+            if (string.IsNullOrEmpty(identifier) ||
+                !gameData.FormsByIdentifier.TryGetValue(identifier, out var formInfo))
+                return Task.FromResult<PokemonInfo>(null!);
 
-            if (formInfo == null)
-                return null;
+            if (!gameData.PokemonTypesByPokemonId.TryGetValue(formInfo.PokemonId, out var pokemonTypes))
+                return Task.FromResult<PokemonInfo>(null!);
 
-            var pokemonTypes = await mongo.PokemonTypes
-                .Find(t => t.PokemonId == formInfo.PokemonId)
-                .FirstOrDefaultAsync();
+            var typeNames = pokemonTypes.Types
+                .Select(typeId => gameData.TypesById.TryGetValue(typeId, out var t) ? t.Identifier : "unknown")
+                .ToList();
 
-            if (pokemonTypes == null)
-                return null;
+            gameData.PokemonStatsByPokemonId.TryGetValue(formInfo.PokemonId, out var stats);
 
-            var typeNames = new List<string>();
-            foreach (var typeId in pokemonTypes.Types)
-            {
-                var type = await mongo.Types
-                    .Find(t => t.TypeId == typeId)
-                    .FirstOrDefaultAsync();
-                typeNames.Add(type?.Identifier ?? "unknown");
-            }
+            var abilities = gameData.PokeAbilitiesByPokemonId.TryGetValue(formInfo.PokemonId, out var abList)
+                ? abList
+                    .Select(a => gameData.AbilitiesById.TryGetValue(a.AbilityId, out var ab) ? ab.Identifier : null)
+                    .Where(s => s != null)
+                    .ToList()!
+                : [];
 
-            var stats = await mongo.PokemonStats
-                .Find(s => s.PokemonId == formInfo.PokemonId)
-                .FirstOrDefaultAsync();
+            var eggGroups = gameData.EggGroupsBySpeciesId.TryGetValue(formInfo.PokemonId, out var egList)
+                ? egList
+                    .SelectMany(eg => eg.Groups ?? Enumerable.Empty<int>())
+                    .Distinct()
+                    .Select(groupId => gameData.EggGroupInfosById.TryGetValue(groupId, out var info) ? info.Identifier : null)
+                    .Where(s => s != null)
+                    .ToList()!
+                : [];
 
-            // Get abilities
-            var abilities = new List<string>();
-            var abilityCursor = mongo.PokeAbilities.Find(a => a.PokemonId == formInfo.PokemonId);
-            await abilityCursor.ForEachAsync(async abilityRef =>
-            {
-                var ability = await mongo.Abilities.Find(a => a.AbilityId == abilityRef.AbilityId)
-                    .FirstOrDefaultAsync();
-                if (ability != null)
-                    abilities.Add(ability.Identifier);
-            });
-
-            // Get egg groups
-            var eggGroups = new List<string>();
-            var eggGroupsCursor = mongo.EggGroups.Find(e => e.SpeciesId == formInfo.PokemonId);
-            await eggGroupsCursor.ForEachAsync(async eggGroupRef =>
-            {
-                var eggGroup = await mongo.EggGroupsInfo.Find(e => e.Id == eggGroupRef.Id).FirstOrDefaultAsync();
-                if (eggGroup != null)
-                    eggGroups.Add(eggGroup.Identifier);
-            });
-
-            return new PokemonInfo
+            return Task.FromResult(new PokemonInfo
             {
                 Id = formInfo.PokemonId,
                 Name = formInfo.Identifier,
                 Types = typeNames,
                 FormIdentifier = formInfo.FormIdentifier,
                 Weight = formInfo.Weight.HasValue ? formInfo.Weight / 10.0f : 0,
-                Abilities = abilities,
-                EggGroups = eggGroups,
+                Abilities = abilities!,
+                EggGroups = eggGroups!,
                 Stats = new PokemonStats
                 {
                     Hp = stats?.Stats[0] ?? 0,
@@ -282,7 +239,7 @@ public class PokemonService(
                     SpecialDefense = stats?.Stats[4] ?? 0,
                     Speed = stats?.Stats[5] ?? 0
                 }
-            };
+            });
         }
         catch (Exception e)
         {
@@ -502,7 +459,7 @@ public class PokemonService(
     public async Task<int> GetUserSoulGauge(ulong userId)
     {
         var value = await redis.Redis.GetDatabase().StringGetAsync($"soul_gauge:{userId}");
-        return value.HasValue ? JsonSerializer.Deserialize<int>(value) : 0;
+        return value.HasValue ? JsonSerializer.Deserialize<int>((string)value!) : 0;
     }
 
     /// <summary>
@@ -527,14 +484,12 @@ public class PokemonService(
     /// </summary>
     /// <param name="val">The name of the Pokemon.</param>
     /// <returns>A string listing the available forms.</returns>
-    public async Task<string> GetPokemonForms(string? val)
+    public Task<string> GetPokemonForms(string? val)
     {
         try
         {
-            var forms = new List<string>();
-
-            // Handle special cases first
-            var lowerVal = val.ToLower();
+            List<string> forms;
+            var lowerVal = val!.ToLower();
             switch (lowerVal)
             {
                 case "spewpa" or "scatterbug" or "mew":
@@ -544,31 +499,23 @@ public class PokemonService(
                     forms = ["aqua-paldea", "blaze-paldea"];
                     break;
                 default:
-                {
-                    // Get forms from MongoDB
-                    var cursor = mongo.Forms.Find(
-                        Builders<Form>.Filter.Regex(f => f.Identifier, new BsonRegularExpression($".*{val}.*", "i"))
-                    );
-
-                    forms = await cursor.Project(f => f.FormIdentifier)
-                        .ToListAsync();
-
-                    // Filter out empty strings and specific region forms
-                    forms = forms.Where(f => !string.IsNullOrEmpty(f))
+                    forms = gameData.FormsById.Values
+                        .Where(f => f.Identifier?.Contains(lowerVal, StringComparison.OrdinalIgnoreCase) == true)
+                        .Select(f => f.FormIdentifier)
+                        .Where(f => !string.IsNullOrEmpty(f))
                         .Where(f => f is not "Galar" and not "Alola" and not "Hisui" and not "Paldea")
-                        .ToList();
+                        .ToList()!;
 
-                    if (!forms.Any()) forms = ["None"];
+                    if (forms.Count == 0) forms = ["None"];
                     break;
-                }
             }
 
-            return string.Join("\n", forms.Select(f => f.Capitalize()));
+            return Task.FromResult(string.Join("\n", forms.Select(f => f.Capitalize())));
         }
         catch (Exception e)
         {
             Log.Error(e, "Error getting Pokemon forms for {Val}", val);
-            return "None";
+            return Task.FromResult("None");
         }
     }
 
@@ -595,13 +542,9 @@ public class PokemonService(
     /// <param name="skin">The skin of the Pokemon, if any.</param>
     /// <returns>A tuple containing the form and image URL.</returns>
     public async Task<(Form Form, string ImagePath)> GetPokemonFormInfo(string? pokemonName, bool shiny = false,
-        bool radiant = false, string skin = null)
+        bool radiant = false, string? skin = null)
     {
-        var identifier = await mongo.Forms
-            .Find(f => f.Identifier.Equals(pokemonName.ToLower(), StringComparison.CurrentCultureIgnoreCase))
-            .FirstOrDefaultAsync();
-
-        if (identifier == null)
+        if (string.IsNullOrEmpty(pokemonName) || !gameData.FormsByIdentifier.TryGetValue(pokemonName, out var identifier))
             throw new ArgumentException($"Invalid name ({pokemonName}) passed to GetPokemonFormInfo");
 
         var suffix = identifier.FormIdentifier;
@@ -613,11 +556,7 @@ public class PokemonService(
             formId = (identifier.FormOrder - 1).GetValueOrDefault();
             var formName = pokemonName[..^(suffix.Length + 1)];
 
-            var pokemonIdentifier = await mongo.Forms
-                .Find(f => f.Identifier.Equals(formName, StringComparison.CurrentCultureIgnoreCase))
-                .FirstOrDefaultAsync();
-
-            if (pokemonIdentifier == null)
+            if (!gameData.FormsByIdentifier.TryGetValue(formName, out var pokemonIdentifier))
                 throw new ArgumentException($"Invalid name ({pokemonName}) passed to GetPokemonFormInfo");
 
             pokemonId = pokemonIdentifier.PokemonId;
@@ -628,14 +567,9 @@ public class PokemonService(
         }
 
         var fileType = "png";
-        var skinPath = "";
-        if (!string.IsNullOrEmpty(skin) )
-        {
-            if (skin.EndsWith("_gif"))
-                fileType = "gif";
-        }
+        if (!string.IsNullOrEmpty(skin) && skin.EndsWith("_gif"))
+            fileType = "gif";
 
-        // Check for radiant placeholder
         var isPlaceholder = await mongo.RadiantPlaceholders
             .Find(p => p.Name.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
             .FirstOrDefaultAsync();
@@ -942,7 +876,7 @@ public class PokemonService(
     /// <param name="gender">Gender filter to apply (all, male, female, genderless).</param>
     /// <param name="search">Optional search term.</param>
     /// <returns>A tuple with filtered Pokemon list, collection statistics, and user data for display.</returns>
-    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int> Stats, HashSet<ulong> PartyPokemon,
+    public async Task<(List<PokemonListEntry> FilteredList, Dictionary<string, int>? Stats, HashSet<ulong> PartyPokemon,
             ulong? SelectedPokemon)>
         GetFilteredPokemonList(ulong userId, SortOrder sortOrder, string filter, string gender, string search)
     {
@@ -1134,7 +1068,7 @@ public class PokemonService(
                 
                 var typeMap = pokemonTypes.ToDictionary(
                     pt => pt.Identifier, 
-                    pt => pt.Types.FirstOrDefault() ?? "Normal");
+                    pt => pt.Types!.FirstOrDefault() ?? "Normal");
 
                 var typedPokemon = pokemonData.Select(p => new
                 {
@@ -1153,7 +1087,7 @@ public class PokemonService(
                         tp.Pokemon.IvTotal / 186.0,
                         tp.Pokemon.Shiny ?? false,
                         tp.Pokemon.Radiant ?? false,
-                        tp.Pokemon.Skin,
+                        tp.Pokemon.Skin!,
                         tp.Pokemon.Gender,
                         tp.Pokemon.Nickname,
                         tp.Pokemon.Favorite,
@@ -1181,7 +1115,7 @@ public class PokemonService(
                 p.IvTotal / 186.0,
                 p.Shiny ?? false,
                 p.Radiant ?? false,
-                p.Skin,
+                p.Skin!,
                 p.Gender,
                 p.Nickname,
                 p.Favorite,
@@ -1251,38 +1185,24 @@ public class PokemonService(
     /// </summary>
     /// <param name="pokemonName">The name of the Pokemon.</param>
     /// <returns>The primary type of the Pokemon, or "unknown" if not found.</returns>
-    public async Task<string> GetPrimaryType(string pokemonName)
+    public Task<string> GetPrimaryType(string pokemonName)
     {
         try
         {
-            // Get the Pokemon form
-            var formInfo = await mongo.Forms
-                .Find(f => f.Identifier.Equals(pokemonName.ToLower(), StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefaultAsync();
+            if (!gameData.FormsByIdentifier.TryGetValue(pokemonName, out var formInfo))
+                return Task.FromResult("unknown");
 
-            if (formInfo == null)
-                return "unknown";
+            if (!gameData.PokemonTypesByPokemonId.TryGetValue(formInfo.PokemonId, out var pokemonTypes)
+                || pokemonTypes.Types is not { Count: > 0 })
+                return Task.FromResult("unknown");
 
-            // Get the Pokemon's types
-            var pokemonTypes = await mongo.PokemonTypes
-                .Find(t => t.PokemonId == formInfo.PokemonId)
-                .FirstOrDefaultAsync();
-
-            if (pokemonTypes?.Types == null || pokemonTypes.Types.Count == 0)
-                return "unknown";
-
-            // Get the name of the primary type (first in the list)
             var primaryTypeId = pokemonTypes.Types[0];
-            var primaryType = await mongo.Types
-                .Find(t => t.TypeId == primaryTypeId)
-                .FirstOrDefaultAsync();
-
-            return primaryType?.Identifier ?? "unknown";
+            return Task.FromResult(gameData.TypesById.TryGetValue(primaryTypeId, out var t) ? t.Identifier : "unknown");
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Error getting primary type for {PokemonName}", pokemonName);
-            return "unknown";
+            return Task.FromResult("unknown");
         }
     }
 
@@ -1401,7 +1321,7 @@ public class PokemonService(
         var properties = obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         foreach (var property in properties)
-            dictionary[property.Name] = property.GetValue(obj);
+            dictionary[property.Name] = property.GetValue(obj)!;
 
         return dictionary;
     }
@@ -1416,9 +1336,9 @@ public class PokemonService(
     /// <returns>A tuple containing success status, new species ID if successful, and whether an active item was used.</returns>
     public async Task<(bool Success, int? NewSpeciesId, bool UsedActiveItem)> TryEvolve(
         ulong pokemonId,
-        string activeItem = null,
+        string? activeItem = null,
         bool overrideLvl100 = false,
-        IMessageChannel channel = null)
+        IMessageChannel? channel = null)
     {
         await using var db = await dbProvider.GetConnectionAsync();
         var pokemon = await db.UserPokemon.FirstOrDefaultAsync(p => p.Id == pokemonId);
@@ -1539,7 +1459,7 @@ public class PokemonService(
                 Log.Error(ex, "Failed to send evolution message");
             }
 
-        return (true, evoId, evoReqs.UsedActiveItem());
+        return (true, evoId, evoReqs!.UsedActiveItem());
     }
 
     /// <summary>
@@ -1561,13 +1481,13 @@ public class PokemonService(
         bool shiny = false,
         bool boosted = false,
         bool radiant = false,
-        string skin = null,
-        string gender = null,
+        string? skin = null,
+        string? gender = null,
         int level = 1)
     {
         // Get form info from MongoDB
         var formInfo = await mongo.Forms
-            .Find(f => f.Identifier.Equals(pokemonName.ToLower()))
+            .Find(f => f.Identifier.Equals(pokemonName!.ToLower()))
             .FirstOrDefaultAsync();
 
         if (formInfo == null) return null;
@@ -1577,7 +1497,7 @@ public class PokemonService(
             .Find(p => p.PokemonId == formInfo.PokemonId)
             .FirstOrDefaultAsync();
 
-        if (pokemonInfo == null && pokemonName.Contains("alola"))
+        if (pokemonInfo == null && pokemonName!.Contains("alola"))
         {
             var pokemonNameWithoutSuffix = pokemonName.ToLower().Split("-")[0];
             pokemonInfo = await mongo.PFile
@@ -1614,7 +1534,7 @@ public class PokemonService(
         // Determine gender if not provided
         if (string.IsNullOrEmpty(gender))
         {
-            if (pokemonName.ToLower().Contains("nidoran-"))
+            if (pokemonName!.ToLower().Contains("nidoran-"))
                 gender = pokemonName.ToLower().EndsWith("f") ? "-f" : "-m";
             else
                 switch (pokemonName.ToLower())
@@ -1750,7 +1670,7 @@ public class PokemonService(
         if (user?.Hunt != pokemon?.Capitalize())
             return false;
 
-        var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user.Chain / 1000.0);
+        var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user!.Chain / 1000.0);
 
         if (makeShadow)
             await db.Users
@@ -1970,11 +1890,11 @@ public class PokemonService(
     /// </summary>
     /// <param name="validEvos">The list of valid evolution options.</param>
     /// <returns>A tuple containing the ID of the best evolution and its requirements.</returns>
-    private (int Id, EvoReqs Reqs) PickEvo(List<Dictionary<string, object>> validEvos)
+    private (int Id, EvoReqs? Reqs) PickEvo(List<Dictionary<string, object>> validEvos)
     {
         var bestScore = -1.0;
         var bestId = -1;
-        EvoReqs bestReqs = null;
+        EvoReqs? bestReqs = null;
 
         foreach (var evo in validEvos)
         {
@@ -2085,22 +2005,22 @@ public class PokemonInfo
     public string? Name { get; set; }
 
     /// <summary>Gets or sets the types of the Pokemon.</summary>
-    public List<string> Types { get; set; }
+    public List<string> Types { get; set; } = null!;
 
     /// <summary>Gets or sets the abilities of the Pokemon.</summary>
-    public List<string> Abilities { get; set; }
+    public List<string> Abilities { get; set; } = null!;
 
     /// <summary>Gets or sets the egg groups of the Pokemon.</summary>
-    public List<string> EggGroups { get; set; }
+    public List<string> EggGroups { get; set; } = null!;
 
     /// <summary>Gets or sets the form identifier of the Pokemon.</summary>
-    public string FormIdentifier { get; set; }
+    public string FormIdentifier { get; set; } = null!;
 
     /// <summary>Gets or sets the weight of the Pokemon in kg.</summary>
     public float? Weight { get; set; }
 
     /// <summary>Gets or sets the base stats of the Pokemon.</summary>
-    public PokemonStats Stats { get; set; }
+    public PokemonStats Stats { get; set; } = null!;
 }
 
 /// <summary>

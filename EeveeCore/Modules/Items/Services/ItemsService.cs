@@ -64,14 +64,9 @@ public class ItemsService(
     ];
 
     /// <summary>
-    ///     Cache service for storing and retrieving frequently used data.
-    /// </summary>
-    private readonly IDataCache _cache;
-
-    /// <summary>
     ///     Random number generator for various operations.
     /// </summary>
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
 
     /// <summary>
     ///     Determines if a Pokémon is in a formed state (mega, primal, etc.).
@@ -81,7 +76,7 @@ public class ItemsService(
     /// <returns>True if the Pokémon is in a formed state, false otherwise.</returns>
     private bool IsFormed(string? pokemonName)
     {
-        return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
+        return pokemonName!.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
                pokemonName.EndsWith("-origin") || pokemonName.EndsWith("-10") || pokemonName.EndsWith("-complete") ||
                pokemonName.EndsWith("-ultra") || pokemonName.EndsWith("-crowned") ||
                pokemonName.EndsWith("-eternamax") ||
@@ -97,7 +92,7 @@ public class ItemsService(
     ///     A tuple containing operation success status, error message if applicable,
     ///     held item, Pokémon name, and the user's inventory.
     /// </returns>
-    public async Task<(bool Success, string Message, string HeldItem, string PokemonName, Dictionary<string, int> Items
+    public async Task<(bool Success, string? Message, string? HeldItem, string? PokemonName, Dictionary<string, int>? Items
             )>
         PrepItemRemove(ulong userId)
     {
@@ -138,10 +133,10 @@ public class ItemsService(
     public async Task<CommandResult> Unequip(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message }!;
 
         await using var db = await dbContextProvider.GetConnectionAsync();
-        prepResult.Items[prepResult.HeldItem] = prepResult.Items.GetValueOrDefault(prepResult.HeldItem, 0) + 1;
+        prepResult.Items![prepResult.HeldItem!] = prepResult.Items.GetValueOrDefault(prepResult.HeldItem!, 0) + 1;
 
         var serializedItems = JsonSerializer.Serialize(prepResult.Items);
 
@@ -170,7 +165,7 @@ public class ItemsService(
     public async Task<CommandResult> Drop(ulong userId)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message }!;
 
         await using var db = await dbContextProvider.GetConnectionAsync();
         await db.UserPokemon
@@ -193,7 +188,7 @@ public class ItemsService(
     public async Task<CommandResult> Transfer(ulong userId, ulong pokemonNumber)
     {
         var prepResult = await PrepItemRemove(userId);
-        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message };
+        if (!prepResult.Success) return new CommandResult { Message = prepResult.Message }!;
 
         await using var db = await dbContextProvider.GetConnectionAsync();
 
@@ -440,7 +435,7 @@ public class ItemsService(
     /// <param name="itemName">The name of the item to apply.</param>
     /// <param name="channel">The Discord channel for sending messages.</param>
     /// <returns>A CommandResult containing the operation result message.</returns>
-    public async Task<CommandResult> Apply(ulong userId, string itemName, IMessageChannel channel)
+    public async Task<CommandResult> Apply(ulong userId, string itemName, IMessageChannel? channel)
     {
         itemName = string.Join("-", itemName.Split()).ToLower();
 
@@ -805,7 +800,7 @@ public class ItemsService(
             .Select(u => u.MewCoins)
             .FirstOrDefaultAsync();
 
-        var useAmount = Math.Max(0, Math.Min(100 - selectedPokemon.Level, amount));
+        var useAmount = Math.Max(0, Math.Min(100 - selectedPokemon!.Level, amount));
         var buyAmount = useAmount == 0 ? 1 : useAmount;
         var price = (ulong)(buyAmount * 100);
         var candyStr = buyAmount == 1 ? "candy" : "candies";
@@ -1144,12 +1139,12 @@ public class ItemsService(
         /// <summary>
         ///     Gets the message to display to the user.
         /// </summary>
-        public string Message { get; init; }
+        public string? Message { get; init; }
 
         /// <summary>
         ///     Gets the embed to display to the user, if any.
         /// </summary>
-        public Embed Embed { get; init; }
+        public Embed? Embed { get; init; }
 
         /// <summary>
         ///     Gets a value indicating whether the message should be ephemeral (only visible to the command user).

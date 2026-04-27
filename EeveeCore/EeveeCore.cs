@@ -85,7 +85,7 @@ public class EeveeCore
 
         var filteredTypes = allTypes
             .Where(x => x.IsSubclassOf(typeof(TypeReader))
-                        && x.BaseType.GetGenericArguments().Length > 0
+                        && x!.BaseType!.GetGenericArguments().Length > 0
                         && !x.IsAbstract);
 
         foreach (var ft in filteredTypes)
@@ -187,7 +187,7 @@ public class EeveeCore
                     .WithThumbnailUrl(guild.IconUrl)
                     .WithColor(OkColor);
 
-                await chan.SendMessageAsync(embed: eb.Build()).ConfigureAwait(false);
+                await chan!.SendMessageAsync(embed: eb.Build()).ConfigureAwait(false);
             }
             catch
             {
@@ -267,7 +267,7 @@ public class EeveeCore
 
     private Task LogCommandsService(LogMessage arg)
     {
-        Log.Information(arg.ToString());
+        WriteDiscordLog(arg);
         return Task.CompletedTask;
     }
 
@@ -291,7 +291,31 @@ public class EeveeCore
 
     private static Task Client_Log(LogMessage arg)
     {
-        Log.Information(arg.ToString());
+        WriteDiscordLog(arg);
         return Task.CompletedTask;
+    }
+
+    private static void WriteDiscordLog(LogMessage arg)
+    {
+        var msg = arg.Message ?? arg.Exception?.Message ?? "";
+        switch (arg.Severity)
+        {
+            case LogSeverity.Critical:
+                Log.Fatal(arg.Exception, "[{Source}] {Message}", arg.Source, msg);
+                break;
+            case LogSeverity.Error:
+                Log.Error(arg.Exception, "[{Source}] {Message}", arg.Source, msg);
+                break;
+            case LogSeverity.Warning:
+                Log.Warning(arg.Exception, "[{Source}] {Message}", arg.Source, msg);
+                break;
+            case LogSeverity.Info:
+                Log.Information("[{Source}] {Message}", arg.Source, msg);
+                break;
+            case LogSeverity.Verbose:
+            case LogSeverity.Debug:
+                Log.Debug("[{Source}] {Message}", arg.Source, msg);
+                break;
+        }
     }
 }

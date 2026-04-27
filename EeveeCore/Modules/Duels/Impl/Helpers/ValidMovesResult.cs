@@ -47,13 +47,13 @@ public class ValidMovesResult
     ///     Gets the forced move that must be used when Type is ForcedMove.
     ///     Null for other result types.
     /// </summary>
-    public Move.Move ForcedMove { get; private set; }
+    public Move.Move? ForcedMove { get; private set; }
 
     /// <summary>
     ///     Gets the list of valid move indexes when Type is ValidIndexes.
     ///     Null for other result types.
     /// </summary>
-    public List<int> ValidMoveIndexes { get; private set; }
+    public List<int>? ValidMoveIndexes { get; private set; }
 
     /// <summary>
     ///     Creates a result indicating the Pokémon is forced to use a specific move.

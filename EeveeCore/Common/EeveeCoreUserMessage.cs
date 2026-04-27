@@ -9,7 +9,7 @@ public class EeveeCoreMessage : IUserMessage
     public ulong Id => 0;
 
     /// <inheritdoc />
-    public DateTimeOffset CreatedAt => DateTime.Now;
+    public DateTimeOffset CreatedAt => DateTime.UtcNow;
 
     /// <inheritdoc />
     public Task DeleteAsync(RequestOptions? options = null)

@@ -49,7 +49,7 @@ public class ExtrasService : INService
 
         var moves = await _mongoService.PokemonMoves.Find(p => p.Pokemon == pokemonName).FirstOrDefaultAsync();
         if (moves == null)
-            return null;
+            return null!;
 
         return moves.Moves.OrderBy(m => m).ToList();
     }

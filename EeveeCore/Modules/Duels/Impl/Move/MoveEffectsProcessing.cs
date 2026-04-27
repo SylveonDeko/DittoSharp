@@ -233,9 +233,9 @@ public partial class Move
             case 84:
             {
                 attacker.HasMoved = false;
-                var random = new Random();
+                var random = Random.Shared;
                 var raw = battle.MetronomeMoves[random.Next(battle.MetronomeMoves.Count)];
-                var newMove = new Move(new Dictionary<string, object>
+                var newMove = new Move(new Dictionary<string, object?>
                 {
                     ["id"] = raw.id,
                     ["identifier"] = raw.identifier,
@@ -284,7 +284,7 @@ public partial class Move
                 var eligibleMoves = attacker.Moves.Where(m => m.SelectableBySleepTalk()).ToList();
                 if (eligibleMoves.Count > 0)
                 {
-                    var move = eligibleMoves[new Random().Next(eligibleMoves.Count)];
+                    var move = eligibleMoves[Random.Shared.Next(eligibleMoves.Count)];
                     msg += move.Use(attacker, defender, battle, false, true);
                     return msg;
                 }
@@ -398,7 +398,7 @@ public partial class Move
             // Present
             case 123:
             {
-                var action = new Random().Next(1, 5);
+                var action = Random.Shared.Next(1, 5);
                 if (action == 1)
                 {
                     if (defender.Hp == defender.StartingHp)

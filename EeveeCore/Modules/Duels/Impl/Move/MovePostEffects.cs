@@ -140,7 +140,7 @@ public partial class Move
             // Burns
             case 5 or 126 or 201 or 254 or 274 or 333 or 365 or 458 or 465 or 500 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("burn", battle, attacker, this);
 
                 break;
@@ -153,8 +153,8 @@ public partial class Move
             case 37 when effectChance.HasValue:
             {
                 var statuses = new[] { "burn", "freeze", "paralysis" };
-                var status = statuses[new Random().Next(statuses.Length)];
-                if (new Random().Next(1, 101) <= effectChance)
+                var status = statuses[Random.Shared.Next(statuses.Length)];
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus(status, battle, attacker, this);
 
                 break;
@@ -163,8 +163,8 @@ public partial class Move
             case 464 when effectChance.HasValue:
             {
                 var statuses = new[] { "poison", "paralysis", "sleep" };
-                var status = statuses[new Random().Next(statuses.Length)];
-                if (new Random().Next(1, 101) <= effectChance)
+                var status = statuses[Random.Shared.Next(statuses.Length)];
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus(status, battle, attacker, this);
 
                 break;
@@ -172,7 +172,7 @@ public partial class Move
             // Freeze
             case 6 or 261 or 275 or 380 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("freeze", battle, attacker, this);
 
                 break;
@@ -180,7 +180,7 @@ public partial class Move
             // Paralysis
             case 7 or 153 or 263 or 264 or 276 or 332 or 372 or 396 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("paralysis", battle, attacker, this);
 
                 break;
@@ -192,7 +192,7 @@ public partial class Move
             case 3 or 78 or 210 or 447 or 461 when
                 effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("poison", battle, attacker, this);
 
                 break;
@@ -205,7 +205,7 @@ public partial class Move
             // Toxic
             case 203 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("b-poison", battle, attacker, this);
 
                 break;
@@ -222,7 +222,7 @@ public partial class Move
                 break;
             case 330 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance)
+                if (Random.Shared.Next(1, 101) <= effectChance)
                     msg += defender.NonVolatileEffect.ApplyStatus("sleep", battle, attacker, this);
 
                 break;
@@ -252,7 +252,7 @@ public partial class Move
                 break;
             case 77 or 268 or 334 or 478 when effectChance.HasValue:
             {
-                if (new Random().Next(1, 101) <= effectChance) msg += defender.Confuse(attacker, this);
+                if (Random.Shared.Next(1, 101) <= effectChance) msg += defender.Confuse(attacker, this);
 
                 break;
             }
@@ -282,24 +282,24 @@ public partial class Move
                 if (new[] { 32, 76, 93, 147, 151, 159, 274, 275, 276, 425, 475, 501 }.Contains(Effect) &&
                     effectChance.HasValue)
                 {
-                    if (new Random().Next(1, 101) <= effectChance)
+                    if (Random.Shared.Next(1, 101) <= effectChance)
                         msg += defender.Flinch(move: this, attacker: attacker);
                 }
                 else if (DamageClass is DamageClass.PHYSICAL or DamageClass.SPECIAL)
                 {
                     if (attacker.Ability() == Ability.STENCH)
                     {
-                        if (new Random().Next(1, 101) <= 10)
+                        if (Random.Shared.Next(1, 101) <= 10)
                             msg += defender.Flinch(move: this, attacker: attacker, source: "its stench");
                     }
                     else if (attacker.HeldItem == "kings-rock")
                     {
-                        if (new Random().Next(1, 101) <= 10)
+                        if (Random.Shared.Next(1, 101) <= 10)
                             msg += defender.Flinch(move: this, attacker: attacker, source: "its kings rock");
                     }
                     else if (attacker.HeldItem == "razor-fang")
                     {
-                        if (new Random().Next(1, 101) <= 10)
+                        if (Random.Shared.Next(1, 101) <= 10)
                             msg += defender.Flinch(move: this, attacker: attacker, source: "its razor fang");
                     }
                 }

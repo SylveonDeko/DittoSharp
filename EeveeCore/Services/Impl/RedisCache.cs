@@ -32,7 +32,7 @@ public class RedisCache : IDataCache
     {
         var data = await _db.StringGetAsync(key);
         if (data.HasValue)
-            return JsonSerializer.Deserialize<T>(data);
+            return JsonSerializer.Deserialize<T>((string)data!)!;
 
         var value = await factory();
         await _db.StringSetAsync(key,
@@ -72,25 +72,25 @@ public class RedisCache : IDataCache
     }
 
     /// <inheritdoc />
-    public async Task<T> GetFromCache<T>(string key)
+    public async Task<T?> GetFromCache<T>(string key)
     {
         var data = await _db.StringGetAsync(key);
-        return data.HasValue ? JsonSerializer.Deserialize<T>(data) : default;
+        return data.HasValue ? JsonSerializer.Deserialize<T>((string)data!) : default;
     }
 
     /// <inheritdoc />
     public async Task PublishAsync(string channel, object data)
     {
-        await Subscriber.PublishAsync(channel, JsonSerializer.Serialize(data));
+        await Subscriber.PublishAsync(RedisChannel.Literal(channel), JsonSerializer.Serialize(data));
     }
 
     /// <inheritdoc />
     public async Task SubscribeAsync(string channel, Action<string> handler)
     {
-        await Subscriber.SubscribeAsync(channel, (_, message) =>
+        await Subscriber.SubscribeAsync(RedisChannel.Literal(channel), (_, message) =>
         {
             if (message.HasValue)
-                handler(message);
+                handler(message!);
         });
     }
 

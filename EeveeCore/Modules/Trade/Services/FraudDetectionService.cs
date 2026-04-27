@@ -1328,12 +1328,12 @@ public class FraudDetectionService : INService
         var riskFactors = new List<double>();
 
         // Pattern 1: Always receiving high value (exploitation victim pattern)
-        var receivingTrades = trades.Where(t => !t.IsGiving && t.SenderValue > t.ReceiverValue * 5).Count();
+        var receivingTrades = trades.Count(t => !t.IsGiving && t.SenderValue > t.ReceiverValue * 5);
         var victimRisk = Math.Min((double)receivingTrades / trades.Count, 1.0);
         riskFactors.Add(victimRisk * 0.3); // Lower weight - victim is less risky
 
         // Pattern 2: Always giving away high value (exploitation/RMT pattern)
-        var givingTrades = trades.Where(t => t.IsGiving && t.SenderValue > t.ReceiverValue * 5).Count();
+        var givingTrades = trades.Count(t => t.IsGiving && t.SenderValue > t.ReceiverValue * 5);
         var exploiterRisk = Math.Min((double)givingTrades / trades.Count, 1.0);
         riskFactors.Add(exploiterRisk * 1.2); // Higher weight - exploiter is very risky
 

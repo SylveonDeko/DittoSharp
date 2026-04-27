@@ -234,7 +234,7 @@ public class TradeEvolutionService : INService
 
         // Check if Pokemon is holding the required item
         var currentHeldItem = pokemon.HeldItem?.ToLower();
-        var requiredItemName = requiredItem.Identifier.ToLower();
+        var requiredItemName = requiredItem!.Identifier!.ToLower();
 
         if (currentHeldItem != requiredItemName)
         {

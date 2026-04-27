@@ -27,6 +27,14 @@ public class NullableIntSerializer : IBsonSerializer<int?>
         {
             case BsonType.Int32:
                 return context.Reader.ReadInt32();
+            case BsonType.Int64:
+                return checked((int)context.Reader.ReadInt64());
+            case BsonType.Double:
+                return (int)context.Reader.ReadDouble();
+            case BsonType.Decimal128:
+                return (int)context.Reader.ReadDecimal128();
+            case BsonType.Boolean:
+                return context.Reader.ReadBoolean() ? 1 : 0;
             case BsonType.String:
                 var str = context.Reader.ReadString();
                 if (string.IsNullOrEmpty(str))
@@ -64,7 +72,7 @@ public class NullableIntSerializer : IBsonSerializer<int?>
     /// <returns>The deserialized object.</returns>
     object IBsonSerializer.Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
     {
-        return Deserialize(context, args);
+        return Deserialize(context, args)!;
     }
 
     /// <summary>

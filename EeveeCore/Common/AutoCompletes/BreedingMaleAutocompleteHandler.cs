@@ -102,7 +102,7 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
                     p.Gender,
                     p.Shiny, 
                     p.Radiant,
-                    p.Skin);
+                    p.Skin!);
                 return new AutocompleteResult(displayName, (p.Position + 1).ToString()); // Return 1-based position
             }).ToList();
 

@@ -272,7 +272,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
             await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10), 
                 InteractionResponseType.DeferredChannelMessageWithSource);
 
-            IPage GeneratePage(IComponentPaginator p)
+            async ValueTask<IPage> GeneratePage(IComponentPaginator p)
             {
                 var pageItems = result.Listings
                     .Skip(p.CurrentPageIndex * itemsPerPage)
@@ -300,11 +300,11 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                                   listing.SpecialAttackIv + listing.SpecialDefenseIv + listing.SpeedIv;
 
                     // Get Pokemon image
-                    var (_, imagePath) = pokemonService.GetPokemonFormInfo(
+                    var (_, imagePath) = await pokemonService.GetPokemonFormInfo(
                         listing.PokemonName,
                         listing.Shiny == true,
                         listing.Radiant == true,
-                        listing.Skin ?? "").Result;
+                        listing.Skin ?? "");
 
                     // Create info text component with IV progress bar
                     var ivPercentage = (int)Math.Round((double)ivTotal / 186 * 100);

@@ -60,9 +60,9 @@ public partial class DuelPokemon
         _name = name;
         _nickname = nickname;
         if (_nickname != "None")
-            DisplayName = $"{_nickname} ({_name.Replace("-", " ")})";
+            DisplayName = $"{_nickname} ({_name!.Replace("-", " ")})";
         else
-            Name = _name.Replace("-", " ");
+            Name = _name!.Replace("-", " ");
         _illusionName = null;
         _illusionDisplayName = null;
 
@@ -129,7 +129,7 @@ public partial class DuelPokemon
         CanStillEvolve = canStillEvolve;
         DislikedFlavor = dislikedFlavor;
 
-        Owner = null;
+        Owner = null!;
         ActiveTurns = 0;
 
         Cursed = false;

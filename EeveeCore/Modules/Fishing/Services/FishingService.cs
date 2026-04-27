@@ -54,7 +54,7 @@ public class FishingService : INService, IReadyExecutor
         _eventHandler = eventHandler;
         _pokemonService = pokemonService;
         _missionService = missionService;
-        _random = new Random();
+        _random = Random.Shared;
     }
 
     /// <summary>
@@ -666,7 +666,7 @@ public class FishingService : INService, IReadyExecutor
     {
         var key = $"fishing:active:{userId}";
         var data = await _cache.Redis.GetDatabase().StringGetAsync(key);
-        return data.HasValue ? JsonSerializer.Deserialize<FishingData>(data!) : null;
+        return data.HasValue ? JsonSerializer.Deserialize<FishingData>((string)data!) : null;
     }
 
     /// <summary>

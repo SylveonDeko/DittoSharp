@@ -10,12 +10,12 @@ public partial class DuelPokemon
     /// <param name="move">The move causing the confusion.</param>
     /// <param name="source">A description of the confusion source.</param>
     /// <returns>A formatted message describing the confusion attempt.</returns>
-    public string Confuse(DuelPokemon attacker = null, Move.Move move = null, string source = "")
+    public string Confuse(DuelPokemon? attacker = null, Move.Move? move = null, string source = "")
     {
         if (Substitute > 0 && (move == null || move.IsAffectedBySubstitute())) return "";
         if (Confusion.Active()) return "";
         if (Ability(move: move, attacker: attacker) == Impl.Ability.OWN_TEMPO) return "";
-        Confusion.SetTurns(new Random().Next(2, 6));
+        Confusion.SetTurns(Random.Shared.Next(2, 6));
         if (!string.IsNullOrEmpty(source)) source = $" from {source}";
         var msg = $"{Name} is confused{source}!\n";
         if (HeldItem.ShouldEatBerryStatus(attacker)) msg += HeldItem.EatBerry(attacker: attacker, move: move);
@@ -30,7 +30,7 @@ public partial class DuelPokemon
     /// <param name="move">The move causing the flinch.</param>
     /// <param name="source">A description of the flinch source.</param>
     /// <returns>A formatted message describing the flinch attempt.</returns>
-    public string Flinch(DuelPokemon attacker = null, Move.Move move = null, string source = "")
+    public string Flinch(DuelPokemon? attacker = null, Move.Move? move = null, string source = "")
     {
         var msg = "";
         if (Substitute > 0 && (move == null || move.IsAffectedBySubstitute())) return "";
@@ -51,7 +51,7 @@ public partial class DuelPokemon
     /// <param name="move">The move causing the infatuation.</param>
     /// <param name="source">A description of the infatuation source.</param>
     /// <returns>A formatted message describing the infatuation attempt.</returns>
-    public string Infatuate(DuelPokemon attacker, Move.Move move = null, string source = "")
+    public string Infatuate(DuelPokemon attacker, Move.Move? move = null, string source = "")
     {
         var msg = "";
         if (!string.IsNullOrEmpty(source)) source = $" from {source}";

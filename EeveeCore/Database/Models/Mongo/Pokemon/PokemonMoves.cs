@@ -13,17 +13,17 @@ public class PokemonMoves
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the identifier or name of the Pokémon.
     /// </summary>
     [BsonElement("pokemon")]
-    public string Pokemon { get; set; }
+    public string Pokemon { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the list of move identifiers that this Pokémon can learn.
     /// </summary>
     [BsonElement("moves")]
-    public List<string> Moves { get; set; }
+    public List<string> Moves { get; set; } = null!;
 }

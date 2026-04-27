@@ -120,7 +120,7 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
                         await FollowupAsync("You have not set a shadow hunt yet.", ephemeral: true);
                         return false;
                     }
-                    var chainIncrease = new Random().Next(item.MinChainIncrease, item.MaxChainIncrease + 1);
+                    var chainIncrease = Random.Shared.Next(item.MinChainIncrease, item.MaxChainIncrease + 1);
                     await Service.IncreaseChainAsync(userId, chainIncrease);
                     break;
 
@@ -196,7 +196,7 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
         var amounts = MissionConstants.LotteryAmounts;
         var weights = MissionConstants.LotteryWeights;
         
-        var random = new Random();
+        var random = Random.Shared;
         var result = new int[numChoices];
         
         for (var i = 0; i < numChoices; i++)

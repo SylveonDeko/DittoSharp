@@ -379,10 +379,10 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
             .Where(u => u.UserId == user.Id)
             .Set(u => u.TradeBanned, false)
             .Set(u => u.TradeBanReason, "")
-            .Set(u => u.TradeBanDate, DateTime.Now)
+            .Set(u => u.TradeBanDate, DateTime.UtcNow)
             .Set(u => u.MarketBanned, false)
             .Set(u => u.MarketBanReason, "")
-            .Set(u => u.MarketBanDate, DateTime.Now)
+            .Set(u => u.MarketBanDate, DateTime.UtcNow)
             .UpdateAsync();
 
         if (updated > 0)

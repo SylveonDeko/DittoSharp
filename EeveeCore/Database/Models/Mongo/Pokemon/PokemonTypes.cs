@@ -14,7 +14,7 @@ public class PokemonTypes
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the Pokémon identifier.
@@ -26,7 +26,7 @@ public class PokemonTypes
     ///     Gets or sets the list of type identifiers for this Pokémon.
     /// </summary>
     [BsonElement("types")]
-    public List<int> Types { get; set; }
+    public List<int> Types { get; set; } = null!;
 }
 
 /// <summary>

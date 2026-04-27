@@ -20,19 +20,19 @@ public class PartyController : ControllerBase
 {
     private readonly PartyService _partyService;
     private readonly LinqToDbConnectionProvider _dbProvider;
-    private readonly IMongoService _mongoService;
+    private readonly IGameDataCache _gameData;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="PartyController"/> class.
     /// </summary>
     /// <param name="partyService">The party service.</param>
     /// <param name="dbProvider">The database connection provider.</param>
-    /// <param name="mongoService">The MongoDB service for accessing Pokemon forms data.</param>
-    public PartyController(PartyService partyService, LinqToDbConnectionProvider dbProvider, IMongoService mongoService)
+    /// <param name="gameData">The in-memory static game data cache.</param>
+    public PartyController(PartyService partyService, LinqToDbConnectionProvider dbProvider, IGameDataCache gameData)
     {
         _partyService = partyService;
         _dbProvider = dbProvider;
-        _mongoService = mongoService;
+        _gameData = gameData;
     }
 
     /// <summary>
@@ -87,11 +87,7 @@ public class PartyController : ControllerBase
                                         select new { Pokemon = pokemon, ownership.Position })
                     .ToListAsync();
 
-                // Read Forms data once for all Pokemon
-                var allForms = await _mongoService.Forms
-                    .Find(_ => true)
-                    .ToListAsync();
-                var formsLookup = allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
+                var formsLookup = _gameData.FormsByIdentifier;
 
                 // Create a lookup for quick access
                 var pokemonLookup = pokemonData.ToDictionary(p => p.Pokemon.Id, p => p);

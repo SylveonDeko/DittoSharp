@@ -10,7 +10,7 @@ public partial class DuelPokemon
     /// <param name="attacker">The Pokemon using a move that might ignore this Pokemon's ability.</param>
     /// <param name="move">The move being used that might ignore this Pokemon's ability.</param>
     /// <returns>The effective ability, or 0 if the ability is being ignored.</returns>
-    public Ability Ability(DuelPokemon attacker = null, Move.Move move = null)
+    public Ability Ability(DuelPokemon? attacker = null, Move.Move? move = null)
     {
         // Currently there are two categories of ability ignores, and both only apply when a move is used.
         // Since this could change, the method signature is flexible. However, without both present, it
@@ -115,7 +115,7 @@ public partial class DuelPokemon
     /// <param name="attacker">The attacking Pokemon (for ability checks).</param>
     /// <param name="move">The move being used (for ability checks).</param>
     /// <returns>The effective weight considering abilities and modifiers.</returns>
-    public int Weight(DuelPokemon attacker = null, Move.Move move = null)
+    public int Weight(DuelPokemon? attacker = null, Move.Move? move = null)
     {
         var curAbility = Ability(attacker, move);
         var curWeight = StartingWeight;
@@ -143,7 +143,7 @@ public partial class DuelPokemon
     /// <param name="attacker">The attacking Pokemon (for ability checks).</param>
     /// <param name="move">The move being used (for ability checks).</param>
     /// <returns>True if the Pokemon is grounded, false if it's airborne.</returns>
-    public bool Grounded(Battle battle, DuelPokemon attacker = null, Move.Move move = null)
+    public bool Grounded(Battle battle, DuelPokemon? attacker = null, Move.Move? move = null)
     {
         if (battle.Gravity.Active()) return true;
         if (HeldItem.Get() == "iron-ball") return true;
@@ -167,6 +167,6 @@ public partial class DuelPokemon
             where move.SelectableByAssist()
             select move).ToList();
 
-        return moves.Count == 0 ? null : moves[new Random().Next(moves.Count)];
+        return moves.Count == 0 ? null : moves[Random.Shared.Next(moves.Count)];
     }
 }

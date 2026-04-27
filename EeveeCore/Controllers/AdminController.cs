@@ -213,7 +213,7 @@ public class AdminController : ControllerBase
                 }
                 else
                 {
-                    baseQuery = baseQuery.Where(q => q.User.TrainerNickname.Contains(search));
+                    baseQuery = baseQuery.Where(q => q!.User!.TrainerNickname!.Contains(search));
                 }
             }
 

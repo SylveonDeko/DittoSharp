@@ -36,7 +36,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             columnWidths[i] = headers[i].Length;
             foreach (var row in rows)
                 if (i < row.Count && row[i] != null)
-                    columnWidths[i] = Math.Max(columnWidths[i], row[i].Length);
+                    columnWidths[i] = Math.Max(columnWidths[i], row[i]!.Length);
         }
 
         // Format headers
@@ -58,7 +58,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             for (var i = 0; i < headers.Count; i++)
             {
                 var value = i < row.Count && row[i] != null ? row[i] : "";
-                sb.Append(' ').Append(value.PadRight(columnWidths[i])).Append(" |");
+                sb.Append(' ').Append(value!.PadRight(columnWidths[i])).Append(" |");
             }
 
             sb.AppendLine();
@@ -83,7 +83,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     ///     Returns null values if the party doesn't exist and can't be created.
     /// </returns>
     public async
-        Task<(string Description, ulong[] Party, ulong[] PartyPokeIds, int[] PokemonIndices, string[] PokemonNames)>
+        Task<(string? Description, ulong[]? Party, ulong[]? PartyPokeIds, int[]? PokemonIndices, string?[]? PokemonNames)>
         GetPartySetupData(ulong userId, string partyName)
     {
         await using var db = await dbProvider.GetConnectionAsync();
@@ -187,7 +187,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     ///     A task representing the asynchronous operation that returns an EmbedBuilder
     ///     with the party information, or null if the party doesn't exist.
     /// </returns>
-    public async Task<EmbedBuilder> GetPartyViewEmbed(ulong userId, string partyName = null)
+    public async Task<EmbedBuilder> GetPartyViewEmbed(ulong userId, string? partyName = null)
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
@@ -202,7 +202,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             var currentParty = await db.Parties
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-            if (currentParty == null) return null;
+            if (currentParty == null) return null!;
 
             var partySlots = new[]
             {
@@ -250,7 +250,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             var party = await db.Parties
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == partyName);
 
-            if (party == null) return null;
+            if (party == null) return null!;
 
             var partySlots = new[]
             {
@@ -647,7 +647,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             .Select(p => p.Name)
             .ToListAsync();
 
-        return parties;
+        return parties.Where(n => n != null).ToList()!;
     }
 
     /// <summary>
@@ -710,7 +710,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
             // Check if the Pokemon is already in the party
             var partySlots = new[]
             {
-                party.Slot1,
+                party!.Slot1,
                 party.Slot2,
                 party.Slot3,
                 party.Slot4,
@@ -786,7 +786,7 @@ public class PartyService(LinqToDbConnectionProvider dbProvider, DiscordShardedC
     {
         if (_pagedResults.TryGetValue(userId, out var result)) return Task.FromResult(result);
 
-        return Task.FromResult<(List<EmbedBuilder> Pages, int CurrentPage)>((null, 0));
+        return Task.FromResult<(List<EmbedBuilder> Pages, int CurrentPage)>((new List<EmbedBuilder>(), 0));
     }
 
     /// <summary>
@@ -818,7 +818,7 @@ public class ServiceResult
     /// <summary>
     ///     Contains a descriptive message about the result of the operation.
     /// </summary>
-    public string Message { get; set; }
+    public string Message { get; set; } = null!;
 
     /// <summary>
     ///     Creates a success result with the specified message.

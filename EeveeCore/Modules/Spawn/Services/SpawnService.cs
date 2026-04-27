@@ -128,7 +128,7 @@ public class SpawnService : INService, IReadyExecutor
         _cache = cache;
         _achievementService = achievementService;
         _missionService = missionService;
-        _random = new Random();
+        _random = Random.Shared;
 
         handler.MessageReceived += HandleMessageAsync;
     }
@@ -383,7 +383,7 @@ public class SpawnService : INService, IReadyExecutor
             chances.Starter < 2 ? GetRandomFromList(PokemonList.starterList) : // This matches Python
             GetRandomFromList(PokemonList.pList); // Fallback to normal list like Python
 
-        return pokemon.ToLower();
+        return pokemon!.ToLower();
     }
 
     /// <summary>
@@ -556,7 +556,7 @@ public class SpawnService : INService, IReadyExecutor
         var shiftAmount = new[] { -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6 };
         var letterShift = shiftAmount[_random.Next(shiftAmount.Length)];
         var shiftInverted = -letterShift;
-        var giftWord = EncodePhrase(pokemonName, letterShift);
+        var giftWord = EncodePhrase(pokemonName!, letterShift);
 
         var embed = new EmbedBuilder()
             .WithTitle("🔒 A locked EeveeCore vault has been spotted!")
@@ -567,7 +567,7 @@ public class SpawnService : INService, IReadyExecutor
         // Check if vault image exists locally
         var vaultImagePath = Path.Combine("data", "images", "EeveeCore_vault.png");
         IUserMessage message;
-        FileStream vaultStream = null;
+        FileStream? vaultStream = null;
         
         try
         {
@@ -630,7 +630,7 @@ public class SpawnService : INService, IReadyExecutor
         };
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == message.Author.Id);
-        if (user == null) return null;
+        if (user == null) return null!;
 
         switch (rewardType)
         {
@@ -654,7 +654,7 @@ public class SpawnService : INService, IReadyExecutor
     /// <param name="phrase">The phrase to encode.</param>
     /// <param name="shift">The amount to shift each letter.</param>
     /// <returns>The encoded phrase.</returns>
-    private string EncodePhrase(string? phrase, int shift)
+    private string EncodePhrase(string phrase, int shift)
     {
         var encoded = new StringBuilder();
         foreach (var c in phrase)
@@ -834,10 +834,10 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>True if spawns are allowed in the channel, false otherwise.</returns>
     private static async Task<bool> ValidateChannel(ITextChannel channel, Guild config)
     {
-        if (!config.EnableSpawnsAll && !config.EnabledChannels.Contains(channel.Id))
+        if (!config.EnableSpawnsAll && !config!.EnabledChannels!.Contains(channel.Id))
             return false;
 
-        return !config.DisabledSpawnChannels.Contains(channel.Id);
+        return !config!.DisabledSpawnChannels!.Contains(channel.Id);
     }
 
     /// <summary>
@@ -875,7 +875,7 @@ public class SpawnService : INService, IReadyExecutor
         if (user?.Hunt != pokemon.Capitalize())
             return false;
 
-        var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user.Chain / 1000.0);
+        var makeShadow = _random.NextDouble() < 1.0 / 6000 * Math.Pow(4, user!.Chain / 1000.0);
 
         if (makeShadow)
             await dbContext.Users
@@ -903,7 +903,7 @@ public class SpawnService : INService, IReadyExecutor
     {
         // Get form info from MongoDB for validation
         var formInfo = await _mongoDb.Forms
-            .Find(f => f.Identifier == pokemonName.ToLower())
+            .Find(f => f.Identifier == pokemonName!.ToLower())
             .FirstOrDefaultAsync();
 
         if (formInfo == null)
@@ -925,7 +925,7 @@ public class SpawnService : INService, IReadyExecutor
 
         var embed = new EmbedBuilder()
             .WithTitle(spawnMessage)
-            .WithDescription($"{shinyEmote}This Pokémon's name starts with {pokemonName[0]}{shinyEmote}")
+            .WithDescription($"{shinyEmote}This Pokémon's name starts with {pokemonName![0]}{shinyEmote}")
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
             .WithFooter("/explain spawns for basic info");
 
@@ -947,7 +947,7 @@ public class SpawnService : INService, IReadyExecutor
 
         // Create spawn message with or without button
         IUserMessage spawnMsg;
-        FileStream fileStream = null;
+        FileStream? fileStream = null;
         
         try
         {
@@ -1146,7 +1146,7 @@ public class SpawnService : INService, IReadyExecutor
     {
         var options = new List<string?> { pokemonName };
 
-        switch (pokemonName.ToLower())
+        switch (pokemonName!.ToLower())
         {
             case "mr-mime":
                 options.Add("mr.-mime");
@@ -1195,7 +1195,7 @@ public class SpawnService : INService, IReadyExecutor
                 break;
         }
 
-        return options.Select(o => o.ToLower()).ToList();
+        return options.Select(o => o!.ToLower()).ToList();
     }
 
     /// <summary>
@@ -1342,7 +1342,7 @@ public class SpawnService : INService, IReadyExecutor
     /// </summary>
     /// <param name="user">The user who caught the Pokemon.</param>
     /// <returns>A tuple containing the message about the berry drop and the updated items dictionary.</returns>
-    private async Task<(string Message, Dictionary<string, int> Items)> HandleBerryDrop(User user)
+    private async Task<(string? Message, Dictionary<string, int>? Items)> HandleBerryDrop(User user)
     {
         var berryChance = _random.Next(1, 101);
         var expensiveChance = _random.Next(1, 26);
@@ -1350,8 +1350,8 @@ public class SpawnService : INService, IReadyExecutor
         if (berryChance >= 8)
             return (null, null);
 
-        Dictionary<string?, int> items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
-                                         new Dictionary<string?, int>();
+        var items = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}") ??
+                                         new Dictionary<string, int>();
 
         string? berry;
         if (berryChance == 1)
@@ -1433,11 +1433,11 @@ public class SpawnService : INService, IReadyExecutor
         bool shiny = false,
         bool boosted = false,
         bool radiant = false,
-        string skin = null,
-        string gender = null,
+        string? skin = null,
+        string? gender = null,
         int level = 1)
     {
-        var pokemonNameLower = pokemonName.ToLower();
+        var pokemonNameLower = pokemonName!.ToLower();
         
         // Get form info using cached lookup
         var formInfo = await GetCachedFormInfoAsync(pokemonNameLower);
@@ -1977,9 +1977,9 @@ public class SpawnService : INService, IReadyExecutor
             var cachedData = await redis.StringGetAsync(cacheKey);
             if (cachedData.HasValue)
             {
-                var spawnData = JsonSerializer.Deserialize<dynamic>(cachedData);
+                var spawnData = JsonSerializer.Deserialize<dynamic>((string)cachedData!);
                 return (
-                    spawnData.GetProperty("PokemonName").GetString(),
+                    spawnData!.GetProperty("PokemonName").GetString(),
                     spawnData.GetProperty("IsShiny").GetBoolean(),
                     spawnData.GetProperty("LegendaryChance").GetInt32(),
                     spawnData.GetProperty("UltraBeastChance").GetInt32()
@@ -2270,11 +2270,11 @@ public class SpawnService : INService, IReadyExecutor
         if (_cachedCheapShopItems == null || DateTime.UtcNow - _cheapShopItemsLastCached > CacheExpiry)
         {
             var cheapItems = await _mongoDb.Shop
-                .Find(i => i.Price <= 8000 && !i.Item.EndsWith("key"))
+                .Find(i => i.Price <= 8000 && !i!.Item!.EndsWith("key"))
                 .Project(i => i.Item)
                 .ToListAsync();
-            
-            _cachedCheapShopItems = cheapItems;
+
+            _cachedCheapShopItems = cheapItems.Where(i => i != null).ToList()!;
             _cheapShopItemsLastCached = DateTime.UtcNow;
         }
 
@@ -2289,11 +2289,11 @@ public class SpawnService : INService, IReadyExecutor
         if (_cachedExpensiveShopItems == null || DateTime.UtcNow - _expensiveShopItemsLastCached > CacheExpiry)
         {
             var expensiveItems = await _mongoDb.Shop
-                .Find(i => i.Price >= 8000 && i.Price <= 20000 && !i.Item.EndsWith("key"))
+                .Find(i => i.Price >= 8000 && i.Price <= 20000 && !i!.Item!.EndsWith("key"))
                 .Project(i => i.Item)
                 .ToListAsync();
-            
-            _cachedExpensiveShopItems = expensiveItems;
+
+            _cachedExpensiveShopItems = expensiveItems.Where(i => i != null).ToList()!;
             _expensiveShopItemsLastCached = DateTime.UtcNow;
         }
 
@@ -2308,11 +2308,11 @@ public class SpawnService : INService, IReadyExecutor
         if (_cachedBerryItems == null || DateTime.UtcNow - _berryItemsLastCached > CacheExpiry)
         {
             var berryItems = await _mongoDb.Items
-                .Find(i => i.Identifier.EndsWith("-berry"))
+                .Find(i => i!.Identifier!.EndsWith("-berry"))
                 .Project(i => i.Identifier)
                 .ToListAsync();
-            
-            _cachedBerryItems = berryItems;
+
+            _cachedBerryItems = berryItems.Where(i => i != null).ToList()!;
             _berryItemsLastCached = DateTime.UtcNow;
         }
 
@@ -2332,8 +2332,8 @@ public class SpawnService : INService, IReadyExecutor
     /// <param name="ShouldPinSpawn">Whether the spawn message should be pinned.</param>
     public record CatchResult(
         bool Success,
-        string Message,
-        Embed ResponseEmbed,
+        string? Message,
+        Embed? ResponseEmbed,
         bool ShouldDeleteSpawn,
         bool ShouldPinSpawn);
 }

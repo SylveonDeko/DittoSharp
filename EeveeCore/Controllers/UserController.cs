@@ -25,6 +25,7 @@ public class UserController : ControllerBase
     private readonly LinqToDbConnectionProvider _dbProvider;
     private readonly DiscordShardedClient _client;
     private readonly IMongoService _mongoService;
+    private readonly IGameDataCache _gameData;
     private readonly PokemonService _pokemonService;
     private readonly FilterGroupService _filterGroupService;
     private readonly RedisCache _redisCache;
@@ -35,15 +36,17 @@ public class UserController : ControllerBase
     /// <param name="dbProvider">The database connection provider.</param>
     /// <param name="client">The Discord client.</param>
     /// <param name="mongoService">The MongoDB service.</param>
+    /// <param name="gameData">The in-memory static game data cache.</param>
     /// <param name="pokemonService">The Pokemon service.</param>
     /// <param name="filterGroupService">The filter group service.</param>
     /// <param name="redisCache">The Redis cache service.</param>
     public UserController(LinqToDbConnectionProvider dbProvider, DiscordShardedClient client, IMongoService mongoService,
-        PokemonService pokemonService, FilterGroupService filterGroupService, RedisCache redisCache)
+        IGameDataCache gameData, PokemonService pokemonService, FilterGroupService filterGroupService, RedisCache redisCache)
     {
         _dbProvider = dbProvider;
         _client = client;
         _mongoService = mongoService;
+        _gameData = gameData;
         _pokemonService = pokemonService;
         _filterGroupService = filterGroupService;
         _redisCache = redisCache;
@@ -74,7 +77,7 @@ public class UserController : ControllerBase
             var pokemonCount = await db.UserPokemonOwnerships.CountAsync(o => o.UserId == userId);
 
             // Get selected Pokemon details with image path
-            object selectedPokemon = null;
+            object? selectedPokemon = null;
             if (user.Selected.HasValue && user.Selected.Value > 0)
             {
                 // First verify ownership, then get Pokemon details
@@ -87,14 +90,7 @@ public class UserController : ControllerBase
 
                 if (pokemon != null)
                 {
-                    // Read all Forms data for mapping with caching
-                    var formsLookup = await _redisCache.GetOrAddCachedDataAsync("pokemon:forms:lookup", async () =>
-                    {
-                        var allForms = await _mongoService.Forms
-                            .Find(_ => true)
-                            .ToListAsync();
-                        return allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
-                    }, TimeSpan.FromDays(2));
+                    var formsLookup = _gameData.FormsByIdentifier;
 
                     var pokemonName = pokemon.PokemonName.ToLower();
                     var pokemonId = 0;
@@ -372,7 +368,7 @@ public class UserController : ControllerBase
             // Cache the result for 5 minutes (filter results change less frequently than individual Pokemon)
             if (result is OkObjectResult okResult)
             {
-                await _redisCache.AddToCache(cacheKey, okResult.Value, TimeSpan.FromMinutes(5));
+                await _redisCache.AddToCache(cacheKey, okResult.Value!, TimeSpan.FromMinutes(5));
             }
 
             return result;
@@ -613,14 +609,7 @@ public class UserController : ControllerBase
             .Take(pageSize)
             .ToListAsync();
 
-        // Read all Forms data once for mapping with caching
-        var formsLookup = await _redisCache.GetOrAddCachedDataAsync("pokemon:forms:lookup", async () =>
-        {
-            var allForms = await _mongoService.Forms
-                .Find(_ => true)
-                .ToListAsync();
-            return allForms.ToDictionary(f => f.Identifier.ToLower(), f => f);
-        }, TimeSpan.FromDays(2));
+        var formsLookup = _gameData.FormsByIdentifier;
 
         // Process each Pokemon to include form data and image paths
         var processedPokemon = pokemonData.Select(item =>
@@ -968,7 +957,7 @@ public class UserController : ControllerBase
     /// <param name="eggDict">Dictionary of egg information keyed by egg ID.</param>
     /// <returns>Slot information object.</returns>
     private static object CreateSlotInfo(ulong? eggId,
-        Dictionary<ulong, (ulong Id, string? PokemonName, DateTime? Timestamp, string Nickname)> eggDict)
+        Dictionary<ulong, (ulong Id, string PokemonName, DateTime? Timestamp, string Nickname)> eggDict)
     {
         if (!eggId.HasValue || eggId.Value == 0) return new { IsEmpty = true };
 

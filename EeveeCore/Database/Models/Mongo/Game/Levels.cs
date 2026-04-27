@@ -13,17 +13,17 @@ public class Levels
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the dictionary mapping level identifiers to title strings.
     /// </summary>
     [BsonElement("titles")]
-    public Dictionary<string, string> Titles { get; set; }
+    public Dictionary<string, string> Titles { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets additional level requirement mappings not explicitly defined in the schema.
     /// </summary>
     [BsonExtraElements]
-    public IDictionary<string, object> LevelRequirements { get; set; }
+    public IDictionary<string, object>? LevelRequirements { get; set; }
 }

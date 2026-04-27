@@ -11,10 +11,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendAttack(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendAttack(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "attack", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "attack", source, checkLooping);
     }
 
     /// <summary>
@@ -26,10 +26,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendDefense(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendDefense(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "defense", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "defense", source, checkLooping);
     }
 
     /// <summary>
@@ -41,10 +41,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendSpAtk(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendSpAtk(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "special attack", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "special attack", source, checkLooping);
     }
 
     /// <summary>
@@ -56,10 +56,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendSpDef(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendSpDef(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "special defense", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "special defense", source, checkLooping);
     }
 
     /// <summary>
@@ -71,10 +71,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendSpeed(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendSpeed(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "speed", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "speed", source, checkLooping);
     }
 
     /// <summary>
@@ -86,10 +86,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendAccuracy(int stageChange, DuelPokemon attacker = null, Move.Move move = null,
+    public string AppendAccuracy(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null,
         string source = "", bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "accuracy", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "accuracy", source, checkLooping);
     }
 
     /// <summary>
@@ -101,10 +101,10 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change.</returns>
-    public string AppendEvasion(int stageChange, DuelPokemon attacker = null, Move.Move move = null, string source = "",
+    public string AppendEvasion(int stageChange, DuelPokemon? attacker = null, Move.Move? move = null, string source = "",
         bool checkLooping = true)
     {
-        return AppendStat(stageChange, attacker, move, "evasion", source, checkLooping);
+        return AppendStat(stageChange, attacker!, move, "evasion", source, checkLooping);
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public partial class DuelPokemon
     /// <param name="source">A description of the source of the change.</param>
     /// <param name="checkLooping">Whether to check for looping abilities like Opportunist.</param>
     /// <returns>A formatted message describing the stat change and any resulting effects.</returns>
-    public string AppendStat(int stageChange, DuelPokemon attacker, Move.Move move, string stat, string source,
+    public string AppendStat(int stageChange, DuelPokemon attacker, Move.Move? move, string stat, string source,
         bool checkLooping = true)
     {
         var msg = "";

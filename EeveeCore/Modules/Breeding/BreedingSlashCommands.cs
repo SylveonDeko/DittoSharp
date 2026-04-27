@@ -303,7 +303,7 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         // Create a temporary Pokemon object from the breeding result
         var tempPokemon = new Database.Linq.Models.Pokemon.Pokemon
         {
-            PokemonName = result.Child.Name,
+            PokemonName = result!.Child!.Name,
             HpIv = result.Child.Hp,
             AttackIv = result.Child.Attack,
             DefenseIv = result.Child.Defense,
@@ -503,7 +503,7 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10),
                 InteractionResponseType.DeferredChannelMessageWithSource);
 
-            IPage GenerateBreedingStatsPage(IComponentPaginator p)
+            async ValueTask<IPage> GenerateBreedingStatsPage(IComponentPaginator p)
             {
                 var pageItems = femalePokemons
                     .Skip(p.CurrentPageIndex * itemsPerPage)
@@ -522,7 +522,7 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
                 foreach (var (pokemon, position) in pageItems)
                 {
-                    var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin);
+                    var emoji = GetPokemonEmoji(pokemon.Shiny, pokemon.Radiant, pokemon.Skin!);
                     var gender = GetGenderEmoji(pokemon.Gender);
                     var favorite = pokemon.Favorite ? "⭐ " : "";
                     var champion = pokemon.Champion ? "🏆 " : "";
@@ -560,11 +560,11 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                         });
 
                     // Add Pokemon image as thumbnail
-                    var (_, imagePath) = _pokemonService.GetPokemonFormInfo(
+                    var (_, imagePath) = await _pokemonService.GetPokemonFormInfo(
                         pokemon.PokemonName,
                         pokemon.Shiny == true,
                         pokemon.Radiant == true,
-                        pokemon.Skin ?? "").Result;
+                        pokemon.Skin ?? "");
 
                     if (File.Exists(imagePath))
                     {

@@ -16,6 +16,7 @@ namespace EeveeCore.Modules.Duels.Impl;
 public class Battle
 {
     private readonly IMongoService _mongoService;
+    private readonly IGameDataCache _gameData;
 
     /// <summary>
     ///     Initializes a new instance of the Battle class.
@@ -26,21 +27,23 @@ public class Battle
     /// <param name="trainer1">The first trainer in the battle.</param>
     /// <param name="trainer2">The second trainer in the battle.</param>
     /// <param name="mongoService">The MongoDB service for accessing game data.</param>
+    /// <param name="gameData">The in-memory static game data cache.</param>
     /// <param name="inverseBattle">Whether this is an inverse battle where type effectiveness is reversed.</param>
-    public Battle(IInteractionContext context, IMessageChannel channel, Trainer? trainer1, Trainer? trainer2,
-        IMongoService mongoService, bool inverseBattle = false)
+    public Battle(IInteractionContext context, IMessageChannel channel, Trainer trainer1, Trainer trainer2,
+        IMongoService mongoService, IGameDataCache gameData, bool inverseBattle = false)
     {
         Context = context;
         Channel = channel;
         Trainer1 = trainer1;
         Trainer2 = trainer2;
         _mongoService = mongoService;
+        _gameData = gameData;
 
         // Initialize items for each Pokemon
         foreach (var poke in trainer1.Party) poke.HeldItem.Battle = this;
         foreach (var poke in trainer2.Party) poke.HeldItem.Battle = this;
 
-        BgNum = new Random().Next(1, 5);
+        BgNum = Random.Shared.Next(1, 5);
         TrickRoom = new ExpiringEffect(0);
         MagicRoom = new ExpiringEffect(0);
         WonderRoom = new ExpiringEffect(0);
@@ -69,12 +72,12 @@ public class Battle
     /// <summary>
     ///     Gets the first trainer in the battle.
     /// </summary>
-    public Trainer? Trainer1 { get; }
+    public Trainer Trainer1 { get; }
 
     /// <summary>
     ///     Gets the second trainer in the battle.
     /// </summary>
-    public Trainer? Trainer2 { get; }
+    public Trainer Trainer2 { get; }
 
     /// <summary>
     ///     Gets the background number used for the battle scene.
@@ -219,34 +222,28 @@ public class Battle
         // Combine ignored move IDs
         var ignoredIds = immuneIds.Union(uncodedIds).ToList();
 
-        // Load move data and type effectiveness
-        var moves = await _mongoService.Moves.AsQueryable()
-            .Where(m => !ignoredIds.Contains(m.MoveId))
-            .ToListAsync();
-        
-        // Convert to dynamic list for compatibility with existing code
-        MetronomeMoves = moves.Cast<dynamic>().ToList();
+        var ignoredSet = ignoredIds.ToHashSet();
+        MetronomeMoves = _gameData.MovesById.Values
+            .Where(m => !ignoredSet.Contains(m.MoveId))
+            .Cast<dynamic>()
+            .ToList();
 
-        var typeEffectivenessData = await _mongoService.TypeEffectiveness.Find(Builders<TypeEffectiveness>.Filter.Empty)
-            .ToListAsync();
-
-        // Populate the type effectiveness dictionary
-        foreach (var te in typeEffectivenessData)
+        foreach (var te in _gameData.TypeEffectiveness)
             TypeEffectiveness[(
                 (ElementType)te.DamageTypeId,
                 (ElementType)te.TargetTypeId
             )] = te.DamageFactor;
 
         // Initial Pokemon send-out
-        if (Trainer1.CurrentPokemon.GetRawSpeed() > Trainer2.CurrentPokemon.GetRawSpeed())
+        if (Trainer1.CurrentPokemon!.GetRawSpeed() > Trainer2.CurrentPokemon!.GetRawSpeed())
         {
-            Msg += Trainer1.CurrentPokemon.SendOut(Trainer2.CurrentPokemon, this);
-            Msg += Trainer2.CurrentPokemon.SendOut(Trainer1.CurrentPokemon, this);
+            Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
+            Msg += Trainer2.CurrentPokemon!.SendOut(Trainer1.CurrentPokemon!, this);
         }
         else
         {
-            Msg += Trainer2.CurrentPokemon.SendOut(Trainer1.CurrentPokemon, this);
-            Msg += Trainer1.CurrentPokemon.SendOut(Trainer2.CurrentPokemon, this);
+            Msg += Trainer2.CurrentPokemon!.SendOut(Trainer1.CurrentPokemon!, this);
+            Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
         }
 
         await SendMsg();
@@ -281,9 +278,9 @@ public class Battle
                 // Send out the pokes that were just swapped to
                 if (swapped1 && swapped2)
                 {
-                    if (Trainer1.CurrentPokemon.GetRawSpeed() > Trainer2.CurrentPokemon.GetRawSpeed())
+                    if (Trainer1.CurrentPokemon!.GetRawSpeed() > Trainer2.CurrentPokemon!.GetRawSpeed())
                     {
-                        Msg += Trainer1.CurrentPokemon.SendOut(Trainer2.CurrentPokemon, this);
+                        Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
                         if (!Trainer1.HasAlivePokemon())
                         {
                             Msg += $"{Trainer2.Name} wins!\n";
@@ -291,7 +288,7 @@ public class Battle
                             break;
                         }
 
-                        Msg += Trainer2.CurrentPokemon.SendOut(Trainer1.CurrentPokemon, this);
+                        Msg += Trainer2.CurrentPokemon!.SendOut(Trainer1.CurrentPokemon!, this);
                         if (!Trainer2.HasAlivePokemon())
                         {
                             Msg += $"{Trainer1.Name} wins!\n";
@@ -301,7 +298,7 @@ public class Battle
                     }
                     else
                     {
-                        Msg += Trainer2.CurrentPokemon.SendOut(Trainer1.CurrentPokemon, this);
+                        Msg += Trainer2.CurrentPokemon!.SendOut(Trainer1.CurrentPokemon!, this);
                         if (!Trainer2.HasAlivePokemon())
                         {
                             Msg += $"{Trainer1.Name} wins!\n";
@@ -309,7 +306,7 @@ public class Battle
                             break;
                         }
 
-                        Msg += Trainer1.CurrentPokemon.SendOut(Trainer2.CurrentPokemon, this);
+                        Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
                         if (!Trainer1.HasAlivePokemon())
                         {
                             Msg += $"{Trainer2.Name} wins!\n";
@@ -320,7 +317,7 @@ public class Battle
                 }
                 else if (swapped1)
                 {
-                    Msg += Trainer1.CurrentPokemon.SendOut(Trainer2.CurrentPokemon, this);
+                    Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
                     if (!Trainer1.HasAlivePokemon())
                     {
                         Msg += $"{Trainer2.Name} wins!\n";
@@ -330,7 +327,7 @@ public class Battle
                 }
                 else if (swapped2)
                 {
-                    Msg += Trainer2.CurrentPokemon.SendOut(Trainer1.CurrentPokemon, this);
+                    Msg += Trainer2.CurrentPokemon!.SendOut(Trainer1.CurrentPokemon!, this);
                     if (!Trainer2.HasAlivePokemon())
                     {
                         Msg += $"{Trainer1.Name} wins!\n";
@@ -350,8 +347,8 @@ public class Battle
             Trainer1.Event = new TaskCompletionSource<bool>();
             Trainer2.Event = new TaskCompletionSource<bool>();
 
-            if (!Trainer1.IsHuman()) ((NPCTrainer)Trainer1).Move(Trainer2.CurrentPokemon, this);
-            if (!Trainer2.IsHuman()) ((NPCTrainer)Trainer2).Move(Trainer1.CurrentPokemon, this);
+            if (!Trainer1.IsHuman()) ((NPCTrainer)Trainer1).Move(Trainer2.CurrentPokemon!, this);
+            if (!Trainer2.IsHuman()) ((NPCTrainer)Trainer2).Move(Trainer1.CurrentPokemon!, this);
 
             var renderer = new DuelRenderer(_mongoService);
 
@@ -468,7 +465,7 @@ public class Battle
             // EDGE CASE - Moves that DO NOT target the opponent (and swapping) SHOULD run
             // even if there is no other poke on the field.
             if (t1.CurrentPokemon == null && t2.CurrentPokemon != null &&
-                (t2.SelectedAction.IsSwitch || !(t2.SelectedAction as Trainer.MoveAction).Move.TargetsOpponent()))
+                (t2.SelectedAction.IsSwitch || !(t2!.SelectedAction as Trainer.MoveAction)!.Move.TargetsOpponent()))
             {
                 winner = await RunSwap(t1, t2, true);
                 if (winner != null)
@@ -489,7 +486,7 @@ public class Battle
                 if (t2.SelectedAction.IsSwitch)
                 {
                     Msg += t2.CurrentPokemon.Remove(this);
-                    t2.SwitchPoke((t2.SelectedAction as Trainer.SwitchAction).SwitchIndex, true);
+                    t2.SwitchPoke((t2!.SelectedAction as Trainer.SwitchAction)!.SwitchIndex, true);
                     Msg += t2.CurrentPokemon.SendOut(t1.CurrentPokemon, this);
                     if (t2.CurrentPokemon != null) t2.CurrentPokemon.HasMoved = true;
                 }
@@ -563,7 +560,7 @@ public class Battle
             }
 
             Msg += t2.NextTurn(this);
-            if (t2.CurrentPokemon != null) Msg += t2.CurrentPokemon.NextTurn(t1.CurrentPokemon, this);
+            if (t2.CurrentPokemon != null) Msg += t2.CurrentPokemon.NextTurn(t1.CurrentPokemon!, this);
             if (!t2.HasAlivePokemon())
             {
                 Msg += $"{t1.Name} wins!\n";
@@ -596,15 +593,15 @@ public class Battle
     /// </summary>
     /// <param name="checkMove">Whether to check move properties when determining order.</param>
     /// <returns>A tuple of trainers in the order they should act.</returns>
-    public (Trainer?, Trainer) WhoFirst(bool checkMove = true)
+    public (Trainer, Trainer) WhoFirst(bool checkMove = true)
     {
-        (Trainer? Trainer1, Trainer Trainer2) T1FIRST = (Trainer1, Trainer2);
-        (Trainer? Trainer2, Trainer Trainer1) T2FIRST = (Trainer2, Trainer1);
+        var T1FIRST = (Trainer1, Trainer2);
+        var T2FIRST = (Trainer2, Trainer1);
 
         if (Trainer1.CurrentPokemon == null || Trainer2.CurrentPokemon == null) return T1FIRST;
 
-        var speed1 = Trainer1.CurrentPokemon.GetSpeed(this);
-        var speed2 = Trainer2.CurrentPokemon.GetSpeed(this);
+        var speed1 = Trainer1.CurrentPokemon!.GetSpeed(this);
+        var speed2 = Trainer2.CurrentPokemon!.GetSpeed(this);
 
         // Pokes that are switching go before pokes making other moves
         if (checkMove)
@@ -613,7 +610,7 @@ public class Battle
             {
                 case Trainer.SwitchAction when Trainer2.SelectedAction is Trainer.SwitchAction:
                 {
-                    if (Trainer1.CurrentPokemon.GetRawSpeed() > Trainer2.CurrentPokemon.GetRawSpeed()) return T1FIRST;
+                    if (Trainer1.CurrentPokemon!.GetRawSpeed() > Trainer2.CurrentPokemon!.GetRawSpeed()) return T1FIRST;
                     return T2FIRST;
                 }
                 case Trainer.SwitchAction:
@@ -626,9 +623,9 @@ public class Battle
         // Priority brackets & abilities
         if (checkMove)
         {
-            var prio1 = (Trainer1.SelectedAction as Trainer.MoveAction).Move.GetPriority(Trainer1.CurrentPokemon,
+            var prio1 = (Trainer1!.SelectedAction as Trainer.MoveAction)!.Move.GetPriority(Trainer1.CurrentPokemon,
                 Trainer2.CurrentPokemon, this);
-            var prio2 = (Trainer2.SelectedAction as Trainer.MoveAction).Move.GetPriority(Trainer2.CurrentPokemon,
+            var prio2 = (Trainer2!.SelectedAction as Trainer.MoveAction)!.Move.GetPriority(Trainer2.CurrentPokemon,
                 Trainer1.CurrentPokemon, this);
 
             if (prio1 > prio2) return T1FIRST;
@@ -638,19 +635,19 @@ public class Battle
             var t2Quick = false;
 
             // Quick draw/claw
-            if (Trainer1.CurrentPokemon.Ability() == Ability.QUICK_DRAW &&
-                (Trainer1.SelectedAction as Trainer.MoveAction).Move.DamageClass != DamageClass.STATUS &&
-                new Random().Next(1, 101) <= 30)
+            if (Trainer1.CurrentPokemon!.Ability() == Ability.QUICK_DRAW &&
+                (Trainer1!.SelectedAction as Trainer.MoveAction)!.Move.DamageClass != DamageClass.STATUS &&
+                Random.Shared.Next(1, 101) <= 30)
                 t1Quick = true;
-            if (Trainer2.CurrentPokemon.Ability() == Ability.QUICK_DRAW &&
-                (Trainer2.SelectedAction as Trainer.MoveAction).Move.DamageClass != DamageClass.STATUS &&
-                new Random().Next(1, 101) <= 30)
+            if (Trainer2.CurrentPokemon!.Ability() == Ability.QUICK_DRAW &&
+                (Trainer2!.SelectedAction as Trainer.MoveAction)!.Move.DamageClass != DamageClass.STATUS &&
+                Random.Shared.Next(1, 101) <= 30)
                 t2Quick = true;
-            if (Trainer1.CurrentPokemon.HeldItem == "quick-claw" &&
-                new Random().Next(1, 101) <= 20)
+            if (Trainer1.CurrentPokemon!.HeldItem == "quick-claw" &&
+                Random.Shared.Next(1, 101) <= 20)
                 t1Quick = true;
-            if (Trainer2.CurrentPokemon.HeldItem == "quick-claw" &&
-                new Random().Next(1, 101) <= 20)
+            if (Trainer2.CurrentPokemon!.HeldItem == "quick-claw" &&
+                Random.Shared.Next(1, 101) <= 20)
                 t2Quick = true;
 
             // If both pokemon activate a quick, priority bracket proceeds as normal
@@ -661,20 +658,20 @@ public class Battle
             var t1Slow = false;
             var t2Slow = false;
 
-            if (Trainer1.CurrentPokemon.Ability() == Ability.STALL) t1Slow = true;
-            if (Trainer1.CurrentPokemon.Ability() == Ability.MYCELIUM_MIGHT &&
-                (Trainer1.SelectedAction as Trainer.MoveAction).Move.DamageClass == DamageClass.STATUS)
+            if (Trainer1.CurrentPokemon!.Ability() == Ability.STALL) t1Slow = true;
+            if (Trainer1.CurrentPokemon!.Ability() == Ability.MYCELIUM_MIGHT &&
+                (Trainer1!.SelectedAction as Trainer.MoveAction)!.Move.DamageClass == DamageClass.STATUS)
                 t1Slow = true;
-            if (Trainer2.CurrentPokemon.Ability() == Ability.STALL) t2Slow = true;
-            if (Trainer2.CurrentPokemon.Ability() == Ability.MYCELIUM_MIGHT &&
-                (Trainer2.SelectedAction as Trainer.MoveAction).Move.DamageClass == DamageClass.STATUS)
+            if (Trainer2.CurrentPokemon!.Ability() == Ability.STALL) t2Slow = true;
+            if (Trainer2.CurrentPokemon!.Ability() == Ability.MYCELIUM_MIGHT &&
+                (Trainer2!.SelectedAction as Trainer.MoveAction)!.Move.DamageClass == DamageClass.STATUS)
                 t2Slow = true;
 
             switch (t1Slow)
             {
                 case true when t2Slow:
                 {
-                    if (speed1 == speed2) return new Random().Next(2) == 0 ? T1FIRST : T2FIRST;
+                    if (speed1 == speed2) return Random.Shared.Next(2) == 0 ? T1FIRST : T2FIRST;
                     return speed1 > speed2 ? T2FIRST : T1FIRST;
                 }
                 case true:
@@ -685,7 +682,7 @@ public class Battle
         }
 
         // Equal speed
-        if (speed1 == speed2) return new Random().Next(2) == 0 ? T1FIRST : T2FIRST;
+        if (speed1 == speed2) return Random.Shared.Next(2) == 0 ? T1FIRST : T2FIRST;
 
         // Trick room
         if (TrickRoom.Active()) return speed1 > speed2 ? T2FIRST : T1FIRST;
@@ -749,14 +746,14 @@ public class Battle
     {
         await SendMsg();
 
-        swapper.Event = new TaskCompletionSource<bool>();
+        swapper!.Event = new TaskCompletionSource<bool>();
 
         if (swapper.IsHuman())
         {
             // Cast to MemberTrainer to get access to the Discord user ID
             if (swapper is not MemberTrainer)
             {
-                Msg += $"{swapper.Name} is not properly set up as a member trainer, {otherTrainer.Name} wins!\n";
+                Msg += $"{swapper.Name} is not properly set up as a member trainer, {otherTrainer!.Name} wins!\n";
                 return otherTrainer;
             }
 
@@ -766,13 +763,13 @@ public class Battle
 
             // Build component buttons for each Pokemon in the party
             var components = new ComponentBuilder();
-            var validSwaps = swapper.ValidSwaps(otherTrainer.CurrentPokemon, this, midTurn);
+            var validSwaps = swapper.ValidSwaps(otherTrainer!.CurrentPokemon, this, midTurn);
 
             for (var i = 0; i < swapper.Party.Count; i++)
             {
                 var pokemon = swapper.Party[i];
                 // Sanitize the name for button display
-                var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name, 15);
+                var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name!, 15);
 
                 components.WithButton(
                     $"{sanitizedName} | {pokemon.Hp}hp",
@@ -790,7 +787,7 @@ public class Battle
         else
         {
             // NPC trainers use their own swap logic
-            ((NPCTrainer)swapper).Swap(otherTrainer.CurrentPokemon, this, midTurn);
+            ((NPCTrainer)swapper).Swap(otherTrainer!.CurrentPokemon, this, midTurn);
         }
 
         try
@@ -831,7 +828,7 @@ public class Battle
     public void HandleMegas(Trainer? t1, Trainer? t2)
     {
         foreach (var (at, dt) in new[] { (t1, t2), (t2, t1) })
-            if (at.CurrentPokemon is { ShouldMegaEvolve: true })
+            if (at!.CurrentPokemon is { ShouldMegaEvolve: true })
             {
                 // Bit of a hack, since it is in its mega form and dashes are removed from `name`, it will show as "<poke> mega evolved!".
                 if ((at.CurrentPokemon.HeldItem.Name == "mega-stone" || at.CurrentPokemon._name == "Rayquaza") &&
@@ -850,7 +847,7 @@ public class Battle
                 at.CurrentPokemon.StartingAbilityId = at.CurrentPokemon.MegaAbilityId;
                 at.CurrentPokemon.TypeIds = new List<ElementType>(at.CurrentPokemon.MegaTypeIds);
                 at.CurrentPokemon.StartingTypeIds = new List<ElementType>(at.CurrentPokemon.MegaTypeIds);
-                Msg += at.CurrentPokemon.SendOutAbility(dt.CurrentPokemon, this);
+                Msg += at.CurrentPokemon.SendOutAbility(dt!.CurrentPokemon, this);
                 at.HasMegaEvolved = true;
             }
     }

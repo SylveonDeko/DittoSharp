@@ -13,17 +13,17 @@ public class Booster
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the unique identifier key for the booster type.
     /// </summary>
     [BsonElement("key")]
-    public string Key { get; set; }
+    public string Key { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the list of user IDs who have active boosters of this type.
     /// </summary>
     [BsonElement("boosters")]
-    public List<ulong> Boosters { get; set; }
+    public List<ulong> Boosters { get; set; } = null!;
 }

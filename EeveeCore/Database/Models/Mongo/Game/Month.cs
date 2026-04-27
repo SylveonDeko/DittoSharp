@@ -13,7 +13,7 @@ public class Month
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier for the month.
@@ -25,5 +25,5 @@ public class Month
     ///     Gets or sets the string representation of the month and year (e.g., "03-2025").
     /// </summary>
     [BsonElement("m-y")]
-    public string MonthYear { get; set; }
+    public string? MonthYear { get; set; }
 }

@@ -19,12 +19,12 @@ public class Trainer
     {
         Name = name;
         Party = party;
-        CurrentPokemon = party.Count > 0 ? party[0] : null;
+        CurrentPokemon = party.Count > 0 ? party[0] : null!;
         foreach (var poke in Party) poke.Owner = this;
         Event = new TaskCompletionSource<bool>();
-        SelectedAction = null;
+        SelectedAction = null!;
         MidTurnRemove = false;
-        BatonPass = null;
+        BatonPass = null!;
         Spikes = 0;
         ToxicSpikes = 0;
         StealthRock = false;
@@ -61,7 +61,7 @@ public class Trainer
     /// <summary>
     ///     Gets or sets the trainer's currently active Pokémon.
     /// </summary>
-    public DuelPokemon.DuelPokemon CurrentPokemon { get; set; }
+    public DuelPokemon.DuelPokemon CurrentPokemon { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the task completion source used for asynchronous action selection.
@@ -71,7 +71,7 @@ public class Trainer
     /// <summary>
     ///     Gets or sets the action selected by the trainer for the current turn.
     /// </summary>
-    public TrainerAction SelectedAction { get; set; }
+    public TrainerAction SelectedAction { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets a value indicating whether this trainer's Pokémon was removed in such a way
@@ -82,7 +82,7 @@ public class Trainer
     /// <summary>
     ///     Gets or sets the data baton passed from the previous Pokémon to the next, if applicable.
     /// </summary>
-    public BatonPass BatonPass { get; set; }
+    public BatonPass BatonPass { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the number of layers of Spikes on this trainer's side of the field.
@@ -225,7 +225,7 @@ public class Trainer
     public string NextTurn(Battle battle)
     {
         var msg = "";
-        SelectedAction = null;
+        SelectedAction = null!;
         MidTurnRemove = false;
         var hp = Wish.NextTurn();
         if (hp > 0 && CurrentPokemon != null) msg += CurrentPokemon.Heal(hp, "its wish");
@@ -243,8 +243,8 @@ public class Trainer
         if (FutureSight.NextTurn() && CurrentPokemon != null)
         {
             msg += $"{CurrentPokemon.Name} took the future sight attack!\n";
-            var futureSightAttacker = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData).Item1;
-            var futureSightMove = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData).Item2;
+            var futureSightAttacker = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData!).Item1;
+            var futureSightMove = ((Tuple<DuelPokemon.DuelPokemon, Move.Move>)futureSightData!).Item2;
             var futureSightResult = futureSightMove.Attack(futureSightAttacker, CurrentPokemon, battle);
             msg += futureSightResult.Item1;
         }
@@ -294,7 +294,7 @@ public class Trainer
     /// <returns>
     ///     A list of valid party indexes that can be switched to.
     /// </returns>
-    public List<int> ValidSwaps(DuelPokemon.DuelPokemon defender, Battle battle, bool checkTrap = true)
+    public List<int> ValidSwaps(DuelPokemon.DuelPokemon? defender, Battle? battle, bool checkTrap = true)
     {
         if (CurrentPokemon != null)
         {
@@ -305,14 +305,14 @@ public class Trainer
             {
                 if (CurrentPokemon.Trapping) return new List<int>();
                 if (CurrentPokemon.Ingrain) return new List<int>();
-                if (CurrentPokemon.FairyLock.Active() || defender.FairyLock.Active()) return new List<int>();
+                if (CurrentPokemon.FairyLock.Active() || defender!.FairyLock.Active()) return new List<int>();
                 if (CurrentPokemon.NoRetreat) return new List<int>();
                 if (CurrentPokemon.Bind.Active() && CurrentPokemon.Substitute == 0) return new List<int>();
                 if (defender.Ability() == Ability.SHADOW_TAG && CurrentPokemon.Ability() != Ability.SHADOW_TAG)
                     return new List<int>();
                 if (defender.Ability() == Ability.MAGNET_PULL && CurrentPokemon.TypeIds.Contains(ElementType.STEEL))
                     return new List<int>();
-                if (defender.Ability() == Ability.ARENA_TRAP && CurrentPokemon.Grounded(battle)) return new List<int>();
+                if (defender.Ability() == Ability.ARENA_TRAP && CurrentPokemon.Grounded(battle!)) return new List<int>();
             }
         }
 
@@ -522,7 +522,7 @@ public class NPCTrainer : Trainer
         switch (moveResult.Type)
         {
             case ValidMovesResult.ResultType.ForcedMove:
-                SelectedAction = new MoveAction(moveResult.ForcedMove);
+                SelectedAction = new MoveAction(moveResult.ForcedMove!);
                 break;
 
             case ValidMovesResult.ResultType.Struggle:
@@ -530,8 +530,8 @@ public class NPCTrainer : Trainer
                 break;
 
             case ValidMovesResult.ResultType.ValidIndexes:
-                var moveData = moveResult.ValidMoveIndexes;
-                var randomMoveIdx = moveData[new Random().Next(moveData.Count)];
+                var moveData = moveResult.ValidMoveIndexes!;
+                var randomMoveIdx = moveData[Random.Shared.Next(moveData.Count)];
                 SelectedAction = new MoveAction(CurrentPokemon.Moves[randomMoveIdx]);
                 break;
         }
@@ -552,7 +552,7 @@ public class NPCTrainer : Trainer
     public void Swap(DuelPokemon.DuelPokemon defender, Battle battle, bool midTurn = false)
     {
         var validSwaps = ValidSwaps(defender, battle, false);
-        var pokeIdx = validSwaps[new Random().Next(validSwaps.Count)];
+        var pokeIdx = validSwaps[Random.Shared.Next(validSwaps.Count)];
         SwitchPoke(pokeIdx, midTurn);
 
         // Also set this as the selected action if it's not a mid-turn swap

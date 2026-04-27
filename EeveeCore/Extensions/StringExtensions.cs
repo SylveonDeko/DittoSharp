@@ -467,10 +467,10 @@ public static partial class StringExtensions
     /// </summary>
     /// <param name="str">The string to capitalize.</param>
     /// <returns>The capitalized string.</returns>
-    public static string? Capitalize(this string? str)
+    public static string Capitalize(this string? str)
     {
         if (string.IsNullOrEmpty(str))
-            return str;
+            return str ?? "";
 
         // Split by hyphens and capitalize each part
         var parts = str.Split('-');
@@ -568,7 +568,7 @@ public static partial class StringExtensions
     /// <returns>The deserialized object.</returns>
     public static T MapJson<T>(this string str)
     {
-        return JsonSerializer.Deserialize<T>(str);
+        return JsonSerializer.Deserialize<T>(str)!;
     }
 
     /// <summary>
@@ -652,7 +652,7 @@ public static partial class StringExtensions
         for (var j = 1; j <= m; j++)
         {
             // Step 5
-            var cost = t[j - 1] == s[i - 1] ? 0 : 1;
+            var cost = t![j - 1] == s![i - 1] ? 0 : 1;
 
             // Step 6
             d[i, j] = Math.Min(
@@ -710,7 +710,7 @@ public static partial class StringExtensions
     /// <returns>The sanitized string.</returns>
     public static string SanitizeMentions(this string? str, bool sanitizeRoleMentions = false)
     {
-        str = str.Replace("@everyone", "@everyοne", StringComparison.InvariantCultureIgnoreCase)
+        str = str!.Replace("@everyone", "@everyοne", StringComparison.InvariantCultureIgnoreCase)
             .Replace("@here", "@һere", StringComparison.InvariantCultureIgnoreCase);
         if (sanitizeRoleMentions)
             str = str.SanitizeRoleMentions();
@@ -725,7 +725,7 @@ public static partial class StringExtensions
     /// <returns>The sanitized string.</returns>
     public static string SanitizeRoleMentions(this string? str)
     {
-        return str.Replace("<@&", "<ම&", StringComparison.InvariantCultureIgnoreCase);
+        return str!.Replace("<@&", "<ම&", StringComparison.InvariantCultureIgnoreCase);
     }
 
     /// <summary>
@@ -810,7 +810,7 @@ public static partial class StringExtensions
     /// <param name="args">An array of objects to format.</param>
     /// <param name="output">The formatted string if successful, otherwise null.</param>
     /// <returns>True if the formatting was successful, otherwise false.</returns>
-    public static bool TryFormat(string data, object[] args, out string output)
+    public static bool TryFormat(string data, object[] args, out string? output)
     {
         output = null;
         try

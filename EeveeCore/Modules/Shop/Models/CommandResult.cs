@@ -8,7 +8,7 @@ public class CommandResult
     /// <summary>
     ///     Gets or sets the message content to display to the user.
     /// </summary>
-    public string Message { get; set; } = string.Empty;
+    public string? Message { get; set; } = string.Empty;
 
     /// <summary>
     ///     Gets or sets an optional embed to display with the message.

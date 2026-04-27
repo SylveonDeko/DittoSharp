@@ -68,7 +68,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
     /// <summary>
     ///     Random number generator for various operations.
     /// </summary>
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
 
     /// <summary>
     ///     Determines if a Pokémon is in a formed state (mega, primal, etc.).
@@ -78,7 +78,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
     /// <returns>True if the Pokémon is in a formed state, false otherwise.</returns>
     private static bool IsFormed(string? pokemonName)
     {
-        return pokemonName.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
+        return pokemonName!.EndsWith("-mega") || pokemonName.EndsWith("-x") || pokemonName.EndsWith("-y") ||
                pokemonName.EndsWith("-origin") || pokemonName.EndsWith("-10") || pokemonName.EndsWith("-complete") ||
                pokemonName.EndsWith("-ultra") || pokemonName.EndsWith("-crowned") ||
                pokemonName.EndsWith("-eternamax") ||
@@ -868,7 +868,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
             .Select(u => u.MewCoins)
             .FirstOrDefaultAsync();
 
-        var useAmount = Math.Max(0, Math.Min(100 - selectedPokemon.Level, amount));
+        var useAmount = Math.Max(0, Math.Min(100 - selectedPokemon!.Level, amount));
         var buyAmount = useAmount == 0 ? 1 : useAmount;
         var price = (ulong)(buyAmount * 100);
         var candyStr = buyAmount == 1 ? "candy" : "candies";

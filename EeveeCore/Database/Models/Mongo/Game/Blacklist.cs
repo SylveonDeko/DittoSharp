@@ -13,17 +13,17 @@ public class Blacklist
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the list of blacklisted guild IDs.
     /// </summary>
     [BsonElement("guilds")]
-    public List<ulong> Guilds { get; set; }
+    public List<ulong> Guilds { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the list of blacklisted user IDs.
     /// </summary>
     [BsonElement("users")]
-    public List<ulong> Users { get; set; }
+    public List<ulong> Users { get; set; } = null!;
 }

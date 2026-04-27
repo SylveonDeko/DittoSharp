@@ -17,8 +17,8 @@ public partial class Move
                 msg += $"{defender.Name}'s aroma veil protects its move from being disabled!\n";
                 break;
             case 87:
-                defender.Disable.Set(defender.LastMove, new Random().Next(4, 8));
-                msg += $"{defender.Name}'s {defender.LastMove.PrettyName} was disabled!\n";
+                defender.Disable.Set(defender.LastMove!, Random.Shared.Next(4, 8));
+                msg += $"{defender.Name}'s {defender!.LastMove!.PrettyName} was disabled!\n";
                 break;
             case 176 when defender.Ability(attacker, this) == Ability.OBLIVIOUS:
                 msg += $"{defender.Name} is too oblivious to be taunted!\n";
@@ -41,8 +41,8 @@ public partial class Move
                 break;
             case 91:
             {
-                defender.Encore.Set(defender.LastMove, 4);
-                if (!defender.HasMoved) defender.Owner.SelectedAction = new Trainer.MoveAction(defender.LastMove);
+                defender.Encore.Set(defender.LastMove!, 4);
+                if (!defender.HasMoved) defender.Owner.SelectedAction = new Trainer.MoveAction(defender.LastMove!);
 
                 msg += $"{defender.Name} is giving an encore!\n";
                 break;
@@ -230,7 +230,7 @@ public partial class Move
             {
                 msg += $"{defender.Name} fled in fear!\n";
                 msg += defender.Remove(battle);
-                var idx = swaps[new Random().Next(swaps.Count)];
+                var idx = swaps[Random.Shared.Next(swaps.Count)];
                 defender.Owner.SwitchPoke(idx, true);
                 msg += defender.Owner.CurrentPokemon.SendOut(attacker, battle);
                 // Safety in case the poke dies on send out.
@@ -265,7 +265,7 @@ public partial class Move
                 msg += $"{defender.Name} held up its red card against {attacker.Name}!\n";
                 defender.HeldItem.Use();
                 msg += attacker.Remove(battle);
-                var idx = swaps[new Random().Next(swaps.Count)];
+                var idx = swaps[Random.Shared.Next(swaps.Count)];
                 attacker.Owner.SwitchPoke(idx, true);
                 msg += attacker.Owner.CurrentPokemon.SendOut(defender, battle);
                 // Safety in case the poke dies on send out.

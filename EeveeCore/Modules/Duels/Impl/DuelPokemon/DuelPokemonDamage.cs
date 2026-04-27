@@ -10,7 +10,7 @@ public partial class DuelPokemon
     /// <param name="attacker">The Pokemon that caused the fainting (if any).</param>
     /// <param name="source">A description of what caused the fainting.</param>
     /// <returns>A formatted message describing the fainting and any triggered effects.</returns>
-    public string Faint(Battle battle, Move.Move move = null, DuelPokemon attacker = null, string source = "")
+    public string Faint(Battle battle, Move.Move? move = null, DuelPokemon? attacker = null, string source = "")
     {
         var msg = "";
         Hp = 0;
@@ -57,8 +57,8 @@ public partial class DuelPokemon
     /// <param name="drainHealRatio">The ratio of damage to heal for drain moves.</param>
     /// <param name="source">A description of the damage source.</param>
     /// <returns>A formatted message describing the damage and any resulting effects.</returns>
-    public string Damage(int damage, Battle battle, Move.Move move = null, ElementType? moveType = null,
-        DuelPokemon attacker = null, bool critical = false, double? drainHealRatio = null, string source = "")
+    public string Damage(int damage, Battle battle, Move.Move? move = null, ElementType? moveType = null,
+        DuelPokemon? attacker = null, bool critical = false, double? drainHealRatio = null, string source = "")
     {
         var result = _Damage(damage, battle, move, moveType, attacker, critical, drainHealRatio, source);
         return result.Item1;
@@ -77,8 +77,8 @@ public partial class DuelPokemon
     /// <param name="drainHealRatio">The ratio of damage to heal for drain moves.</param>
     /// <param name="source">A description of the damage source.</param>
     /// <returns>A tuple containing the formatted message and actual damage dealt.</returns>
-    public Tuple<string, int> _Damage(int damage, Battle battle, Move.Move move = null, ElementType? moveType = null,
-        DuelPokemon attacker = null, bool critical = false, double? drainHealRatio = null, string source = "")
+    public Tuple<string, int> _Damage(int damage, Battle battle, Move.Move? move = null, ElementType? moveType = null,
+        DuelPokemon? attacker = null, bool critical = false, double? drainHealRatio = null, string source = "")
     {
         var msg = "";
 
@@ -145,7 +145,7 @@ public partial class DuelPokemon
                 damage = Hp - 1;
                 HeldItem.Use();
             }
-            else if (HeldItem.Get() == "focus-band" && new Random().Next(10) == 0)
+            else if (HeldItem.Get() == "focus-band" && Random.Shared.Next(10) == 0)
             {
                 msg += $"{Name} held on using its focus band!\n";
                 damage = Hp - 1;
@@ -192,7 +192,7 @@ public partial class DuelPokemon
                 msg += attacker.AppendAttack(1, attacker, source: "its moxie");
             if (attacker != null && attacker.Ability() == Impl.Ability.BEAST_BOOST)
             {
-                var stats = new List<Tuple<int, Func<int, DuelPokemon, Move.Move, string, bool, string>>>
+                var stats = new List<Tuple<int, Func<int, DuelPokemon, Move.Move?, string, bool, string>>>
                 {
                     new(attacker.GetRawAttack(), attacker.AppendAttack),
                     new(attacker.GetRawDefense(), attacker.AppendDefense),
@@ -310,7 +310,7 @@ public partial class DuelPokemon
             if (attacker != null)
             {
                 if (Ability() == Impl.Ability.CURSED_BODY && !attacker.Disable.Active() &&
-                    attacker.Moves.Contains(move) && new Random().Next(1, 101) <= 30)
+                    attacker.Moves.Contains(move) && Random.Shared.Next(1, 101) <= 30)
                 {
                     if (attacker.Ability() == Impl.Ability.AROMA_VEIL)
                     {
@@ -329,7 +329,7 @@ public partial class DuelPokemon
                     msg += $"{attacker.Name} stole {attacker.HeldItem.Name} using its magician!\n";
                 }
 
-                if (attacker.Ability() == Impl.Ability.TOXIC_CHAIN && new Random().Next(1, 101) <= 30)
+                if (attacker.Ability() == Impl.Ability.TOXIC_CHAIN && Random.Shared.Next(1, 101) <= 30)
                     msg += NonVolatileEffect.ApplyStatus("b-poison", battle, attacker,
                         source: $"{attacker.Name}'s toxic chain");
                 if (attacker.HeldItem.Get() == "shell-bell")
@@ -387,17 +387,17 @@ public partial class DuelPokemon
                     msg += attacker.NonVolatileEffect.ApplyStatus("burn", battle, attacker,
                         source: $"{Name}'s charging beak blast");
                 if (Ability() == Impl.Ability.STATIC)
-                    if (new Random().Next(1, 101) <= 30)
+                    if (Random.Shared.Next(1, 101) <= 30)
                         msg += attacker.NonVolatileEffect.ApplyStatus("paralysis", battle, attacker,
                             source: $"{Name}'s static");
 
                 if (Ability() == Impl.Ability.POISON_POINT)
-                    if (new Random().Next(1, 101) <= 30)
+                    if (Random.Shared.Next(1, 101) <= 30)
                         msg += attacker.NonVolatileEffect.ApplyStatus("poison", battle, attacker,
                             source: $"{Name}'s poison point");
 
                 if (Ability() == Impl.Ability.FLAME_BODY)
-                    if (new Random().Next(1, 101) <= 30)
+                    if (Random.Shared.Next(1, 101) <= 30)
                         msg += attacker.NonVolatileEffect.ApplyStatus("burn", battle, attacker,
                             source: $"{Name}'s flame body");
 
@@ -407,14 +407,14 @@ public partial class DuelPokemon
                     msg += attacker.Damage(attacker.StartingHp / 8, battle, source: $"{Name}'s iron barbs");
                 if (Ability() == Impl.Ability.EFFECT_SPORE)
                     if (attacker.Ability() != Impl.Ability.OVERCOAT && !attacker.TypeIds.Contains(ElementType.GRASS) &&
-                        attacker.HeldItem.Get() != "safety-glasses" && new Random().Next(1, 101) <= 30)
+                        attacker.HeldItem.Get() != "safety-glasses" && Random.Shared.Next(1, 101) <= 30)
                     {
                         string[] statuses = ["paralysis", "poison", "sleep"];
-                        var status = statuses[new Random().Next(statuses.Length)];
+                        var status = statuses[Random.Shared.Next(statuses.Length)];
                         msg += attacker.NonVolatileEffect.ApplyStatus(status, battle, attacker);
                     }
 
-                if (Ability() == Impl.Ability.CUTE_CHARM && new Random().Next(1, 101) <= 30)
+                if (Ability() == Impl.Ability.CUTE_CHARM && Random.Shared.Next(1, 101) <= 30)
                     msg += attacker.Infatuate(this, source: $"{Name}'s cute charm");
                 if (Ability() == Impl.Ability.MUMMY && attacker.Ability() != Impl.Ability.MUMMY &&
                     attacker.AbilityChangeable())
@@ -457,7 +457,7 @@ public partial class DuelPokemon
 
             // Affects DEFENDER
             if (attacker.Ability() == Impl.Ability.POISON_TOUCH)
-                if (new Random().Next(1, 101) <= 30)
+                if (Random.Shared.Next(1, 101) <= 30)
                     msg += NonVolatileEffect.ApplyStatus("poison", battle, attacker, move,
                         source: $"{attacker.Name}'s poison touch");
 

@@ -383,7 +383,7 @@ public class TradeAnalyticsController : ControllerBase
     {
         var timeSeries = new List<TradeVolumeTimeSeriesDto>();
         var days = (int)(endDate - startDate).TotalDays;
-        var random = new Random();
+        var random = Random.Shared;
 
         for (var i = 0; i < days; i++)
         {

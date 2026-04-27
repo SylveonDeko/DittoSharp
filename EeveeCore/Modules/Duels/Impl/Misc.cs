@@ -82,7 +82,7 @@ public class Weather(Battle battle) : ExpiringEffect(0)
             if (poke == null)
                 continue;
             // Forecast
-            if (poke.Ability() != Ability.FORECAST || !poke.Name.StartsWith("Castform") ||
+            if (poke.Ability() != Ability.FORECAST || !poke!.Name!.StartsWith("Castform") ||
                 poke.Name == "Castform") continue;
             if (poke.Form("Castform")) poke.TypeIds = [ElementType.NORMAL];
         }
@@ -226,7 +226,7 @@ public class Weather(Battle battle) : ExpiringEffect(0)
         }
 
         // Forecast
-        var t = element.ToString().ToLower();
+        var t = element!.ToString()!.ToLower();
         foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
         {
             if (poke == null)
@@ -300,7 +300,7 @@ public class ExpiringItem() : ExpiringEffect(0)
     ///     Gets or sets the object associated with this expiring effect.
     ///     This can be a move, a Pokémon, or any other reference type depending on the context.
     /// </summary>
-    public object Item { get; private set; }
+    public object? Item { get; private set; }
 
     /// <summary>
     ///     Progresses the effect by one turn, clearing the item if expired.
@@ -394,7 +394,7 @@ public class Terrain(Battle battle) : ExpiringItem
         {
             if (poke == null)
                 continue;
-            if (poke.Ability() == Ability.MIMICRY)
+            if (poke.Ability() == Ability.MIMICRY && element.HasValue)
             {
                 poke.TypeIds = [element.Value];
                 var t = element.Value.ToString().ToLower();
@@ -464,7 +464,7 @@ public class ExpiringWish() : ExpiringEffect(0)
     /// <returns>
     ///     The amount of HP to restore if the Wish activates this turn, or 0 if not.
     /// </returns>
-    public int NextTurn()
+    public new int NextTurn()
     {
         var expired = base.NextTurn();
         var hp = 0;
@@ -532,7 +532,7 @@ public class NonVolatileEffect(DuelPokemon.DuelPokemon pokemon)
             return $"{pokemon.Name}'s hydration cured its {removed}!\n";
         }
 
-        if (pokemon.Ability() == Ability.SHED_SKIN && new Random().Next(3) == 0)
+        if (pokemon.Ability() == Ability.SHED_SKIN && Random.Shared.Next(3) == 0)
         {
             var removed = Current;
             Reset();
@@ -630,7 +630,7 @@ public class NonVolatileEffect(DuelPokemon.DuelPokemon pokemon)
     /// <param name="force">Whether to force the status application, bypassing some protections.</param>
     /// <param name="source">The source of the status condition for message formatting.</param>
     /// <returns>A formatted message describing the result of the status application attempt.</returns>
-    public string ApplyStatus(string status, Battle battle, DuelPokemon.DuelPokemon attacker = null, Move.Move move = null,
+    public string ApplyStatus(string status, Battle battle, DuelPokemon.DuelPokemon? attacker = null, Move.Move? move = null,
         int? turns = null, bool force = false, string source = "")
     {
         var msg = "";
@@ -695,7 +695,7 @@ public class NonVolatileEffect(DuelPokemon.DuelPokemon pokemon)
                 if (battle.Trainer2.CurrentPokemon != null && battle.Trainer2.CurrentPokemon.Uproar.Active())
                     return $"An uproar keeps {pokemon.Name} from falling asleep!\n";
 
-                if (turns == null) turns = new Random().Next(2, 5);
+                if (turns == null) turns = Random.Shared.Next(2, 5);
                 if (pokemon.Ability(attacker, move) == Ability.EARLY_BIRD) turns /= 2;
                 Current = status;
                 SleepTimer.SetTurns(turns);
@@ -863,7 +863,7 @@ public class Item(IDictionary<string, object> itemData)
 public class HeldItem
 {
     private readonly DuelPokemon.DuelPokemon _owner;
-    private Database.Models.Mongo.Pokemon.Item _item;
+    private Database.Models.Mongo.Pokemon.Item? _item;
 
     /// <summary>
     ///     Initializes a new instance of the HeldItem class for a specific Pokémon.
@@ -880,7 +880,7 @@ public class HeldItem
     /// <summary>
     ///     Gets or sets the battle context this held item is being used in.
     /// </summary>
-    public Battle Battle { get; set; }
+    public Battle Battle { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the last item used or consumed by the Pokémon.
@@ -1062,7 +1062,7 @@ public class HeldItem
         EverHadItem = EverHadItem || _item != null;
     }
 
-    private bool _ShouldEatBerryUtil(DuelPokemon.DuelPokemon otherpoke = null)
+    private bool _ShouldEatBerryUtil(DuelPokemon.DuelPokemon? otherpoke = null)
     {
         if (_owner.Hp == 0) return false;
         if (otherpoke != null && (
@@ -1080,7 +1080,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerryDamage(DuelPokemon.DuelPokemon otherpoke = null)
+    public bool ShouldEatBerryDamage(DuelPokemon.DuelPokemon? otherpoke = null)
     {
         if (!_ShouldEatBerryUtil(otherpoke)) return false;
         if (_owner.Hp <= _owner.StartingHp / 4)
@@ -1109,7 +1109,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerryStatus(DuelPokemon.DuelPokemon otherpoke = null)
+    public bool ShouldEatBerryStatus(DuelPokemon.DuelPokemon? otherpoke = null)
     {
         if (!_ShouldEatBerryUtil(otherpoke)) return false;
         var item = Get();
@@ -1133,7 +1133,7 @@ public class HeldItem
     /// </summary>
     /// <param name="otherpoke">The opposing Pokémon, used to check for anti-berry abilities.</param>
     /// <returns>True if conditions are met for the berry to be eaten, False otherwise.</returns>
-    public bool ShouldEatBerry(DuelPokemon.DuelPokemon otherpoke = null)
+    public bool ShouldEatBerry(DuelPokemon.DuelPokemon? otherpoke = null)
     {
         return ShouldEatBerryDamage(otherpoke) || ShouldEatBerryStatus(otherpoke);
     }
@@ -1149,7 +1149,7 @@ public class HeldItem
     /// <param name="attacker">The attacking Pokémon, if relevant to berry effects.</param>
     /// <param name="move">The move being used, if relevant to berry effects.</param>
     /// <returns>A formatted message describing the berry's effects.</returns>
-    public string EatBerry(DuelPokemon.DuelPokemon consumer = null, DuelPokemon.DuelPokemon attacker = null, Move.Move move = null)
+    public string EatBerry(DuelPokemon.DuelPokemon? consumer = null, DuelPokemon.DuelPokemon? attacker = null, Move.Move? move = null)
     {
         var msg = "";
         if (!IsBerry()) return "";
@@ -1160,7 +1160,7 @@ public class HeldItem
 
         // 2x or 1x
         var ripe = Convert.ToInt32(consumer.Ability(attacker, move) == Ability.RIPEN) + 1;
-        string flavor = null;
+        string? flavor = null;
 
         var item = Get();
         switch (item)
@@ -1220,8 +1220,8 @@ public class HeldItem
                     consumer.AppendSpDef,
                     consumer.AppendSpeed
                 };
-                var func = funcs[new Random().Next(funcs.Length)];
-                msg += func(ripe * 2, attacker, move, "eating its berry", false);
+                var func = funcs[Random.Shared.Next(funcs.Length)];
+                msg += func(ripe * 2, attacker!, move!, "eating its berry", false);
                 break;
             case "aspear-berry":
                 if (consumer.NonVolatileEffect.Freeze())
@@ -1350,7 +1350,7 @@ public class HeldItem
     ///     True if the specified object is a string matching the item's identifier,
     ///     or if it is equal according to the base class's implementation.
     /// </returns>
-    public override bool Equals(object obj)
+    public override bool Equals(object? obj)
     {
         if (obj is string str) return Get() == str;
         return base.Equals(obj);

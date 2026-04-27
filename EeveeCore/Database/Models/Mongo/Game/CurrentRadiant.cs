@@ -13,13 +13,13 @@ public class CurrentRadiant
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the list of radiant Pokémon names available for the current period.
     /// </summary>
     [BsonElement("rads")]
-    public List<string> Radiants { get; set; }
+    public List<string>? Radiants { get; set; }
 
     /// <summary>
     ///     Gets or sets the month for which these radiants are active.

@@ -48,11 +48,11 @@ public partial class Move
                     4, 4, 4,
                     5, 5, 5
                 };
-                hits = hitChoices[new Random().Next(hitChoices.Length)];
+                hits = hitChoices[Random.Shared.Next(hitChoices.Length)];
             }
             else
             {
-                hits = new Random().Next(minHits.Value, maxHits.Value + 1);
+                hits = Random.Shared.Next(minHits.Value, maxHits.Value + 1);
             }
         }
         else
@@ -90,7 +90,7 @@ public partial class Move
             criticalStage = Math.Min(criticalStage, 3);
 
             var critMap = new[] { 24, 8, 2, 1 };
-            var critical = new Random().Next(critMap[criticalStage]) == 0;
+            var critical = Random.Shared.Next(critMap[criticalStage]) == 0;
 
             if (attacker.Ability() == Ability.MERCILESS && defender.NonVolatileEffect.Poison()) critical = true;
 
@@ -403,7 +403,7 @@ public partial class Move
                 damage *= .5;
 
             // Random damage scaling
-            damage *= new Random().NextDouble() * (1.0 - 0.85) + 0.85;
+            damage *= Random.Shared.NextDouble() * (1.0 - 0.85) + 0.85;
             damage = Math.Max(1, (int)damage);
 
             // Cannot lower the target's HP below 1.
@@ -467,7 +467,7 @@ public partial class Move
                 break;
             // Inflicts damage between 50% and 150% of the user's level.
             case 89:
-                power = new Random().Next((int)(attacker.Level * 0.5), (int)(attacker.Level * 1.5) + 1);
+                power = Random.Shared.Next((int)(attacker.Level * 0.5), (int)(attacker.Level * 1.5) + 1);
                 break;
             // Inflicts more damage to heavier targets, with a maximum of 120 power.
             case 197:
@@ -683,12 +683,12 @@ public partial class Move
                 break;
             // Power doubles every turn this move is used in succession after the first, resetting after five turns.
             case 118:
-                power = (int)(Math.Pow(2, attacker.LockedMove.Turn) * Power.Value);
+                power = (int)(Math.Pow(2, attacker.LockedMove!.Turn) * (Power ?? 0));
                 break;
             // Power varies randomly from 10 to 150.
             case 127:
             {
-                var percentile = new Random().Next(0, 101);
+                var percentile = Random.Shared.Next(0, 101);
                 switch (percentile)
                 {
                     case <= 5:
@@ -1076,7 +1076,7 @@ public partial class Move
                 power = (int)(power * (1 + Math.Min(attacker.NumHits, 6)));
                 break;
             // Has a 30% chance to double power
-            case 498 when new Random().NextDouble() <= 0.3:
+            case 498 when Random.Shared.NextDouble() <= 0.3:
                 power = (int)(power * 2);
                 break;
         }

@@ -20,7 +20,7 @@ public partial class Move
 
         if (attacker.NonVolatileEffect.Freeze())
         {
-            if (usePP && new Random().Next(0, 5) == 0)
+            if (usePP && Random.Shared.Next(0, 5) == 0)
             {
                 attacker.NonVolatileEffect.Reset();
                 msg += $"{attacker.Name} is no longer frozen!\n";
@@ -34,7 +34,7 @@ public partial class Move
             }
         }
 
-        if (attacker.NonVolatileEffect.Paralysis() && new Random().Next(0, 4) == 0)
+        if (attacker.NonVolatileEffect.Paralysis() && Random.Shared.Next(0, 4) == 0)
         {
             msg += $"{attacker.Name} is paralyzed! It can't move!\n";
             if (Effect == 28) attacker.LockedMove = null;
@@ -42,7 +42,7 @@ public partial class Move
             return (msg, true); // Abort move execution
         }
 
-        if (attacker.Infatuated == defender && new Random().Next(0, 2) == 0)
+        if (attacker.Infatuated == defender && Random.Shared.Next(0, 2) == 0)
         {
             msg += $"{attacker.Name} is in love with {defender.Name} and can't bare to hurt them!\n";
             if (Effect == 28) attacker.LockedMove = null;
@@ -76,7 +76,7 @@ public partial class Move
 
         if (attacker.Confusion.NextTurn()) msg += $"{attacker.Name} is no longer confused!\n";
 
-        if (attacker.Confusion.Active() && new Random().Next(0, 3) == 0)
+        if (attacker.Confusion.Active() && Random.Shared.Next(0, 3) == 0)
         {
             msg += $"{attacker.Name} hurt itself in its confusion!\n";
             var (msgadd, numhits) = Confusion().Attack(attacker, attacker, battle);

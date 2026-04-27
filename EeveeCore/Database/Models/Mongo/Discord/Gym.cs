@@ -13,23 +13,23 @@ public class Gym
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the name of the gym.
     /// </summary>
     [BsonElement("name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the Discord emoji representation of the gym.
     /// </summary>
     [BsonElement("emote")]
-    public string Emote { get; set; }
+    public string Emote { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the file path to the gym's image.
     /// </summary>
     [BsonElement("img")]
-    public string ImagePath { get; set; }
+    public string? ImagePath { get; set; }
 }

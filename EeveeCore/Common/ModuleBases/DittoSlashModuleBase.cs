@@ -28,7 +28,7 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
     {
         return !ctx.Interaction.HasResponded
             ? ctx.Interaction.SendErrorAsync(text)
-            : ctx.Interaction.SendErrorFollowupAsync(text);
+            : ctx.Interaction.SendErrorFollowupAsync(text!);
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
     {
         return !ctx.Interaction.HasResponded
             ? ctx.Interaction.SendConfirmAsync(text)
-            : ctx.Interaction.SendConfirmFollowupAsync(text);
+            : ctx.Interaction.SendConfirmFollowupAsync(text!);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
             .ConfigureAwait(false);
         try
         {
-            var input = await GetButtonInputAsync(msg.Channel.Id, msg.Id, userid).ConfigureAwait(false);
+            var input = await GetButtonInputAsync(msg!.Channel.Id, msg.Id, userid).ConfigureAwait(false);
             return input == "Yes";
         }
         finally
@@ -144,18 +144,18 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
     /// <param name="userId">The user ID to bind to</param>
     /// <param name="alreadyDeferred">Whether the interaction was already responded to.</param>
     /// <returns></returns>
-    public async Task<string>? GetButtonInputAsync(ulong channelId, ulong msgId, ulong userId,
+    public async Task<string?> GetButtonInputAsync(ulong channelId, ulong msgId, ulong userId,
         bool alreadyDeferred = false)
     {
         var userInputTask = new TaskCompletionSource<string>();
-        var dsc = CmdHandler.Services.GetRequiredService<DiscordShardedClient>();
+        var dsc = CmdHandler!.Services.GetRequiredService<DiscordShardedClient>();
         var handler = new EventHandler(dsc);
         try
         {
             handler.InteractionCreated += Interaction;
             if (await Task.WhenAny(userInputTask.Task, Task.Delay(30000)).ConfigureAwait(false) !=
                 userInputTask.Task)
-                return null;
+                return null!;
 
             return await userInputTask.Task.ConfigureAwait(false);
         }
@@ -194,14 +194,14 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
     public async Task<string>? NextMessageAsync(ulong channelId, ulong userId)
     {
         var userInputTask = new TaskCompletionSource<string>();
-        var dsc = CmdHandler.Services.GetRequiredService<DiscordShardedClient>();
+        var dsc = CmdHandler!.Services.GetRequiredService<DiscordShardedClient>();
         var handler = new EventHandler(dsc);
         try
         {
             handler.MessageReceived += Interaction;
             if (await Task.WhenAny(userInputTask.Task, Task.Delay(60000)).ConfigureAwait(false) !=
                 userInputTask.Task)
-                return null;
+                return null!;
 
             return await userInputTask.Task.ConfigureAwait(false);
         }
@@ -234,7 +234,7 @@ public abstract class EeveeCoreSlashModuleBase<TService> : EeveeCoreSlashCommand
     /// <summary>
     ///     The service associated with the module.
     /// </summary>
-    public TService Service { get; set; }
+    public TService Service { get; set; } = default!;
 }
 
 /// <summary>

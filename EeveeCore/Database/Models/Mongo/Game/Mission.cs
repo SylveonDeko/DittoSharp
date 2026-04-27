@@ -13,19 +13,19 @@ public class Mission
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the display name of the mission.
     /// </summary>
     [BsonElement("name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the detailed description of what the mission entails.
     /// </summary>
     [BsonElement("description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the target value that must be reached to complete the mission.
@@ -49,7 +49,7 @@ public class Mission
     ///     Gets or sets the unique key identifying the mission type.
     /// </summary>
     [BsonElement("key")]
-    public string Key { get; set; }
+    public string Key { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier for the mission.

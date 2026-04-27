@@ -13,11 +13,11 @@ public class RadiantPlaceholder
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the name of the radiant Pokémon.
     /// </summary>
     [BsonElement("name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }

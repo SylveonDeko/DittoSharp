@@ -10,11 +10,10 @@ namespace EeveeCore.Modules.Games;
 ///     Provides Discord slash commands for game functionality.
 ///     Includes commands for word search, slot machine, and other mini-games.
 /// </summary>
-/// <param name="wordSearchService">Service for handling word search games.</param>
 /// <param name="slotMachineService">Service for handling slot machine games.</param>
 /// <param name="missionService">Service for handling mission progress tracking.</param>
 [Group("game", "Mini-game commands to earn credits and have fun!")]
-public class GamesSlashCommands(WordSearchService wordSearchService, SlotMachineService slotMachineService, MissionService missionService)
+public class GamesSlashCommands(SlotMachineService slotMachineService, MissionService missionService)
     : EeveeCoreSlashModuleBase<WordSearchService>
 {
     /// <summary>

@@ -133,7 +133,7 @@ public class BackgroundTaskService : BackgroundService, INService
             
             if (potentialMissions.Count >= 2)
             {
-                var random = new Random();
+                var random = Random.Shared;
                 var chosenMissions = potentialMissions.OrderBy(x => random.Next()).Take(2);
                 
                 // Activate chosen missions

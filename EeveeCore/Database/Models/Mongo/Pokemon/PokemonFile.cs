@@ -14,7 +14,7 @@ public class PokemonFile
     /// </summary>
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the numeric identifier for this Pokémon species.
@@ -26,7 +26,7 @@ public class PokemonFile
     ///     Gets or sets the string identifier or name of the Pokémon.
     /// </summary>
     [BsonElement("identifier")]
-    public string Identifier { get; set; }
+    public string Identifier { get; set; } = null!;
 
     /// <summary>
     ///     Gets or sets the generation in which this Pokémon was introduced.
@@ -150,5 +150,5 @@ public class PokemonFile
     ///     Gets or sets the list of elemental types for this Pokémon.
     /// </summary>
     [BsonElement("types")]
-    public List<string> Types { get; set; }
+    public List<string>? Types { get; set; }
 }

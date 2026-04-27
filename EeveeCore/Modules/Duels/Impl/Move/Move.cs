@@ -12,10 +12,10 @@ public partial class Move
     ///     Initializes a new instance of the Move class using a dictionary of move data.
     /// </summary>
     /// <param name="moveData">A dictionary containing the move's attributes and properties.</param>
-    public Move(IDictionary<string, object> moveData)
+    public Move(IDictionary<string, object?> moveData)
     {
         Id = Convert.ToInt32(moveData["id"]);
-        Name = (string)moveData["identifier"];
+        Name = (string)moveData["identifier"]!;
         PrettyName = Name[..1].ToUpper() + Name[1..].Replace("-", " ");
         Power = moveData["power"] as int?;
         PP = Convert.ToInt32(moveData["pp"]);
@@ -52,7 +52,7 @@ public partial class Move
         DamageClass = (DamageClass)moveData.DamageClassId;
         Effect = moveData.EffectId;
         EffectChance = moveData.EffectChance;
-        Target = (MoveTarget)moveData.TargetId;
+        Target = (MoveTarget)(moveData.TargetId ?? 0);
         CritRate = moveData.CritRate;
         MinHits = moveData.MinHits;
         MaxHits = moveData.MaxHits;
@@ -185,7 +185,7 @@ public partial class Move
     /// <returns>A copy of this move.</returns>
     public Move Copy()
     {
-        return new Move(new Dictionary<string, object>
+        return new Move(new Dictionary<string, object?>
         {
             ["id"] = Id,
             ["identifier"] = Name,
@@ -237,7 +237,7 @@ public partial class Move
 
         if (newTypes.Count == 0) return null;
 
-        return newTypes.ElementAt(new Random().Next(newTypes.Count));
+        return newTypes.ElementAt(Random.Shared.Next(newTypes.Count));
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public partial class Move
     /// <returns>A Move instance representing Struggle.</returns>
     public static Move Struggle()
     {
-        return new Move(new Dictionary<string, object>
+        return new Move(new Dictionary<string, object?>
         {
             ["id"] = 165,
             ["identifier"] = "struggle",
@@ -271,7 +271,7 @@ public partial class Move
     /// <returns>A Move instance representing the self-inflicted Confusion damage.</returns>
     public static Move Confusion()
     {
-        return new Move(new Dictionary<string, object>
+        return new Move(new Dictionary<string, object?>
         {
             ["id"] = 0xCFCF,
             ["identifier"] = "confusion",
@@ -298,7 +298,7 @@ public partial class Move
     /// <returns>A Move instance representing Present with the specified power.</returns>
     public static Move Present(int power)
     {
-        return new Move(new Dictionary<string, object>
+        return new Move(new Dictionary<string, object?>
         {
             ["id"] = 217,
             ["identifier"] = "present",

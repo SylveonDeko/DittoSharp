@@ -39,7 +39,7 @@ public class BreedingService : INService
         "Calm", "Gentle", "Sassy", "Careful", "Quirky"
     ];
 
-    private readonly Random _random = new();
+    private readonly Random _random = Random.Shared;
     private readonly RedisCache _redisCache;
 
     /// <summary>
@@ -642,7 +642,7 @@ public class BreedingService : INService
             Chance = chance,
             IsShiny = isShiny,
             IsShadow = isShadow,
-            InheritedStats = inheritedStats
+            InheritedStats = inheritedStats!
         };
     }
 
@@ -678,7 +678,7 @@ public class BreedingService : INService
         // Get egg groups
         var eggGroupsRecord =
             await _mongoService.EggGroups.Find(e => e.SpeciesId == formInfo.PokemonId).FirstOrDefaultAsync();
-        var eggGroups = eggGroupsRecord?.Groups.ToList() ?? [1]; // Default to 'Monster' group
+        var eggGroups = eggGroupsRecord?.Groups?.ToList() ?? [1]; // Default to 'Monster' group
 
         // Get base Pokémon in evolution chain
         var pokemonName2 = pokemonPFile.Identifier;
@@ -735,7 +735,7 @@ public class BreedingService : INService
     /// <param name="father">The father Pokémon.</param>
     /// <param name="shiny">Whether the child should be shiny.</param>
     /// <returns>A tuple containing the child, hatch counter, and inherited stats.</returns>
-    private async Task<(BreedingPokemon Child, int Counter, List<string> InheritedStats)> GetChildAsync(
+    private async Task<(BreedingPokemon? Child, int Counter, List<string>? InheritedStats)> GetChildAsync(
         BreedingPokemon mother, BreedingPokemon father, bool shiny)
     {
         // Determine nature
@@ -826,7 +826,7 @@ public class BreedingService : INService
         // Handle destiny knot
         var knotted = false;
         var numStats = 0;
-        BreedingPokemon knotParent = null;
+        BreedingPokemon? knotParent = null;
 
         if (mother.HeldItem == "ultra-destiny-knot")
         {
@@ -867,22 +867,22 @@ public class BreedingService : INService
                 switch (stat)
                 {
                     case "hp":
-                        hp = knotParent.Hp;
+                        hp = knotParent!.Hp;
                         break;
                     case "attack":
-                        attack = knotParent.Attack;
+                        attack = knotParent!.Attack;
                         break;
                     case "defense":
-                        defense = knotParent.Defense;
+                        defense = knotParent!.Defense;
                         break;
                     case "spatk":
-                        specialAttack = knotParent.SpAtk;
+                        specialAttack = knotParent!.SpAtk;
                         break;
                     case "spdef":
-                        specialDefense = knotParent.SpDef;
+                        specialDefense = knotParent!.SpDef;
                         break;
                     case "speed":
-                        speed = knotParent.Speed;
+                        speed = knotParent!.Speed;
                         break;
                 }
         }
@@ -932,7 +932,7 @@ public class BreedingService : INService
             Happiness = 0,
             AbilityId = abilityIdx,
             AbilityIds = abilityIds,
-            EggGroups = eggGroups.Groups?.ToList(),
+            EggGroups = eggGroups.Groups?.ToList() ?? new List<int>(),
             Nature = nature,
             CaptureRate = 0
         };
@@ -1089,65 +1089,23 @@ public class BreedingService : INService
         // Draw background image
         canvas.DrawBitmap(bitmap, 0, 0);
 
-        // Create paint objects for different colors and styles
-        var greenPaint = new SKPaint
-        {
-            Color = new SKColor(0, 139, 0),
-            TextSize = 35,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        // Create font + paint objects for different colors and styles
+        var arialBold = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+        using var font35 = new SKFont(arialBold, 35);
+        using var font25 = new SKFont(arialBold, 25);
 
-        var redPaint = new SKPaint
-        {
-            Color = new SKColor(139, 0, 0),
-            TextSize = 25,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        var bluePaint = new SKPaint
-        {
-            Color = new SKColor(116, 140, 255),
-            TextSize = 35,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        var pinkPaint = new SKPaint
-        {
-            Color = new SKColor(255, 116, 140),
-            TextSize = 35,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        var whitePaint = new SKPaint
-        {
-            Color = SKColors.White,
-            TextSize = 35,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
-
-        var blackPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 35,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        var greenPaint = new SKPaint { Color = new SKColor(0, 139, 0), IsAntialias = true };
+        var redPaint = new SKPaint { Color = new SKColor(139, 0, 0), IsAntialias = true };
+        var bluePaint = new SKPaint { Color = new SKColor(116, 140, 255), IsAntialias = true };
+        var pinkPaint = new SKPaint { Color = new SKColor(255, 116, 140), IsAntialias = true };
+        var whitePaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        var blackPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
 
         // Get child stats
         var statsValues = new[]
         {
-            result.Child.Hp,
+            result!.Child!.Hp,
             result.Child.Attack,
             result.Child.Defense,
             result.Child.SpAtk,
@@ -1191,11 +1149,11 @@ public class BreedingService : INService
 
         // Draw stats values
         for (var i = 0; i < statsValues.Length; i++)
-            canvas.DrawText(statsValues[i].ToString(), statsPositions[i], greenPaint);
+            canvas.DrawText(statsValues[i].ToString(), statsPositions[i], font35, greenPaint);
 
         // Draw inherited stats
         for (var i = 0; i < inheritedStats.Count; i++)
-            canvas.DrawText(inheritedStats[i], inheritedPositions[i], redPaint);
+            canvas.DrawText(inheritedStats[i], inheritedPositions[i], font25, redPaint);
 
         // Determine gender text
         var genderSign = result.Child.Gender switch
@@ -1206,13 +1164,13 @@ public class BreedingService : INService
         };
 
         // Draw parent names
-        canvas.DrawText(fatherName, 635, 861, bluePaint);
-        canvas.DrawText(motherName, 205, 861, pinkPaint);
+        canvas.DrawText(fatherName, 635, 861, font35, bluePaint);
+        canvas.DrawText(motherName, 205, 861, font35, pinkPaint);
 
         // Draw egg info
-        canvas.DrawText($"{genderSign}{result.Child.Name} Egg!", 326, 136, whitePaint);
-        canvas.DrawText($"IV % {result.Child.CalculateIvPercentage()}", 590, 202, blackPaint);
-        canvas.DrawText(result.Child.Nature, 693, 713, blackPaint);
+        canvas.DrawText($"{genderSign}{result.Child.Name} Egg!", 326, 136, font35, whitePaint);
+        canvas.DrawText($"IV % {result.Child.CalculateIvPercentage()}", 590, 202, font35, blackPaint);
+        canvas.DrawText(result.Child.Nature, 693, 713, font35, blackPaint);
 
         // Convert to bytes
         using var image = surface.Snapshot();
@@ -1245,29 +1203,20 @@ public class BreedingService : INService
         // Draw background image
         canvas.DrawBitmap(bitmap, 0, 0);
 
-        // Create paint objects
-        var smallPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 10,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Italic)
-        };
+        // Create font + paint objects
+        using var smallFont = new SKFont(
+            SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+                SKFontStyleSlant.Italic), 10);
+        using var bigFont = new SKFont(
+            SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
+                SKFontStyleSlant.Upright), 18);
 
-        var bigPaint = new SKPaint
-        {
-            Color = SKColors.Black,
-            TextSize = 18,
-            IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
-                SKFontStyleSlant.Upright)
-        };
+        var blackPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
 
         // Draw text
-        canvas.DrawText("IV: 0% - Cooldown Started", 48, 250, smallPaint);
+        canvas.DrawText("IV: 0% - Cooldown Started", 48, 250, smallFont, blackPaint);
 
-        if (auto) canvas.DrawText($"Attempt #{retryCount} out of 15", 16, 195, bigPaint);
+        if (auto) canvas.DrawText($"Attempt #{retryCount} out of 15", 16, 195, bigFont, blackPaint);
 
         // Convert to bytes
         using var image = surface.Snapshot();
@@ -1430,12 +1379,12 @@ public class BreedingService : INService
         /// <summary>
         ///     Gets or sets the Pokémon's name.
         /// </summary>
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's gender.
         /// </summary>
-        public string Gender { get; set; }
+        public string Gender { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's HP IV.
@@ -1480,7 +1429,7 @@ public class BreedingService : INService
         /// <summary>
         ///     Gets or sets the Pokémon's held item.
         /// </summary>
-        public string HeldItem { get; set; }
+        public string HeldItem { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's happiness value.
@@ -1495,17 +1444,17 @@ public class BreedingService : INService
         /// <summary>
         ///     Gets or sets the Pokémon's available ability IDs.
         /// </summary>
-        public List<int> AbilityIds { get; set; }
+        public List<int> AbilityIds { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's egg groups.
         /// </summary>
-        public List<int> EggGroups { get; set; }
+        public List<int> EggGroups { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's nature.
         /// </summary>
-        public string Nature { get; set; }
+        public string Nature { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the Pokémon's capture rate.
@@ -1536,12 +1485,12 @@ public class BreedingService : INService
         /// <summary>
         ///     Gets or sets the error message if the breeding attempt failed.
         /// </summary>
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } = null!;
 
         /// <summary>
         ///     Gets or sets the child Pokémon if the breeding attempt was successful.
         /// </summary>
-        public BreedingPokemon Child { get; set; }
+        public BreedingPokemon? Child { get; set; }
 
         /// <summary>
         ///     Gets or sets the hatch counter for the egg if the breeding attempt was successful.
@@ -1566,6 +1515,6 @@ public class BreedingService : INService
         /// <summary>
         ///     Gets or sets the stats that were inherited from the parents.
         /// </summary>
-        public List<string> InheritedStats { get; set; }
+        public List<string> InheritedStats { get; set; } = null!;
     }
 }

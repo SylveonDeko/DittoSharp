@@ -13,9 +13,9 @@ public partial class DuelPokemon
         ChoiceMove = null;
         _name = otherpoke._name;
         if (_nickname != "None")
-            Name = $"{_nickname} ({_name.Replace('-', ' ')})";
+            Name = $"{_nickname} ({_name!.Replace('-', ' ')})";
         else
-            Name = _name.Replace("-", " ");
+            Name = _name!.Replace("-", " ");
         Attack = otherpoke.Attack;
         Defense = otherpoke.Defense;
         SpAtk = otherpoke.SpAtk;
@@ -55,12 +55,12 @@ public partial class DuelPokemon
     /// <returns>True if the form change was successful, false if the form doesn't exist.</returns>
     public bool Form(string? form)
     {
-        if (!BaseStats.ContainsKey(form)) return false;
+        if (!BaseStats.ContainsKey(form!)) return false;
         _name = form;
         if (_nickname != "None")
-            DisplayName = $"{_nickname} ({_name.Replace('-', ' ')})";
+            DisplayName = $"{_nickname} ({_name!.Replace('-', ' ')})";
         else
-            DisplayName = _name.Replace("-", " ");
+            DisplayName = _name!.Replace("-", " ");
         Attack = BaseStats[_name][1];
         Defense = BaseStats[_name][2];
         SpAtk = BaseStats[_name][3];

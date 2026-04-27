@@ -11,8 +11,8 @@ public partial class DuelPokemon
     /// <param name="attacker">The attacking Pokemon (for ability checks).</param>
     /// <param name="move">The move being used (for special effects).</param>
     /// <returns>The type effectiveness multiplier (0.0, 0.5, 1.0, 2.0, etc.).</returns>
-    public double Effectiveness(ElementType attackerType, Battle battle, DuelPokemon attacker = null,
-        Move.Move move = null)
+    public double Effectiveness(ElementType attackerType, Battle battle, DuelPokemon? attacker = null,
+        Move.Move? move = null)
     {
         if (attackerType == ElementType.TYPELESS) return 1;
         double effectiveness = 1;

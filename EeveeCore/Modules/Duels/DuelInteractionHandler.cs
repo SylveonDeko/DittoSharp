@@ -19,16 +19,17 @@ namespace EeveeCore.Modules.Duels;
 ///     Processes user input via buttons and commands during battles,
 ///     manages battle state, and coordinates battle flow.
 /// </summary>
-/// ///
 /// <param name="mongoService">The MongoDB service for accessing Pokémon data.</param>
 /// <param name="battleRenderer">The renderer for creating battle images.</param>
 /// <param name="dbContext">The database context provider for Entity Framework operations.</param>
 /// <param name="client">The Discord client for user and channel interactions.</param>
+/// <param name="gameData">The in-memory static game data cache.</param>
 public class DuelInteractionHandler(
     IMongoService mongoService,
     DuelRenderer battleRenderer,
     LinqToDbConnectionProvider dbContext,
-    DiscordShardedClient client) : EeveeCoreSlashModuleBase<DuelService>
+    DiscordShardedClient client,
+    IGameDataCache gameData) : EeveeCoreSlashModuleBase<DuelService>
 {
     private static readonly Dictionary<(ulong, ulong), Battle?> ActiveBattles = new();
 
@@ -56,7 +57,7 @@ public class DuelInteractionHandler(
     ///     A task representing the asynchronous operation that returns the winning Trainer.
     /// </returns>
     public static async Task<Trainer> RunBattle(Battle battle, LinqToDbConnectionProvider dbProvider,
-        DiscordShardedClient client, DuelService duelService, MissionService missionService = null)
+        DiscordShardedClient client, DuelService duelService, MissionService? missionService = null)
     {
         Trainer? winner = null;
         var battleId = battle.Context.Interaction.Id.ToString();
@@ -66,7 +67,7 @@ public class DuelInteractionHandler(
             // Run the actual battle
             winner = await battle.Run();
         }
-        catch (HttpRequestException e)
+        catch (HttpRequestException)
         {
             await battle.Channel.SendMessageAsync(
                 "The bot encountered an unexpected network issue, " +
@@ -74,7 +75,7 @@ public class DuelInteractionHandler(
                 "Please try again in a few moments.\n" +
                 "Note: Do not report this as a bug.");
         }
-        catch (TimeoutException e)
+        catch (TimeoutException)
         {
             await battle.Channel.SendMessageAsync(
                 "The battle timed out. " +
@@ -112,7 +113,7 @@ public class DuelInteractionHandler(
                     // Fire DuelCompleted mission event for both participants
                     if (missionService != null)
                     {
-                        _ = Task.Run(async () => await missionService.FireDuelCompletedEvent(battle.Context.Interaction, winner as MemberTrainer, t1.Id == (winner as MemberTrainer)?.Id ? t2 : t1));
+                        _ = Task.Run(async () => await missionService.FireDuelCompletedEvent(battle.Context.Interaction, (winner as MemberTrainer)!, t1.Id == (winner as MemberTrainer)?.Id ? t2 : t1));
                     }
                     // Handle post-battle rewards, XP gain, etc.
                     var description = "";
@@ -121,7 +122,7 @@ public class DuelInteractionHandler(
 
                     var memWinner = winner as MemberTrainer;
                     // Update achievements for both players
-                    await db.Achievements.Where(a => a.UserId == memWinner.Id)
+                    await db.Achievements.Where(a => a.UserId == memWinner!.Id)
                         .Set(a => a.DuelPartyWins, a => a.DuelPartyWins + 1)
                         .UpdateAsync();
 
@@ -186,7 +187,7 @@ public class DuelInteractionHandler(
         // Always clean up battle references in Redis
         await duelService.EndBattle(battle);
 
-        return winner;
+        return winner!;
     }
 
     /// <summary>
@@ -237,7 +238,7 @@ public class DuelInteractionHandler(
     /// <param name="battle">The Battle object to remove from tracking.</param>
     private static void CleanupBattle(Battle? battle)
     {
-        if (battle.Trainer1 is MemberTrainer memberTrainer1 && battle.Trainer2 is MemberTrainer memberTrainer2)
+        if (battle!.Trainer1 is MemberTrainer memberTrainer1 && battle.Trainer2 is MemberTrainer memberTrainer2)
         {
             ActiveBattles.Remove((memberTrainer1.Id, memberTrainer2.Id));
             ActiveBattles.Remove((memberTrainer2.Id, memberTrainer1.Id));
@@ -281,7 +282,7 @@ public class DuelInteractionHandler(
             }
 
             // Create loading embed with local GIF attachment
-            var selectedGifPath = PregameGifs[new Random().Next(PregameGifs.Length)];
+            var selectedGifPath = PregameGifs[Random.Shared.Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle accepted! Loading...")
                 .WithDescription("Please wait")
@@ -467,11 +468,11 @@ public class DuelInteractionHandler(
         // Handle forced moves
         if (moveResult.Type == ValidMovesResult.ResultType.ForcedMove)
         {
-            trainer.SelectedAction = new Trainer.MoveAction(moveResult.ForcedMove);
+            trainer.SelectedAction = new Trainer.MoveAction(moveResult.ForcedMove!);
             trainer.Event.SetResult(true);
 
             await ctx.Interaction.RespondAsync(
-                $"You were forced to play: {moveResult.ForcedMove.PrettyName}",
+                $"You were forced to play: {moveResult!.ForcedMove!.PrettyName}",
                 ephemeral: true);
             return;
         }
@@ -504,7 +505,7 @@ public class DuelInteractionHandler(
                 label,
                 $"battle:move:{i}",
                 ButtonStyle.Secondary,
-                disabled: !moveResult.ValidMoveIndexes.Contains(i),
+                disabled: !moveResult!.ValidMoveIndexes!.Contains(i),
                 row: i / 2);
         }
 
@@ -690,7 +691,7 @@ public class DuelInteractionHandler(
         var castTrainer1 = battle.Trainer1 as MemberTrainer;
         var trainer = castTrainer1?.Id == ctx.User.Id ? battle.Trainer1 : battle.Trainer2;
 
-        trainer.SelectedAction = null;
+        trainer.SelectedAction = null!;
         trainer.Event.SetResult(true);
 
         await ctx.Interaction.ModifyOriginalResponseAsync(properties =>
@@ -777,7 +778,7 @@ public class DuelInteractionHandler(
                 label,
                 $"battle:move:{i}",
                 ButtonStyle.Secondary,
-                disabled: !moveResult.ValidMoveIndexes.Contains(i),
+                disabled: !moveResult!.ValidMoveIndexes!.Contains(i),
                 row: i / 2);
         }
 
@@ -934,15 +935,15 @@ public class DuelInteractionHandler(
         }
 
         // Create DuelPokemon objects
-        var challengerDuelPoke = await DuelPokemon.Create(ctx, challengerPoke, mongoService);
-        var opponentDuelPoke = await DuelPokemon.Create(ctx, opponentPoke, mongoService);
+        var challengerDuelPoke = await DuelPokemon.Create(ctx, challengerPoke, mongoService, gameData);
+        var opponentDuelPoke = await DuelPokemon.Create(ctx, opponentPoke, mongoService, gameData);
 
         // Create trainers
         var trainer1 = new MemberTrainer(challenger, [challengerDuelPoke]);
         var trainer2 = new MemberTrainer(ctx.User, [opponentDuelPoke]);
 
         // Create battle
-        var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService);
+        var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService, gameData);
 
         // Store battle in local dictionary
         ActiveBattles[(challenger.Id, ctx.User.Id)] = battle;
@@ -993,7 +994,7 @@ public class DuelInteractionHandler(
         var trainer2 = new MemberTrainer(ctx.User, opponentPokemon);
 
         // Create battle
-        var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService, inverseBattle);
+        var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService, gameData, inverseBattle);
 
         // Store in local dictionary
         ActiveBattles[(challenger.Id, ctx.User.Id)] = battle;

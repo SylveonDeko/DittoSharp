@@ -337,7 +337,7 @@ public class MarketService : INService
         
         return lockedListings.Any(value => 
             value.HasValue && 
-            ulong.TryParse(value, out var id) && 
+            ulong.TryParse((string?)value, out var id) &&
             id == listingId);
     }
 

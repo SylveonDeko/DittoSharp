@@ -275,17 +275,11 @@ public class WordSearchService(IMongoService mongoService) : INService
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DrawGridAsync(SKCanvas canvas, WordSearchGameState gameState)
     {
-        using var textPaint = new SKPaint();
-        textPaint.Color = SKColors.White;
-        textPaint.IsAntialias = true;
-        textPaint.TextSize = 18;
-        textPaint.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+        var arialBold = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+        using var font = new SKFont(arialBold, 18);
 
-        using var foundTextPaint = new SKPaint();
-        foundTextPaint.Color = SKColors.Red;
-        foundTextPaint.IsAntialias = true;
-        foundTextPaint.TextSize = 18;
-        foundTextPaint.Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+        using var textPaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        using var foundTextPaint = new SKPaint { Color = SKColors.Red, IsAntialias = true };
 
         // Get coordinates of found words
         var foundCoordinates = new HashSet<(int Row, int Col)>();
@@ -309,7 +303,7 @@ public class WordSearchService(IMongoService mongoService) : INService
                 var x = col * (GameConstants.WordSearchBoxSize + 4) + GameConstants.WordSearchLeftOffset;
                 var y = row * (GameConstants.WordSearchBoxSize + 4) + GameConstants.WordSearchTopOffset + 18; // Add offset for text baseline
 
-                canvas.DrawText(letter, x, y, paint);
+                canvas.DrawText(letter, x, y, SKTextAlign.Left, font, paint);
 
                 // Draw underline for found letters
                 if (foundCoordinates.Contains((row, col)))
@@ -317,7 +311,7 @@ public class WordSearchService(IMongoService mongoService) : INService
                     using var underlinePaint = new SKPaint();
                     underlinePaint.Color = SKColors.Red;
                     underlinePaint.StrokeWidth = 2;
-                    canvas.DrawLine(x, y + 2, x + textPaint.MeasureText(letter), y + 2, underlinePaint);
+                    canvas.DrawLine(x, y + 2, x + font.MeasureText(letter), y + 2, underlinePaint);
                 }
             }
         }

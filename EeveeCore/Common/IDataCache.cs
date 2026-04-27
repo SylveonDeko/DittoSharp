@@ -63,7 +63,7 @@ public interface IDataCache : IDisposable
     /// <typeparam name="T">The type of the item to retrieve.</typeparam>
     /// <param name="key">The cache key.</param>
     /// <returns>The cached item.</returns>
-    Task<T> GetFromCache<T>(string key);
+    Task<T?> GetFromCache<T>(string key);
 
     /// <summary>
     ///     Publishes data to a Redis channel.

@@ -47,7 +47,7 @@ public partial class DuelPokemon
         {
             msg += $"{Name} carries on the baton!\n";
             Owner.BatonPass.Apply(this);
-            Owner.BatonPass = null;
+            Owner.BatonPass = null!;
         }
 
         // Shed Tail
@@ -106,7 +106,7 @@ public partial class DuelPokemon
             }
         }
 
-        if (Hp > 0) msg += SendOutAbility(otherpoke, battle);
+        if (Hp > 0) msg += SendOutAbility(otherpoke!, battle);
 
         // Restoration
         if (Owner.HealingWish)
@@ -292,20 +292,11 @@ public partial class DuelPokemon
 
         if (Ability() == Impl.Ability.ANTICIPATION && otherpoke != null)
         {
-            var shuddered = false;
             foreach (var move in otherpoke.Moves)
             {
-                if (move.Effect == 39)
+                if (move.Effect == 39 || Effectiveness(move.Type, battle) > 1)
                 {
                     msg += $"{Name} shuddered in anticipation!\n";
-                    shuddered = true;
-                    break;
-                }
-
-                if (Effectiveness(move.Type, battle) > 1)
-                {
-                    msg += $"{Name} shuddered in anticipation!\n";
-                    shuddered = true;
                     break;
                 }
             }
@@ -339,7 +330,7 @@ public partial class DuelPokemon
 
             if (bestMoves.Count > 0)
             {
-                var move = bestMoves[new Random().Next(bestMoves.Count)];
+                var move = bestMoves[Random.Shared.Next(bestMoves.Count)];
                 msg += $"{Name} is forewarned about {otherpoke.Name}'s {move.PrettyName}!\n";
             }
         }
@@ -646,13 +637,13 @@ public partial class DuelPokemon
                 Name = _name.Replace("-", " ");
         }
 
-        if (Owner.CurrentPokemon == this) Owner.CurrentPokemon = null;
+        if (Owner.CurrentPokemon == this) Owner.CurrentPokemon = null!;
         if (battle.Weather.RecheckAbilityWeather()) msg += "The weather cleared!\n";
-        Attack = BaseStats[_name][1];
-        Defense = BaseStats[_name][2];
-        SpAtk = BaseStats[_name][3];
-        SpDef = BaseStats[_name][4];
-        Speed = BaseStats[_name][5];
+        Attack = BaseStats[_name!][1];
+        Defense = BaseStats[_name!][2]!;
+        SpAtk = BaseStats[_name!][3];
+        SpDef = BaseStats[_name!][4];
+        Speed = BaseStats[_name!][5];
         HpIV = StartingHpIV;
         AtkIV = StartingAtkIV;
         DefIV = StartingDefIV;
@@ -836,8 +827,8 @@ public partial class DuelPokemon
         msg += NonVolatileEffect.NextTurn(battle);
 
         // Volatile status turn progression
-        var prevDisabMove = (Move.Move)Disable.Item;
-        if (Disable.NextTurn()) msg += $"{Name}'s {prevDisabMove.PrettyName} is no longer disabled!\n";
+        var prevDisabMove = (Move.Move)Disable.Item!;
+        if (Disable.NextTurn()) msg += $"{Name}'s {prevDisabMove!.PrettyName} is no longer disabled!\n";
         if (Taunt.NextTurn()) msg += $"{Name}'s taunt has ended!\n";
         if (HealBlock.NextTurn()) msg += $"{Name}'s heal block has ended!\n";
         if (Silenced.NextTurn()) msg += $"{Name}'s voice returned!\n";
@@ -849,13 +840,13 @@ public partial class DuelPokemon
         if (Yawn.NextTurn()) msg += NonVolatileEffect.ApplyStatus("sleep", battle, this, source: "drowsiness");
         if (Encore.NextTurn()) msg += $"{Name}'s encore is over!\n";
         if (PerishSong.NextTurn()) msg += Faint(battle, source: "perish song");
-        if (Encore.Active() && ((Move.Move)Encore.Item).PP == 0)
+        if (Encore.Active() && ((Move.Move)Encore.Item!).PP == 0)
         {
             Encore.End();
             msg += $"{Name}'s encore is over!\n";
         }
 
-        if (CudChew.NextTurn() && HeldItem.LastUsed != null && HeldItem.LastUsed.Identifier.EndsWith("-berry"))
+        if (CudChew.NextTurn() && HeldItem.LastUsed != null && HeldItem!.LastUsed!.Identifier!.EndsWith("-berry"))
         {
             HeldItem.Recover(HeldItem);
             msg += HeldItem.EatBerry();
@@ -1019,10 +1010,10 @@ public partial class DuelPokemon
                 if (stats[i].Item1 == 6)
                     addStats.RemoveAt(i);
 
-            Tuple<int, string> addStat = null;
+            Tuple<int, string>? addStat = null;
             if (addStats.Count > 0)
             {
-                addStat = addStats[new Random().Next(addStats.Count)];
+                addStat = addStats[Random.Shared.Next(addStats.Count)];
                 msg += AppendStat(2, this, null, addStat.Item2, "its moodiness");
             }
 
@@ -1033,7 +1024,7 @@ public partial class DuelPokemon
 
             if (removeStats.Count > 0)
             {
-                var removeStat = removeStats[new Random().Next(removeStats.Count)];
+                var removeStat = removeStats[Random.Shared.Next(removeStats.Count)];
                 msg += AppendStat(-1, this, null, removeStat.Item2, "its moodiness");
             }
         }
@@ -1053,7 +1044,7 @@ public partial class DuelPokemon
             }
 
         if (Ability() == Impl.Ability.HARVEST && LastBerry != null && !HeldItem.HasItem())
-            if (new Random().Next(2) == 0)
+            if (Random.Shared.Next(2) == 0)
             {
                 HeldItem = new HeldItem(LastBerry, this);
                 LastBerry = null;
@@ -1119,7 +1110,7 @@ public partial class DuelPokemon
             if (Form(newForm)) msg += $"{Name}'s core was exposed!\n";
         }
 
-        if (Ability() == Impl.Ability.SHIELDS_DOWN && _name.StartsWith("Minior-") && _name != "Minior" &&
+        if (Ability() == Impl.Ability.SHIELDS_DOWN && _name!.StartsWith("Minior-") && _name != "Minior" &&
             Hp >= StartingHp / 2)
             if (Form("Minior"))
                 msg += $"{Name}'s shell returned!\n";

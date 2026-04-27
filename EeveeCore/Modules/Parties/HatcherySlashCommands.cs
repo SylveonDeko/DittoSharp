@@ -174,8 +174,7 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
 ///     Handles component interactions for the hatchery system.
 ///     Processes pagination buttons for browsing hatchery groups.
 /// </summary>
-/// <param name="Service">The service that handles hatchery data operations.</param>
-public class HatcheryInteractionModule(HatcheryService Service) : EeveeCoreSlashModuleBase<HatcheryService>
+public class HatcheryInteractionModule : EeveeCoreSlashModuleBase<HatcheryService>
 {
     /// <summary>
     ///     Handles the previous page button interaction.

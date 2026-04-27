@@ -459,7 +459,7 @@ public class TradeService : INService
             return null;
         }
 
-        var session = JsonSerializer.Deserialize<TradeSession>(sessionData!);
+        var session = JsonSerializer.Deserialize<TradeSession>((string)sessionData!);
         if (session != null)
         {
             // Check if session has expired
@@ -615,7 +615,7 @@ public class TradeService : INService
                     var sessionData = await database.StringGetAsync(key);
                     if (sessionData.HasValue)
                     {
-                        var session = JsonSerializer.Deserialize<TradeSession>(sessionData!);
+                        var session = JsonSerializer.Deserialize<TradeSession>((string)sessionData!);
                         if (session != null && 
                             session.IsParticipant(userId) && 
                             session.Status is TradeStatus.Active or TradeStatus.PendingConfirmation or TradeStatus.Processing)
