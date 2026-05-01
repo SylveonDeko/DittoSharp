@@ -32,7 +32,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
 
             await using var db = await dbProvider.GetConnectionAsync();
             
-            // Get filter groups with criteria loaded
             var filterGroups = await db.GetTable<UserFilterGroup>()
                 .LoadWithAsTable(g => g.FilterCriteria)
                 .Where(g => g.UserId == userId && g.IsActive)
@@ -64,7 +63,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
         {
             await using var db = await dbProvider.GetConnectionAsync();
             
-            // Get the filter group with criteria loaded
             var filterGroup = await db.GetTable<UserFilterGroup>()
                 .LoadWithAsTable(g => g.FilterCriteria)
                 .FirstOrDefaultAsync(g => g.Id == groupId && g.UserId == userId);
@@ -102,7 +100,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
     {
         try
         {
-            // Validate inputs
             if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
                 return null;
 
@@ -117,14 +114,12 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
 
             try
             {
-                // Check if user already has a group with this name
                 var existingGroup = await db.GetTable<UserFilterGroup>()
                     .AnyAsync(g => g.UserId == userId && g.Name == name && g.IsActive);
 
                 if (existingGroup)
                     return null;
 
-                // Get next sort order
                 var maxSortOrder = await db.GetTable<UserFilterGroup>()
                     .Where(g => g.UserId == userId)
                     .MaxAsync(g => (int?)g.SortOrder) ?? -1;
@@ -141,10 +136,8 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                // Insert filter group and get the ID
                 filterGroup.Id = await db.InsertWithInt32IdentityAsync(filterGroup);
 
-                // Add criteria if provided
                 if (criteria != null && criteria.Count > 0)
                 {
                     for (var i = 0; i < criteria.Count; i++)
@@ -153,7 +146,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                         criterion.FilterGroupId = filterGroup.Id;
                         criterion.CriterionOrder = i;
                         
-                        // Validate criterion
                         if (!IsValidCriterion(criterion))
                             throw new ArgumentException($"Invalid criterion at index {i}");
                     }
@@ -163,10 +155,8 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
 
                 await transaction.CommitAsync();
 
-                // Clear cache
                 await InvalidateUserCache(userId);
 
-                // Return with criteria loaded
                 return await GetFilterGroup(filterGroup.Id, userId);
             }
             catch
@@ -218,13 +208,11 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                 if (filterGroup == null)
                     return false;
 
-                // Update properties if provided
                 if (name != null)
                 {
                     if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
                         return false;
                     
-                    // Check for duplicate name
                     var duplicateName = await db.GetTable<UserFilterGroup>()
                         .AnyAsync(g => g.UserId == userId && g.Name == name && g.Id != groupId && g.IsActive);
                     
@@ -254,7 +242,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                 if (isFavorite.HasValue)
                     filterGroup.IsFavorite = isFavorite.Value;
 
-                // Update the filter group
                 await db.GetTable<UserFilterGroup>()
                     .Where(g => g.Id == groupId)
                     .Set(g => g.Name, filterGroup.Name!)
@@ -265,15 +252,12 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                     .Set(g => g.UpdatedAt, DateTime.UtcNow)
                     .UpdateAsync();
 
-                // Update criteria if provided
                 if (criteria != null)
                 {
-                    // Remove existing criteria
                     await db.UserFilterCriteria
                         .Where(c => c.FilterGroupId == groupId)
                         .DeleteAsync();
 
-                    // Add new criteria
                     for (var i = 0; i < criteria.Count; i++)
                     {
                         var criterion = criteria[i];
@@ -289,7 +273,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                 }
                 await transaction.CommitAsync();
 
-                // Clear cache
                 await InvalidateUserCache(userId);
 
                 return true;
@@ -355,7 +338,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
 
             try
             {
-                // Verify all groups belong to the user
                 var userGroups = await db.GetTable<UserFilterGroup>()
                     .Where(g => g.UserId == userId && groupIds.Contains(g.Id))
                     .ToListAsync();
@@ -363,7 +345,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
                 if (userGroups.Count != groupIds.Count)
                     return false;
 
-                // Update sort orders
                 for (var i = 0; i < groupIds.Count; i++)
                 {
                     var groupId = groupIds[i];
@@ -404,7 +385,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
         if (string.IsNullOrWhiteSpace(criterion.Operator) || criterion.Operator.Length > 20)
             return false;
 
-        // Validate field names against known Pokemon properties
         var validFields = new HashSet<string>
         {
             "level", "hp_iv", "attack_iv", "defense_iv", "special_attack_iv", "special_defense_iv", "speed_iv",
@@ -416,7 +396,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
         if (!validFields.Contains(criterion.FieldName.ToLower()))
             return false;
 
-        // Validate operators
         var validOperators = new HashSet<string>
         {
             "equals", "not_equals", "greater_than", "less_than", "greater_equal", "less_equal",
@@ -426,7 +405,6 @@ public class FilterGroupService(LinqToDbConnectionProvider dbProvider, RedisCach
         if (!validOperators.Contains(criterion.Operator.ToLower()))
             return false;
 
-        // Validate logical connectors
         if (criterion.LogicalConnector != null)
         {
             var validConnectors = new HashSet<string> { "AND", "OR" };

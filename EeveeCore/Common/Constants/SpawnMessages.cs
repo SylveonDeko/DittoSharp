@@ -35,23 +35,19 @@ public static class SpawnMessages
         "Get ready, Trainers! A Pokémon is nearby!",
         "A Pokémon encounter is imminent!",
         "Prepare for a wild Pokémon encounter!",
-        // Fun/Humorous Messages
         "A wild Pokémon appears! It looks like it's trying to read the chat!",
         "Whoops! A wild Pokémon just tripped into view!",
         "A wild Pokémon appears, practicing its stand-up comedy routine!",
         "Look out! A wild Pokémon just cannonballed into an invisible pool!",
         "A wild Pokémon has appeared and it's... doing interpretive dance?",
-        // Spooky Messages
         "A wild Pokémon emerges from the shadows, eyes glowing ominously...",
         "In the eerie silence, a wild Pokémon appears with a sinister aura...",
         "A chilling wind blows as a wild Pokémon materializes from the mist...",
         "A wild Pokémon appears, its haunting cry echoing in the darkness...",
-        // Tech-themed Messages
         "Initializing encounter... A wild Pokémon has been detected!",
         "System alert: A wild Pokémon has hacked its way into the vicinity!",
         "A wild Pokémon appears, its movements precise and mechanical!",
         "Error 404: Wild Pokémon not found... Wait...nevermind",
-        // Simple Messages
         "A wild Pokémon has Spawned!",
         "Hey look it's a wild creature",
         "A wild Pokémon jumps from the shadows",
@@ -59,7 +55,6 @@ public static class SpawnMessages
         "From out of the tall grass, it's a wild Pokémon",
         "A confused wild Pokémon appears out of thin air between messages",
         "A wild Pokémon materializes from the interwebs",
-        // Quirky Messages
         "HOLY COW! Its one of those there poke-mans",
         "What in tarnation! Its one a dem dere' poke-EMAN thingys",
         "AAAAAAAHHHHHHHH-a Pokémon",

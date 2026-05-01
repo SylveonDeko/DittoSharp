@@ -106,7 +106,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     [SlashCommand("single", "1v1 duel with another user's selected pokemon")]
     public async Task SingleDuel(IUser opponent)
     {
-        // Check if the opponent is a bot or self
         if (opponent.IsBot)
         {
             await ErrorAsync("You cannot duel a bot!");
@@ -119,11 +118,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             return;
         }
 
-        // Check cooldowns
         if (!await CheckDuelCooldowns(ctx.User.Id, opponent.Id))
             return;
 
-        // Create confirmation buttons
         var components = new ComponentBuilder()
             .WithButton("Accept", $"duel:accept:{ctx.User.Id}:single", ButtonStyle.Success)
             .WithButton("Reject", $"duel:reject:{ctx.User.Id}", ButtonStyle.Danger)
@@ -142,7 +139,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     [SlashCommand("party", "6v6 duel with another user's selected party")]
     public async Task PartyDuel(IUser opponent)
     {
-        // Check if the opponent is a bot or self
         if (opponent.IsBot)
         {
             await ErrorAsync("You cannot duel a bot!");
@@ -155,11 +151,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             return;
         }
 
-        // Check cooldowns
         if (!await CheckDuelCooldowns(ctx.User.Id, opponent.Id))
             return;
 
-        // Create confirmation buttons
         var components = new ComponentBuilder()
             .WithButton("Accept", $"duel:accept:{ctx.User.Id}:party", ButtonStyle.Success)
             .WithButton("Reject", $"duel:reject:{ctx.User.Id}", ButtonStyle.Danger)
@@ -179,7 +173,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     [SlashCommand("inverse", "6v6 inverse battle with another user's selected party")]
     public async Task InverseDuel(IUser opponent)
     {
-        // Check if the opponent is a bot or self
         if (opponent.IsBot)
         {
             await ErrorAsync("You cannot duel a bot!");
@@ -192,11 +185,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             return;
         }
 
-        // Check cooldowns
         if (!await CheckDuelCooldowns(ctx.User.Id, opponent.Id))
             return;
 
-        // Create confirmation buttons
         var components = new ComponentBuilder()
             .WithButton("Accept", $"duel:accept:{ctx.User.Id}:inverse", ButtonStyle.Success)
             .WithButton("Reject", $"duel:reject:{ctx.User.Id}", ButtonStyle.Danger)
@@ -218,23 +209,19 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     {
         await DeferAsync();
 
-        // Check cooldowns for NPC duels
         if (!await CheckNpcDuelCooldowns(ctx.User.Id))
             return;
 
         try
         {
-            // Check if user is already in a battle
             if (await Service.IsUserInBattle(ctx.User.Id))
             {
                 await FollowupAsync("You are already in a battle! Please finish your current battle first.");
                 return;
             }
 
-            // Retrieve the user's data and selected Pokemon
             await using var dbContext = await _db.GetConnectionAsync();
 
-            // Check if user exists and has energy
             var userData = await dbContext.Users
                 .FirstOrDefaultAsync(u => u.UserId == ctx.User.Id);
 
@@ -244,7 +231,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return;
             }
 
-            // Check if user has selected a Pokemon
             var selectedPokemonId = userData.Selected;
             if (selectedPokemonId == 0)
             {
@@ -252,7 +238,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return;
             }
 
-            // Get the selected Pokemon
             var selectedPokemon = await dbContext.UserPokemon
                 .FirstOrDefaultAsync(p => p.Id == selectedPokemonId);
 
@@ -262,23 +247,20 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return;
             }
 
-            // Check if the selected Pokemon is an egg
             if (selectedPokemon.PokemonName.Equals("Egg", StringComparison.OrdinalIgnoreCase))
             {
                 await FollowupAsync("You have an egg selected! Select a different pokemon with `/select <id>` first!");
                 return;
             }
 
-            // Check if user has energy
             if (userData.Energy <= 0 &&
-                ctx.Channel.Id != 1351200647743275142) // Skip energy check in designated channel
+                ctx.Channel.Id != 1351200647743275142)
             {
                 await FollowupAsync(
                     "You don't have any energy left!");
                 return;
             }
 
-            // Deduct energy (except in special channel)
             var energyImmune = ctx.Channel.Id == 1351200647743275142;
             if (!energyImmune)
             {
@@ -286,7 +268,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 await dbContext.UpdateAsync(userData);
             }
 
-            // Create loading embed with local GIF attachment
             var selectedGifPath = PregameGifs[Random.Shared.Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle loading...")
@@ -305,7 +286,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 await FollowupAsync(embed: loadingEmbed.Build());
             }
 
-            // Find an NPC Pokemon of similar level (remove complex array operations)
             var npcPokemonList = await dbContext.UserPokemon
                 .Where(p => p.Level >= selectedPokemon.Level - 10 &&
                             p.Level <= selectedPokemon.Level + 10 &&
@@ -319,7 +299,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 .Take(1000)
                 .ToListAsync();
 
-            // Filter out Pokemon with "tackle" moves in memory (avoid LinqToDB translation issues)
             if (npcPokemonList.Count > 0)
             {
                 npcPokemonList = npcPokemonList
@@ -333,33 +312,25 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return;
             }
 
-            // Randomly select one NPC Pokemon
             var npcPokemon = npcPokemonList[Random.Shared.Next(npcPokemonList.Count)];
 
-            // Create DuelPokemon objects
             var playerPokemon = await DuelPokemon.Create(ctx, selectedPokemon, _mongoService, _gameData);
             var npcPokemonDuel = await DuelPokemon.Create(ctx, npcPokemon, _mongoService, _gameData);
 
-            // Create trainers
             var playerTrainer = new MemberTrainer(ctx.User, [playerPokemon]);
             var npcTrainer = new NPCTrainer([npcPokemonDuel]);
 
-            // Create battle
             var battle = new Battle(ctx, ctx.Channel, playerTrainer, npcTrainer, _mongoService, _gameData);
 
-            // Register battle in Redis with 0 as opponent ID for NPC battles
             var battleId = ctx.Interaction.Id.ToString();
             await Service.RegisterBattle(ctx.User.Id, 0, battle, ctx.Interaction.Id);
 
-            // Run the battle
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    // Run the battle and get winner
                     var winner = await DuelInteractionHandler.RunBattle(battle, _db, _client, Service);
 
-                    // Handle NPC-specific rewards if user won
                     if (winner == playerTrainer && !energyImmune)
                         await HandleNpcRewards(ctx.User.Id, winner, battle, userData);
                 }
@@ -395,15 +366,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 
             decimal battleMulti = 1;
 
-            // Handle inventory which might be a string, JSON object, or dictionary
             try
             {
                 if (userData.Inventory != null)
                 {
-                    // Check if Inventory is a string that needs parsing
                     if (userData.Inventory is string inventoryStr)
                     {
-                        // Try to parse as JSON if it's a string
                         var inventoryJson = JsonDocument.Parse(inventoryStr);
                         if (inventoryJson.RootElement.TryGetProperty("battle-multiplier", out var element))
                         {
@@ -414,15 +382,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                                 battleMulti = parsed;
                         }
                     }
-                    // If it's a JObject (Newtonsoft.Json)
                     else if (userData.Inventory.GetType().Name.Contains("JObject"))
                     {
-                        // Use dynamic for JObject access
                         var jsonObj = userData.Inventory;
                         if (jsonObj["battle-multiplier"] != null)
                             battleMulti = Convert.ToDecimal(jsonObj["battle-multiplier"]);
                     }
-                    // If it's a dictionary
                     else if (userData.Inventory is IDictionary<string, object> dict &&
                              dict.TryGetValue("battle-multiplier", out var value))
                     {
@@ -437,12 +402,10 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                     }
                 }
 
-                // Safety cap for multiplier
                 battleMulti = Math.Min(battleMulti, 50m);
             }
             catch
             {
-                // Fallback to default if any error occurs
                 battleMulti = 1;
             }
 
@@ -451,23 +414,19 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 
             var desc = $"You received {creds} credits for winning the duel!\n\n";
 
-            // Update achievements
             await db.Achievements
                 .Where(a => a.UserId == userId)
                 .Set(a => a.DuelsTotal, a => a.DuelsTotal + 1)
                 .Set(a => a.NpcWins, a => a.NpcWins + 1)
                 .UpdateAsync();
 
-            // Add credits to user
             await db.Users
                 .Where(u => u.UserId == userId)
                 .Set(u => u.MewCoins, u => u.MewCoins + Convert.ToUInt64(creds))
                 .UpdateAsync();
 
-            // Grant XP to winning Pokemon
             foreach (var poke in winner.Party.Where(p => p is { Hp: > 0, EverSentOut: true }))
             {
-                // Get Pokemon data
                 var pokeData = await db.UserPokemon
                     .FirstOrDefaultAsync(p => p.Id == poke.Id);
 
@@ -477,21 +436,17 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 var heldItem = pokeData.HeldItem?.ToLower();
                 var currentExp = pokeData.Experience;
 
-                // Skip XP-blocked Pokemon
                 if (heldItem == "xp-block")
                     continue;
 
-                // Calculate XP
                 var expValue = 150 * poke.Level / 7.0;
 
                 if (heldItem == "lucky-egg") expValue *= 2.5;
 
-                // Limit exp to prevent integer overflow
                 var exp = Math.Min((int)expValue, int.MaxValue - currentExp);
 
                 desc += $"{poke.Name} got {exp} exp from winning.\n";
 
-                // Update Pokemon
                 await db.UserPokemon
                     .Where(p => p.Id == poke.Id)
                     .Set(p => p.Happiness, p => p.Happiness + 1)
@@ -499,11 +454,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                     .UpdateAsync();
             }
 
-            // Add advertisement
             desc +=
                 "\nConsider joining the [Official Server](https://discord.gg/EeveeCore) if you are a fan of pokemon duels!\n";
 
-            // Send rewards message
             await battle.Channel.SendMessageAsync(
                 embed: new EmbedBuilder()
                     .WithDescription(desc)
@@ -528,7 +481,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     /// </returns>
     private async Task<bool> CheckDuelCooldowns(ulong userId, ulong opponentId)
     {
-        // Check channel permissions
         var perms = (await ctx.Guild.GetCurrentUserAsync()).GetPermissions(ctx.Channel as ITextChannel);
 
         if (!perms.SendMessages || !perms.EmbedLinks || !perms.AttachFiles)
@@ -541,7 +493,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 
         try
         {
-            // Get per-command cooldown for this user
             var db = _redis.Redis.GetDatabase();
             var duelReset = await db.StringGetAsync($"duelcooldowns:{userId}");
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -553,10 +504,8 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return false;
             }
 
-            // Set the per-command cooldown (20 seconds)
             await db.StringSetAsync($"duelcooldowns:{userId}", (currentTime + 20).ToString());
 
-            // Check daily duel count limit
             var duelResetTime = await db.StringGetAsync("duelcooldownreset");
             DateTime resetTime;
 
@@ -570,7 +519,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             {
                 resetTime = DateTime.ParseExact(duelResetTime.ToString(), DATE_FORMAT, null);
 
-                // If it's been more than a day since the last reset
                 if (DateTime.UtcNow > resetTime.AddDays(1))
                 {
                     resetTime = DateTime.UtcNow;
@@ -580,7 +528,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 }
             }
 
-            // Get current daily duel count
             var usedCount = await db.HashGetAsync("dailyduelcooldowns", userId.ToString());
             var used = 0;
 
@@ -589,14 +536,12 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
             else
                 await db.HashSetAsync("dailyduelcooldowns", userId.ToString(), "0");
 
-            // Check if user has hit the daily limit
             if (used >= 50)
             {
                 await RespondAsync("You have hit the maximum number of duels per day!", ephemeral: true);
                 return false;
             }
 
-            // Increment daily duel count
             await db.HashSetAsync("dailyduelcooldowns", userId.ToString(), (used + 1).ToString());
 
             return true;
@@ -620,7 +565,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
     /// </returns>
     private async Task<bool> CheckNpcDuelCooldowns(ulong userId)
     {
-        // Check channel permissions
         var perms = (await ctx.Guild.GetCurrentUserAsync()).GetPermissions(ctx.Channel as ITextChannel);
 
         if (!perms.SendMessages || !perms.EmbedLinks || !perms.AttachFiles)
@@ -632,7 +576,6 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
 
         try
         {
-            // Get per-command cooldown for this user
             var db = _redis.Redis.GetDatabase();
             var duelReset = await db.StringGetAsync($"duelcooldowns:{userId}");
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -644,10 +587,9 @@ public class PokemonBattleModule : EeveeCoreSlashModuleBase<DuelService>
                 return false;
             }
 
-            // Set the per-command cooldown (20 seconds)
             await db.StringSetAsync($"duelcooldowns:{userId}", (currentTime + 20).ToString());
 
-            return true; // NPC duels don't count against daily limit
+            return true;
         }
         catch (Exception ex)
         {

@@ -25,7 +25,6 @@ namespace EeveeCore.Modules.Spawn.Services;
 /// </summary> 
 public class SpawnService : INService, IReadyExecutor
 {
-    // Constants from Python code
     /// <summary>
     ///     Base chance for a Pokemon to spawn when a message is sent.
     /// </summary>
@@ -155,8 +154,6 @@ public class SpawnService : INService, IReadyExecutor
     {
         var key = $"pokemon:caught:{messageId}";
 
-        // Set key only if it doesn't exist, with 15 minute expiry
-        // This ensures that even if the code never cleans up, the key will expire
         var result = await _cache.Redis.GetDatabase().StringSetAsync(
             key,
             userId.ToString(),
@@ -187,15 +184,12 @@ public class SpawnService : INService, IReadyExecutor
         int ubChance,
         ulong messageId)
     {
-        // First check if this Pokémon message has already been caught
         if (await IsPokemonAlreadyCaught(messageId))
             return new CatchResult(false, "This Pokémon has already been caught by someone else!", null, false, false);
 
-        // Try to mark the Pokémon as caught - if this fails, someone else caught it since our check
         if (!await TryMarkPokemonAsCaught(messageId, userId))
             return new CatchResult(false, "This Pokémon has already been caught by someone else!", null, false, false);
 
-        // Now proceed with the normal catch logic
         return await HandleCatch(userId, guildId, pokemonName, isShiny, legendChance, ubChance);
     }
 
@@ -219,7 +213,6 @@ public class SpawnService : INService, IReadyExecutor
 
         try
         {
-            // Check for mention-based catching first
             if (await HandleMentionCatch(message, channel))
                 return;
             var guildConfig = await GetGuildConfig(guildId);
@@ -253,7 +246,6 @@ public class SpawnService : INService, IReadyExecutor
             var spawnChances = CalculateSpawnChances(honey);
             var pokemon = await SelectPokemon(spawnChances, overrideWithGhost, overrideWithIce, guildId);
 
-            // Handle Christmas Event (if active)
             if (IsChristmasEvent() && _random.NextDouble() < 0.09 && !_activeVaults.Contains(channel.Id))
             {
                 await HandleVaultSpawn(spawnChannel, pokemon);
@@ -376,12 +368,11 @@ public class SpawnService : INService, IReadyExecutor
         if (guildId == 999953429751414784)
             return "EeveeCore";
 
-        // Low numbers = rare spawns in Python
-        var pokemon = chances.Legend < 2 ? GetRandomFromList(PokemonList.LegendList) : // This matches Python
-            chances.Ub < 2 ? GetRandomFromList(PokemonList.ubList) : // This matches Python
-            chances.Pseudo < 2 ? GetRandomFromList(PokemonList.pseudoList) : // This matches Python
-            chances.Starter < 2 ? GetRandomFromList(PokemonList.starterList) : // This matches Python
-            GetRandomFromList(PokemonList.pList); // Fallback to normal list like Python
+        var pokemon = chances.Legend < 2 ? GetRandomFromList(PokemonList.LegendList) :
+            chances.Ub < 2 ? GetRandomFromList(PokemonList.ubList) :
+            chances.Pseudo < 2 ? GetRandomFromList(PokemonList.pseudoList) :
+            chances.Starter < 2 ? GetRandomFromList(PokemonList.starterList) :
+            GetRandomFromList(PokemonList.pList);
 
         return pokemon!.ToLower();
     }
@@ -395,18 +386,15 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>True if the message was a catch attempt, false otherwise.</returns>
     private async Task<bool> HandleMentionCatch(IUserMessage message, ITextChannel channel)
     {
-        // Check if the message mentions the bot
         if (message.MentionedUserIds.All(u => u != _client.CurrentUser.Id))
             return false;
 
-        // Extract Pokemon name from the message (everything after the mention)
         var content = message.Content;
         var mentionPattern = $"<@{_client.CurrentUser.Id}>";
         var mentionIndex = content.IndexOf(mentionPattern, StringComparison.OrdinalIgnoreCase);
         
         if (mentionIndex == -1)
         {
-            // Try alternative mention format
             mentionPattern = $"<@!{_client.CurrentUser.Id}>";
             mentionIndex = content.IndexOf(mentionPattern, StringComparison.OrdinalIgnoreCase);
         }
@@ -414,17 +402,14 @@ public class SpawnService : INService, IReadyExecutor
         if (mentionIndex == -1)
             return false;
 
-        // Extract the potential Pokemon name after the mention
         var afterMention = content[(mentionIndex + mentionPattern.Length)..].Trim();
         if (string.IsNullOrEmpty(afterMention))
             return false;
 
-        // Get active spawns in this channel from the new tracking system
         var activeSpawnIds = await GetActiveSpawnsInChannel(channel.Id);
         
         foreach (var spawnMessageId in activeSpawnIds)
         {
-            // Get spawn info from tracking system
             var spawnInfo = await GetActiveSpawn(spawnMessageId);
             if (spawnInfo == null)
                 continue;
@@ -434,14 +419,12 @@ public class SpawnService : INService, IReadyExecutor
             var legChance = spawnInfo.Value.LegendaryChance;
             var ubChance = spawnInfo.Value.UltraBeastChance;
 
-            // Check if the mentioned Pokemon name matches
             var validNames = GetCatchOptions(pokemonName);
             var guessedName = afterMention.ToLower().Replace(" ", "-");
             
             if (!validNames.Contains(guessedName))
                 continue;
 
-            // Try to get the actual message to modify it later
             IUserMessage? spawnMessage = null;
             try
             {
@@ -449,10 +432,8 @@ public class SpawnService : INService, IReadyExecutor
             }
             catch
             {
-                // Message might have been deleted, continue with the catch anyway
             }
 
-            // Attempt to catch the Pokemon using the same logic as modal catching
             var result = await HandleCatchWithMessageCheck(
                 message.Author.Id,
                 channel.Guild.Id,
@@ -462,13 +443,11 @@ public class SpawnService : INService, IReadyExecutor
                 ubChance,
                 spawnMessageId);
 
-            // If successful, also mark in the new spawn tracking system
             if (result.Success)
             {
                 await MarkSpawnAsCaught(spawnMessageId, message.Author.Id);
             }
 
-            // Send the catch result
             if (result.Success)
             {
                 if (result.ResponseEmbed != null)
@@ -480,17 +459,14 @@ public class SpawnService : INService, IReadyExecutor
                     await message.Channel.SendMessageAsync(result.Message);
                 }
                 
-                // Add reaction to the original catch message
                 try
                 {
                     await message.AddReactionAsync(new Emoji("✅"));
                 }
                 catch
                 {
-                    // Ignore reaction errors
                 }
 
-                // Handle the spawn message if we found it
                 if (spawnMessage != null)
                 {
                     if (result.ShouldDeleteSpawn)
@@ -520,7 +496,6 @@ public class SpawnService : INService, IReadyExecutor
             }
             else
             {
-                // Send error message as reply
                 if (result.ResponseEmbed != null)
                 {
                     await message.ReplyAsync(embed: result.ResponseEmbed);
@@ -535,10 +510,10 @@ public class SpawnService : INService, IReadyExecutor
                 }
             }
 
-            return true; // We processed a catch attempt
+            return true;
         }
 
-        return false; // No matching spawn found
+        return false;
     }
 
     /// <summary>
@@ -564,7 +539,6 @@ public class SpawnService : INService, IReadyExecutor
                 $"`Decoding key:` ||{shiftInverted}||!\n# {giftWord}\n**Reply to the bots message with the pokemon name.**\nShift each letter up or down by the decoding key!\nBe the first decode and say the name to unlock the vault and see what its hiding!\n\n||`A B C D E F G H I J K L M N O P Q R S T U V W X Y Z`||")
             .WithColor(Color.Red);
 
-        // Check if vault image exists locally
         var vaultImagePath = Path.Combine("data", "images", "EeveeCore_vault.png");
         IUserMessage message;
         FileStream? vaultStream = null;
@@ -585,7 +559,6 @@ public class SpawnService : INService, IReadyExecutor
         }
         finally
         {
-            // Dispose the stream after sending
             vaultStream?.Dispose();
         }
         _activeVaults.Add(channel.Id);
@@ -768,7 +741,6 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>A string describing the reward.</returns>
     private async Task<string> HandleGiftReward(User user, DittoDataConnection db)
     {
-        // Implement gift creation logic
         return
             "Its a winter wrapped gift! Oh, it even has a EeveeCore on it... Imagine that!\n\nGifts can be kept and opened or gifted to others as a `Mystery Gift`\nSee `/explain event`";
     }
@@ -901,7 +873,6 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task CreateAndSendSpawnMessage(ITextChannel channel, string? pokemonName, bool isShiny, Guild config)
     {
-        // Get form info from MongoDB for validation
         var formInfo = await _mongoDb.Forms
             .Find(f => f.Identifier == pokemonName!.ToLower())
             .FirstOrDefaultAsync();
@@ -912,14 +883,12 @@ public class SpawnService : INService, IReadyExecutor
             return;
         }
 
-        // Get the image path
         var (_, imagePath) = await _pokemonService.GetPokemonFormInfo(pokemonName, isShiny);
         if (string.IsNullOrEmpty(imagePath)) return;
 
         var shinyEmote = isShiny ? "<a:shiny:1057764628349853786>" : "";
         var spawnMessage = SpawnMessages.Messages[_random.Next(SpawnMessages.Messages.Count)];
 
-        // Calculate spawn chances ONCE
         var legChance = _random.Next(4000);
         var ubChance = _random.Next(3000);
 
@@ -929,7 +898,6 @@ public class SpawnService : INService, IReadyExecutor
             .WithColor(new Color(_random.Next(256), _random.Next(256), _random.Next(256)))
             .WithFooter("/explain spawns for basic info");
 
-        // Check if the image file exists
         if (!File.Exists(imagePath))
         {
             Log.Warning("Pokemon image not found at path: {ImagePath}", imagePath);
@@ -937,7 +905,6 @@ public class SpawnService : INService, IReadyExecutor
         }
         else
         {
-            // Set image attachment filename - use generic name to avoid revealing Pokemon identity
             var imageFileName = "spawn.png";
             if (config.SmallImages)
                 embed.WithThumbnailUrl($"attachment://{imageFileName}");
@@ -945,7 +912,6 @@ public class SpawnService : INService, IReadyExecutor
                 embed.WithImageUrl($"attachment://{imageFileName}");
         }
 
-        // Create spawn message with or without button
         IUserMessage spawnMsg;
         FileStream? fileStream = null;
         
@@ -954,7 +920,6 @@ public class SpawnService : INService, IReadyExecutor
             if (File.Exists(imagePath))
             {
                 fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
-                // Use generic filename to not reveal Pokemon identity
                 var imageFileName = "spawn.png";
                 var fileAttachment = new FileAttachment(fileStream, imageFileName);
 
@@ -972,7 +937,7 @@ public class SpawnService : INService, IReadyExecutor
                 {
                     spawnMsg = await channel.SendFileAsync(fileAttachment, embed: embed.Build());
                     _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
-                        ubChance); // Pass the chances here too
+                        ubChance);
                 }
             }
             else
@@ -991,16 +956,14 @@ public class SpawnService : INService, IReadyExecutor
                 {
                     spawnMsg = await channel.SendMessageAsync(embed: embed.Build());
                     _ = HandleMessageCollector(channel, spawnMsg, pokemonName, isShiny, config, legChance,
-                        ubChance); // Pass the chances here too
+                        ubChance);
                 }
             }
             
-            // Register the active spawn for tracking
             _ = RegisterActiveSpawn(spawnMsg.Id, channel.Id, channel.Guild.Id, pokemonName, isShiny, legChance, ubChance);
         }
         finally
         {
-            // Dispose the stream after sending
             fileStream?.Dispose();
         }
     }
@@ -1024,7 +987,7 @@ public class SpawnService : INService, IReadyExecutor
         var catchOptions = GetCatchOptions(pokemonName);
         var hasCaught = false;
 
-        for (var i = 0; i < 12; i++) // 12 * 50 = 600 seconds (10 minutes)
+        for (var i = 0; i < 12; i++)
             try
             {
                 var collected = await channel.GetMessagesAsync(50).FlattenAsync();
@@ -1036,21 +999,15 @@ public class SpawnService : INService, IReadyExecutor
                     var content = message.Content.ToLower().Replace(" ", "-");
                     if (!catchOptions.Contains(content)) continue;
 
-                    // Get spawn info from new tracking system
                     var spawnInfo = await GetActiveSpawn(spawnMsg.Id);
                     if (spawnInfo == null)
-                        // Spawn no longer active (already caught or expired)
                         break;
 
-                    // Try to mark as caught - this is atomic using the old Redis system for backward compatibility
                     if (!await TryMarkPokemonAsCaught(spawnMsg.Id, message.Author.Id))
-                        // Another thread marked it as caught before we could
                         break;
 
-                    // Mark spawn as caught in the new system
                     await MarkSpawnAsCaught(spawnMsg.Id, message.Author.Id);
 
-                    // Process catch using info from spawn tracking
                     var result = await HandleCatch(
                         message.Author.Id,
                         channel.Guild.Id,
@@ -1107,18 +1064,16 @@ public class SpawnService : INService, IReadyExecutor
                 }
 
                 if (hasCaught) break;
-                await Task.Delay(50000); // Wait 50 seconds before next collection
+                await Task.Delay(50000);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error in message collector for spawn");
             }
 
-        // Timeout if no one caught it
         if (!hasCaught)
             try
             {
-                // Make sure no one caught it while we were deciding to despawn
                 if (!await IsPokemonAlreadyCaught(spawnMsg.Id))
                 {
                     var timeoutEmbed = spawnMsg.Embeds.First().ToEmbedBuilder();
@@ -1127,6 +1082,9 @@ public class SpawnService : INService, IReadyExecutor
                     {
                         m.Embed = timeoutEmbed.Build();
                         m.Components = new ComponentBuilder().Build();
+                        m.Attachments = new Discord.Optional<IEnumerable<FileAttachment>>(
+                            spawnMsg.Attachments.Select(a =>
+                                new FileAttachment(a.Url, a.Filename)));
                     });
                 }
             }
@@ -1286,7 +1244,6 @@ public class SpawnService : INService, IReadyExecutor
         if (boosted)
             rewardMessages.Add("It was boosted by your IV multiplier!");
 
-        // Handle berry drops
         var berryResult = await HandleBerryDrop(user);
         if (berryResult.Message != null)
         {
@@ -1297,7 +1254,6 @@ public class SpawnService : INService, IReadyExecutor
                 .UpdateAsync();
         }
 
-        // Handle chest drops
         if (_random.Next(150) == 0)
         {
             inventory ??= new Dictionary<string, int>();
@@ -1309,7 +1265,6 @@ public class SpawnService : INService, IReadyExecutor
             rewardMessages.Add("It also dropped a Common Chest!");
         }
 
-        // Handle premium server credits
         var isPremium = await _cache.Redis.GetDatabase().KeyExistsAsync($"premium_guild:{guildId}");
         if (isPremium)
         {
@@ -1439,11 +1394,9 @@ public class SpawnService : INService, IReadyExecutor
     {
         var pokemonNameLower = pokemonName!.ToLower();
         
-        // Get form info using cached lookup
         var formInfo = await GetCachedFormInfoAsync(pokemonNameLower);
         if (formInfo == null) return null;
 
-        // Get pokemon info and abilities using cached data in parallel
         var pokemonInfoTask = GetCachedPokemonInfoAsync(formInfo.Value.PokemonId, pokemonNameLower);
         var abilityTask = GetCachedAbilityIdsAsync(formInfo.Value.PokemonId);
         var natureTask = GetRandomNatureAsync();
@@ -1455,11 +1408,9 @@ public class SpawnService : INService, IReadyExecutor
 
         if (pokemonInfo == null) return null;
 
-        // Determine base stats
         var minIv = boosted ? 12 : 1;
         var maxIv = boosted || _random.Next(2) == 0 ? 31 : 29;
 
-        // Generate IVs
         var hpIv = _random.Next(minIv, maxIv + 1);
         var atkIv = _random.Next(minIv, maxIv + 1);
         var defIv = _random.Next(minIv, maxIv + 1);
@@ -1467,7 +1418,6 @@ public class SpawnService : INService, IReadyExecutor
         var spdIv = _random.Next(minIv, maxIv + 1);
         var speIv = _random.Next(minIv, maxIv + 1);
 
-        // Determine gender if not provided (optimized)
         if (string.IsNullOrEmpty(gender))
         {
             if (pokemonNameLower.Contains("nidoran-"))
@@ -1482,20 +1432,17 @@ public class SpawnService : INService, IReadyExecutor
                 };
         }
 
-        // Check for shadow override if no skin is specified
         if (string.IsNullOrEmpty(skin) && !radiant && !shiny)
         {
             var makeShadow = await ShadowHuntCheck(userId, pokemonName);
             if (makeShadow)
             {
                 skin = "shadow";
-                // Log shadow creation
                 if (_client.GetChannel(1005737655025291334) is IMessageChannel channel)
                     await channel.SendMessageAsync($"`{userId} - {pokemonName}`");
             }
         }
 
-        // Create the Pokemon
         var pokemon = new Database.Linq.Models.Pokemon.Pokemon{
             PokemonName = pokemonName.Capitalize(),
             Nickname = "None",
@@ -1539,10 +1486,8 @@ public class SpawnService : INService, IReadyExecutor
 
         try
         {
-            // Insert Pokemon first and get its ID
             pokemon.Id = (ulong)await dbContext.InsertWithInt64IdentityAsync(pokemon);
 
-            // Retry logic for handling concurrent position conflicts
             UserPokemonOwnership? ownership = null;
             var maxRetries = 5;
             
@@ -1564,16 +1509,14 @@ public class SpawnService : INService, IReadyExecutor
                     };
 
                     await dbContext.InsertAsync(ownership);
-                    break; // Success
+                    break;
                 }
                 catch (Exception ex) when (ex.Message.Contains("duplicate key") && attempt < maxRetries - 1)
                 {
-                    // Small random delay to reduce collision probability
                     await Task.Delay(_random.Next(10, 50));
                 }
             }
 
-            // Update achievements (keep this separate to avoid connection conflicts)
             if (shiny)
                 await dbContext.Achievements
                     .Where(a => a.UserId == userId)
@@ -1585,17 +1528,14 @@ public class SpawnService : INService, IReadyExecutor
                     .Set(a => a.PokemonCaught, a => a.PokemonCaught + 1)
                     .UpdateAsync();
 
-            // Comprehensive achievement tracking with type-specific milestones
             try
             {
-                // Get Pokemon type information for type-specific achievements
                 var pokemonTypes = await _mongoDb.PokemonTypes
                     .Find(pt => pt.PokemonId == Convert.ToInt32(pokemon.Id))
                     .FirstOrDefaultAsync();
 
                 var typeIds = pokemonTypes?.Types ?? [];
 
-                // Track comprehensive achievements including milestones and rewards
                 await _achievementService.TrackPokemonCaughtAsync(userId, typeIds, shiny, false);
             }
             catch (Exception ex)
@@ -1674,12 +1614,10 @@ public class SpawnService : INService, IReadyExecutor
     /// <returns>An embed with information about the update.</returns>
     public async Task<Embed> UpdateChannelSetting(ulong guildId, ulong channelId, bool enable)
     {
-        // First check if the document exists
         var guild = await _mongoDb.Guilds.Find(g => g.GuildId == guildId).FirstOrDefaultAsync();
 
         if (guild == null)
         {
-            // Create new document with initialized arrays
             guild = new Guild
             {
                 GuildId = guildId,
@@ -1687,7 +1625,6 @@ public class SpawnService : INService, IReadyExecutor
                 DisabledSpawnChannels = []
             };
 
-            // Add the channel to the appropriate list
             if (enable)
                 guild.EnabledChannels.Add(channelId);
             else
@@ -1697,14 +1634,12 @@ public class SpawnService : INService, IReadyExecutor
         }
         else
         {
-            // Initialize arrays if they are null
             if (guild.EnabledChannels == null)
                 guild.EnabledChannels = [];
 
             if (guild.DisabledSpawnChannels == null)
                 guild.DisabledSpawnChannels = [];
 
-            // Add the channel to the appropriate list if not already present
             if (enable && !guild.EnabledChannels.Contains(channelId))
             {
                 guild.EnabledChannels.Add(channelId);
@@ -1852,7 +1787,6 @@ public class SpawnService : INService, IReadyExecutor
         {
             await using var db = await _dbContextProvider.GetConnectionAsync();
             
-            // Get all active spawns from database (not caught and created within last 24 hours)
             var cutoffTime = DateTime.UtcNow.AddHours(-24);
             var activeSpawns = await db.ActiveSpawns
                 .Where(s => !s.IsCaught && s.CreatedAt > cutoffTime)
@@ -1862,13 +1796,11 @@ public class SpawnService : INService, IReadyExecutor
             
             foreach (var spawn in activeSpawns)
             {
-                // Check if spawn still exists in cache
                 var cacheKey = $"spawn:active:{spawn.MessageId}";
                 var exists = await redis.KeyExistsAsync(cacheKey);
                 
                 if (!exists)
                 {
-                    // Add to cache with remaining TTL (24 hours from creation)
                     var remainingTime = spawn.CreatedAt.AddHours(24) - DateTime.UtcNow;
                     if (remainingTime.TotalMinutes > 0)
                     {
@@ -1890,7 +1822,6 @@ public class SpawnService : INService, IReadyExecutor
                     }
                     else
                     {
-                        // Spawn is too old, mark as expired
                         spawn.IsCaught = true;
                         spawn.CaughtAt = DateTime.UtcNow;
                     }
@@ -1935,7 +1866,6 @@ public class SpawnService : INService, IReadyExecutor
                 CreatedAt = DateTime.UtcNow
             };
             
-            // Cache for 24 hours
             await redis.StringSetAsync(cacheKey, 
                 JsonSerializer.Serialize(spawnData),
                 TimeSpan.FromHours(24));
@@ -1973,7 +1903,6 @@ public class SpawnService : INService, IReadyExecutor
             var redis = _cache.Redis.GetDatabase();
             var cacheKey = $"spawn:active:{messageId}";
             
-            // Try cache first
             var cachedData = await redis.StringGetAsync(cacheKey);
             if (cachedData.HasValue)
             {
@@ -1992,7 +1921,6 @@ public class SpawnService : INService, IReadyExecutor
                 
             if (spawn != null)
             {
-                // Re-cache if found in database
                 var spawnData = new
                 {
                     spawn.MessageId,
@@ -2037,7 +1965,6 @@ public class SpawnService : INService, IReadyExecutor
             var redis = _cache.Redis.GetDatabase();
             var cacheKey = $"spawn:active:{messageId}";
             
-            // Remove from cache
             await redis.KeyDeleteAsync(cacheKey);
             
             await using var db = await _dbContextProvider.GetConnectionAsync();
@@ -2174,11 +2101,9 @@ public class SpawnService : INService, IReadyExecutor
             _pokemonInfoLastCached = DateTime.UtcNow;
         }
 
-        // Try direct lookup first
         if (_cachedPokemonInfo.TryGetValue(pokemonNameLower, out var info))
             return (info.GenderRate, info.BaseHappiness);
 
-        // Handle Alola variant fallback
         if (pokemonNameLower.Contains("alola"))
         {
             var pokemonNameWithoutSuffix = pokemonNameLower.Split("-")[0];
@@ -2218,7 +2143,6 @@ public class SpawnService : INService, IReadyExecutor
     {
         if (_cachedPokemonByType == null || DateTime.UtcNow - _pokemonByTypeLastCached > CacheExpiry)
         {
-            // Load all Pokemon types and forms in parallel
             var pokemonTypesTask = _mongoDb.PokemonTypes
                 .Find(_ => true)
                 .Project(p => new { p.PokemonId, p.Types })
@@ -2233,12 +2157,10 @@ public class SpawnService : INService, IReadyExecutor
             var pokemonTypes = await pokemonTypesTask;
             var forms = await formsTask;
 
-            // Create Pokemon ID to form name mapping
             var pokemonIdToForms = forms
                 .GroupBy(f => f.PokemonId)
                 .ToDictionary(g => g.Key, g => g.Select(f => f.Identifier.ToTitleCase()).ToList());
 
-            // Build type to Pokemon mapping
             _cachedPokemonByType = new Dictionary<int, List<string>>();
             
             foreach (var pokemonType in pokemonTypes)

@@ -39,7 +39,6 @@ public class Battle
         _mongoService = mongoService;
         _gameData = gameData;
 
-        // Initialize items for each Pokemon
         foreach (var poke in trainer1.Party) poke.HeldItem.Battle = this;
         foreach (var poke in trainer2.Party) poke.HeldItem.Battle = this;
 
@@ -159,31 +158,25 @@ public class Battle
     /// <returns>The sent message for later reference.</returns>
     public async Task<IUserMessage> GenerateMainBattleMessage(DuelRenderer renderer)
     {
-        // Create embed for battle
         var embed = new EmbedBuilder()
             .WithTitle($"Battle between {Trainer1.Name} and {Trainer2.Name}")
             .WithColor(new Color(255, 182, 193))
             .WithFooter("Who Wins!?")
             .WithImageUrl("attachment://battle.png");
 
-        // Using local BattleRenderer instead of HTTP service
         using var battleImage = await renderer.GenerateBattleImage(this);
         using var memoryStream = new MemoryStream();
         battleImage.Encode(SKEncodedImageFormat.Png, 100).SaveTo(memoryStream);
         memoryStream.Position = 0;
 
-        // Create button for viewing actions
         var components = new ComponentBuilder()
             .WithButton("View your actions", "battle:actions")
             .Build();
 
-        // Update battle interaction turn
         this.SetCurrentInteractionTurn(Turn);
 
-        // Create the file to send
         var fileAttachment = new FileAttachment(memoryStream, "battle.png");
 
-        // Send the message with embed, file attachment, and components
         return await Channel.SendFileAsync(
             fileAttachment,
             embed: embed.Build(),
@@ -199,7 +192,6 @@ public class Battle
     {
         Msg = "";
 
-        // Moves which are immune to metronome (implementation pending)
         var immuneIds = new List<int>
         {
             68, 102, 119, 144, 165, 166, 168, 173, 182, 194, 197, 203, 214, 243, 264, 266,
@@ -208,7 +200,6 @@ public class Battle
             606, 607, 614, 615, 617, 621, 661, 671, 689, 690, 704, 705, 712, 720, 721, 722
         };
 
-        // Moves which are not coded in the bot (implementation pending)
         var uncodedIds = new List<int>
         {
             266, 270, 476, 495, 502, 511, 597, 602, 603, 607, 622, 623, 624, 625, 626, 627,
@@ -219,7 +210,6 @@ public class Battle
             10012, 10013, 10014, 10015, 10016, 10017, 10018
         };
 
-        // Combine ignored move IDs
         var ignoredIds = immuneIds.Union(uncodedIds).ToList();
 
         var ignoredSet = ignoredIds.ToHashSet();
@@ -234,7 +224,6 @@ public class Battle
                 (ElementType)te.TargetTypeId
             )] = te.DamageFactor;
 
-        // Initial Pokemon send-out
         if (Trainer1.CurrentPokemon!.GetRawSpeed() > Trainer2.CurrentPokemon!.GetRawSpeed())
         {
             Msg += Trainer1.CurrentPokemon!.SendOut(Trainer2.CurrentPokemon!, this);
@@ -250,10 +239,8 @@ public class Battle
 
         Trainer? winner = null;
 
-        // Main battle loop
         while (true)
         {
-            // Swap pokes for any users w/o an active poke
             while (Trainer1.CurrentPokemon == null || Trainer2.CurrentPokemon == null)
             {
                 var swapped1 = false;
@@ -275,7 +262,6 @@ public class Battle
                         break;
                 }
 
-                // Send out the pokes that were just swapped to
                 if (swapped1 && swapped2)
                 {
                     if (Trainer1.CurrentPokemon!.GetRawSpeed() > Trainer2.CurrentPokemon!.GetRawSpeed())
@@ -337,11 +323,9 @@ public class Battle
                 }
             }
 
-            // Handle breaking out of the main game loop when a winner happens in the poke select loop
             if (winner != null)
                 break;
 
-            // Get trainer actions
             await SendMsg();
 
             Trainer1.Event = new TaskCompletionSource<bool>();
@@ -356,11 +340,10 @@ public class Battle
             await Trainer1.Event.Task;
             await Trainer2.Event.Task;
 
-            // Check for forfeits
             if (Trainer1.SelectedAction == null && Trainer2.SelectedAction == null)
             {
                 await Channel.SendMessageAsync("Both players forfeited...");
-                return null; // TODO: handle this case better
+                return null;
             }
 
             if (Trainer1.SelectedAction == null)
@@ -377,7 +360,6 @@ public class Battle
                 break;
             }
 
-            // Run setup for both pokemon
             var (t1, t2) = WhoFirst();
             if (t1.CurrentPokemon != null && t2.CurrentPokemon != null)
                 if (!t1.SelectedAction.IsSwitch)
@@ -416,8 +398,6 @@ public class Battle
                 break;
             }
 
-            // Run moves for both pokemon
-            // Trainer 1's move
             var ranMegas = false;
             if (!t1.SelectedAction.IsSwitch)
             {
@@ -454,7 +434,6 @@ public class Battle
                 break;
             }
 
-            // Pokes who die do NOT get attacked, but pokes who retreat *do*
             if (t1.MidTurnRemove)
             {
                 winner = await RunSwap(t1, t2, true);
@@ -462,8 +441,6 @@ public class Battle
                     break;
             }
 
-            // EDGE CASE - Moves that DO NOT target the opponent (and swapping) SHOULD run
-            // even if there is no other poke on the field.
             if (t1.CurrentPokemon == null && t2.CurrentPokemon != null &&
                 (t2.SelectedAction.IsSwitch || !(t2!.SelectedAction as Trainer.MoveAction)!.Move.TargetsOpponent()))
             {
@@ -474,7 +451,6 @@ public class Battle
 
             Msg += "\n";
 
-            // Trainer 2's move
             if (!ranMegas && !t2.SelectedAction.IsSwitch)
             {
                 HandleMegas(t1, t2);
@@ -513,7 +489,6 @@ public class Battle
             Msg += "\n";
             if (t2.MidTurnRemove)
             {
-                // This DOES need to be here, otherwise end of turn effects aren't handled right
                 winner = await RunSwap(t2, t1, true);
                 if (winner != null)
                     break;
@@ -535,7 +510,6 @@ public class Battle
 
             if (!ranMegas) HandleMegas(t1, t2);
 
-            // Progress turns
             Turn += 1;
             PlasmaFists = false;
             if (Weather.NextTurn()) Msg += "The weather cleared!\n";
@@ -582,7 +556,6 @@ public class Battle
                 Msg += "The room returns to normal, and stats swap back to what they were before!\n";
         }
 
-        // The game is over, and we broke out before sending, send the remaining cache
         await SendMsg();
         return winner;
     }
@@ -603,7 +576,6 @@ public class Battle
         var speed1 = Trainer1.CurrentPokemon!.GetSpeed(this);
         var speed2 = Trainer2.CurrentPokemon!.GetSpeed(this);
 
-        // Pokes that are switching go before pokes making other moves
         if (checkMove)
         {
             switch (Trainer1.SelectedAction)
@@ -620,7 +592,6 @@ public class Battle
             if (Trainer2.SelectedAction.IsSwitch) return T2FIRST;
         }
 
-        // Priority brackets & abilities
         if (checkMove)
         {
             var prio1 = (Trainer1!.SelectedAction as Trainer.MoveAction)!.Move.GetPriority(Trainer1.CurrentPokemon,
@@ -634,7 +605,6 @@ public class Battle
             var t1Quick = false;
             var t2Quick = false;
 
-            // Quick draw/claw
             if (Trainer1.CurrentPokemon!.Ability() == Ability.QUICK_DRAW &&
                 (Trainer1!.SelectedAction as Trainer.MoveAction)!.Move.DamageClass != DamageClass.STATUS &&
                 Random.Shared.Next(1, 101) <= 30)
@@ -650,11 +620,9 @@ public class Battle
                 Random.Shared.Next(1, 101) <= 20)
                 t2Quick = true;
 
-            // If both pokemon activate a quick, priority bracket proceeds as normal
             if (t1Quick && !t2Quick) return T1FIRST;
             if (t2Quick && !t1Quick) return T2FIRST;
 
-            // OldMove last in prio bracket
             var t1Slow = false;
             var t2Slow = false;
 
@@ -681,13 +649,10 @@ public class Battle
             if (t2Slow) return T1FIRST;
         }
 
-        // Equal speed
         if (speed1 == speed2) return Random.Shared.Next(2) == 0 ? T1FIRST : T2FIRST;
 
-        // Trick room
         if (TrickRoom.Active()) return speed1 > speed2 ? T2FIRST : T1FIRST;
 
-        // Default handling
         return speed1 > speed2 ? T1FIRST : T2FIRST;
     }
 
@@ -731,7 +696,7 @@ public class Battle
 
         foreach (var embedPage in pages) await Channel.SendMessageAsync(embed: embedPage);
 
-        Msg = ""; // Clear the message after sending
+        Msg = "";
     }
 
     /// <summary>
@@ -750,25 +715,21 @@ public class Battle
 
         if (swapper.IsHuman())
         {
-            // Cast to MemberTrainer to get access to the Discord user ID
             if (swapper is not MemberTrainer)
             {
                 Msg += $"{swapper.Name} is not properly set up as a member trainer, {otherTrainer!.Name} wins!\n";
                 return otherTrainer;
             }
 
-            // Set the current swap turn and mid-turn flag for component handlers to check
             this.SetCurrentSwapTurn(Turn);
             this.SetCurrentMidTurn(midTurn);
 
-            // Build component buttons for each Pokemon in the party
             var components = new ComponentBuilder();
             var validSwaps = swapper.ValidSwaps(otherTrainer!.CurrentPokemon, this, midTurn);
 
             for (var i = 0; i < swapper.Party.Count; i++)
             {
                 var pokemon = swapper.Party[i];
-                // Sanitize the name for button display
                 var sanitizedName = PokemonNameSanitizer.SanitizeDisplayName(pokemon.Name!, 15);
 
                 components.WithButton(
@@ -779,21 +740,17 @@ public class Battle
                     row: i / 2);
             }
 
-            // Send the message with Pokemon options
             await Channel.SendMessageAsync(
                 $"{swapper.Name}, pick a pokemon to swap to!",
                 components: components.Build());
         }
         else
         {
-            // NPC trainers use their own swap logic
             ((NPCTrainer)swapper).Swap(otherTrainer!.CurrentPokemon, this, midTurn);
         }
 
         try
         {
-            // Wait for the trainer to make a selection (via ComponentInteraction)
-            // The timeout is handled by the WaitAsync method
             await swapper.Event.Task.WaitAsync(TimeSpan.FromSeconds(60));
         }
         catch (TimeoutException)
@@ -802,14 +759,12 @@ public class Battle
             return otherTrainer;
         }
 
-        // Check if a Pokemon was actually selected
         if (swapper.CurrentPokemon == null)
         {
             Msg += $"{swapper.Name} did not select a poke, {otherTrainer.Name} wins!\n";
             return otherTrainer;
         }
 
-        // Handle mid-turn effects
         if (midTurn)
         {
             Msg += swapper.CurrentPokemon.SendOut(otherTrainer.CurrentPokemon, this);
@@ -830,7 +785,6 @@ public class Battle
         foreach (var (at, dt) in new[] { (t1, t2), (t2, t1) })
             if (at!.CurrentPokemon is { ShouldMegaEvolve: true })
             {
-                // Bit of a hack, since it is in its mega form and dashes are removed from `name`, it will show as "<poke> mega evolved!".
                 if ((at.CurrentPokemon.HeldItem.Name == "mega-stone" || at.CurrentPokemon._name == "Rayquaza") &&
                     at.CurrentPokemon.Form(at.CurrentPokemon._name + "-mega"))
                     Msg += $"{at.CurrentPokemon.DisplayName} evolved!\n";

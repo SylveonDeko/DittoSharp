@@ -141,7 +141,6 @@ public sealed class ConcurrentHashSet<T> : IReadOnlyCollection<T>, ISet<T> where
     /// </summary>
     public bool IsReadOnly => false;
 
-    // Members of ISet<T>
     /// <summary>
     ///     Removes all elements in the specified collection from the current set.
     /// </summary>

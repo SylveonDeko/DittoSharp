@@ -47,7 +47,6 @@ public class JwtTokenService : INService
     {
         try
         {
-            // Exchange Discord code for access token
             var discordToken = await GetDiscordTokenAsync(discordCode, redirectUri);
             if (discordToken == null)
             {
@@ -55,7 +54,6 @@ public class JwtTokenService : INService
                 return null;
             }
 
-            // Get Discord user info
             var discordUser = await GetDiscordUserInfoAsync(discordToken.Access_Token);
             if (discordUser == null)
             {
@@ -63,7 +61,6 @@ public class JwtTokenService : INService
                 return null;
             }
 
-            // Get user from database
             await using var db = await _dbProvider.GetConnectionAsync();
             var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == ulong.Parse(discordUser.Id));
             
@@ -73,24 +70,21 @@ public class JwtTokenService : INService
                 return null;
             }
 
-            // Check if user is banned
             if (user.BotBanned == true)
             {
                 _logger.LogWarning("Banned user {UserId} attempted to authenticate", discordUser.Id);
                 return null;
             }
 
-            // Store/update Discord token
             await StoreDiscordTokenAsync(discordUser, discordToken);
 
-            // Generate JWT token (24 hour expiry)
             var accessToken = GenerateAccessToken(user, discordUser);
             var expiresAt = DateTime.UtcNow.AddHours(24);
 
             return new JwtTokenResponse
             {
                 AccessToken = accessToken,
-                RefreshToken = "", // Not used in stateless JWT
+                RefreshToken = "",
                 ExpiresAt = expiresAt,
                 User = new UserProfileDto
                 {

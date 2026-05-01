@@ -17,10 +17,9 @@ public class DittoDataConnection : DataConnection
     /// <summary>
     ///     Initializes a new instance of the DittoDataConnection using the specified connection string.
     /// </summary>
-    public DittoDataConnection(string connectionString) 
+    public DittoDataConnection(string connectionString)
         : base(ConfigureDataOptions(connectionString))
     {
-        // Configure connection options
         (this as IDataContext).CloseAfterUse = true;
     }
 

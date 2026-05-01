@@ -35,11 +35,9 @@ public class RequireStaffAttribute : PreconditionAttribute
         var creds = services.GetRequiredService<BotCredentials>();
         var dbProvider = services.GetRequiredService<LinqToDbConnectionProvider>();
 
-        // Check if user is owner first (bypass all checks)
         if (creds.IsOwner(context.User))
             return PreconditionResult.FromSuccess();
 
-        // Get user's staff rank from database
         await using var db = await dbProvider.GetConnectionAsync();
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == context.User.Id);
@@ -47,11 +45,9 @@ public class RequireStaffAttribute : PreconditionAttribute
         if (user == null)
             return PreconditionResult.FromError("User not found in database");
 
-        // Parse staff rank from string
         if (!Enum.TryParse<StaffRank>(user.Staff, true, out var userRank))
             return PreconditionResult.FromError("Invalid staff rank");
 
-        // Check if user has required rank or higher
         if (userRank >= _requiredRank)
             return PreconditionResult.FromSuccess();
 

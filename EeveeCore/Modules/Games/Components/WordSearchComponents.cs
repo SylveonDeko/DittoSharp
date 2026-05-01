@@ -29,17 +29,12 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
         {
             await DeferAsync();
 
-            // Initialize new game
             var gameState = await wordSearchService.InitializeGameAsync(ctx.User.Id);
             
-            // Store game state in cache/memory (you might want to use Redis or similar)
-            // For now, we'll pass it through the embed description or store in a static dictionary
             GameStateManager.StoreGameState(gameState);
 
-            // Generate the word search image
             var imageStream = await wordSearchService.GenerateWordSearchImageAsync(gameState, "data/backgrounds/bg1.png");
             
-            // Create embed with game info
             var prompt = wordSearchService.FormatPromptMessage(gameState);
             var embed = new EmbedBuilder()
                 .WithTitle("Word Search Game - Find the Pokemon!")
@@ -48,7 +43,6 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
                 .WithImageUrl($"attachment://wordsearch_{gameState.GameId}.png")
                 .Build();
 
-            // Create components for guessing
             var components = new ComponentBuilder()
                 .WithButton("Make a Guess", $"wordsearch:guess:{gameState.GameId}", ButtonStyle.Primary, new Emoji("🔍"))
                 .WithButton("Quit Game", $"wordsearch:quit:{gameState.GameId}", ButtonStyle.Danger, new Emoji("❌"))
@@ -140,7 +134,6 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
                 return;
             }
 
-            // Mark game as inactive
             gameState.IsActive = false;
             GameStateManager.RemoveGameState(gameId);
 
@@ -201,12 +194,10 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
                 return;
             }
 
-            // Process the guess
             var result = wordSearchService.HandleGuess(gameState, modal.Guess);
             
             if (result.TimedOut || result.GameComplete)
             {
-                // Game is over
                 GameStateManager.RemoveGameState(gameId);
                 
                 var finalEmbed = new EmbedBuilder()
@@ -217,7 +208,6 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
                     .WithColor(result.GameComplete ? Color.Green : Color.Red)
                     .Build();
 
-                // Track mission progress for word search completion
                 if (result.GameComplete)
                 {
                     await missionService.TriggerGameWordSearchCompletedAsync(ctx.Interaction, gameState.FoundWords.Count);
@@ -232,7 +222,6 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
             }
             else if (result.Success)
             {
-                // Correct guess, update the image
                 var imageStream = await wordSearchService.GenerateWordSearchImageAsync(gameState, "data/backgrounds/bg1.png");
                 var prompt = wordSearchService.FormatPromptMessage(gameState);
                 
@@ -261,7 +250,6 @@ public class WordSearchInteractionModule(WordSearchService wordSearchService, Mi
             }
             else
             {
-                // Incorrect guess, just send a message
                 await ctx.Interaction.FollowupAsync(result.Message, ephemeral: true);
             }
         }

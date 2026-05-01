@@ -304,7 +304,6 @@ public partial class DuelPokemon
     /// <returns>The final speed value including all modifiers.</returns>
     public int GetSpeed(Battle battle)
     {
-        // Always active stage changes
         var speed = CalculateStat(GetRawSpeed(), SpeedStage);
         if (NonVolatileEffect.Paralysis() && Ability() != Impl.Ability.QUICK_FEET) speed /= 2;
         if (HeldItem.Get() == "iron-ball") speed /= 2;

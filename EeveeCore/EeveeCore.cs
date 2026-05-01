@@ -67,6 +67,12 @@ public class EeveeCore
     /// </summary>
     public event Func<Guild, Task> JoinedGuild = delegate { return Task.CompletedTask; };
 
+    /// <summary>
+    ///     Reflectively scans an assembly for non-abstract <see cref="TypeReader"/> subclasses, instantiates
+    ///     each one through the DI container, and registers it with the <see cref="CommandService"/> for its
+    ///     declared target type.
+    /// </summary>
+    /// <param name="assembly">The assembly to scan.</param>
     private void LoadTypeReaders(Assembly assembly)
     {
         var sw = new Stopwatch();
@@ -101,6 +107,12 @@ public class EeveeCore
         Log.Information("TypeReaders loaded in {ElapsedTotalSeconds}s", sw.Elapsed.TotalSeconds);
     }
 
+    /// <summary>
+    ///     Logs the sharded Discord client in, starts it, and awaits the point at which every shard has reached
+    ///     the Ready state. Wires up join/leave guild handlers once startup completes.
+    /// </summary>
+    /// <param name="token">The Discord bot token.</param>
+    /// <returns>A task that completes once all shards are ready.</returns>
     private async Task LoginAsync(string token)
     {
         Client.Log += Client_Log;
@@ -138,6 +150,12 @@ public class EeveeCore
         Log.Information("Logged in as:");
     }
 
+    /// <summary>
+    ///     Posts a "left guild" embed to the configured guild-joins log channel and writes a log line
+    ///     when the bot is removed from a server. Errors are swallowed so logging issues never propagate.
+    /// </summary>
+    /// <param name="guild">The guild the bot just left.</param>
+    /// <returns>A completed task; the actual work runs on a background task.</returns>
     private Task Client_LeftGuild(SocketGuild guild)
     {
         _ = Task.Run(async () =>
@@ -154,7 +172,6 @@ public class EeveeCore
             }
             catch
             {
-                // Ignored
             }
 
             Log.Information("Left server: {Name} [{Id}]", guild.Name, guild.Id);
@@ -162,6 +179,13 @@ public class EeveeCore
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Downloads users for the new guild, fetches/creates its config, raises the public
+    ///     <see cref="JoinedGuild"/> event, and posts a "joined guild" embed to the configured log channel.
+    ///     Errors during the embed post are swallowed.
+    /// </summary>
+    /// <param name="guild">The guild the bot just joined.</param>
+    /// <returns>A completed task; the actual work runs on a background task.</returns>
     private Task Client_JoinedGuild(SocketGuild guild)
     {
         _ = Task.Run(async () =>
@@ -191,7 +215,6 @@ public class EeveeCore
             }
             catch
             {
-                // Ignored
             }
         });
         return Task.CompletedTask;
@@ -213,7 +236,6 @@ public class EeveeCore
         {
             LoadTypeReaders(typeof(EeveeCore).Assembly);
 
-            // Run database migrations
             var migrator = Services.GetRequiredService<DatabaseMigrator>();
             var migrationSuccessful = await migrator.MigrateAsync();
             if (!migrationSuccessful)
@@ -221,7 +243,6 @@ public class EeveeCore
                 throw new InvalidOperationException("Database migration failed");
             }
 
-            // Small delay to ensure migration connections are fully disposed
             await Task.Delay(100);
 
             var dbProvider = Services.GetRequiredService<LinqToDbConnectionProvider>();
@@ -236,7 +257,6 @@ public class EeveeCore
         sw.Stop();
         Log.Information("Connected in {Elapsed:F2}s", sw.Elapsed.TotalSeconds);
 
-        // Initialize Commands
         var commandService = Services.GetRequiredService<CommandService>();
         commandService.Log += LogCommandsService;
         var interactionService = Services.GetRequiredService<InteractionService>();
@@ -252,7 +272,6 @@ public class EeveeCore
             throw;
         }
 
-        // Register commands based on environment
 #if !DEBUG
         await interactionService.RegisterCommandsGloballyAsync().ConfigureAwait(false);
 #else
@@ -265,12 +284,23 @@ public class EeveeCore
         Log.Information("Ready.");
     }
 
+    /// <summary>
+    ///     Bridges Discord.NET's <see cref="CommandService"/> log stream into the bot's Discord log writer.
+    /// </summary>
+    /// <param name="arg">The log message emitted by the command service.</param>
+    /// <returns>A completed task.</returns>
     private Task LogCommandsService(LogMessage arg)
     {
         WriteDiscordLog(arg);
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Resolves every registered <see cref="IReadyExecutor"/> from DI and invokes their <c>OnReadyAsync</c>
+    ///     hooks in parallel. Per-executor exceptions are logged so one misbehaving subscriber cannot block
+    ///     the others.
+    /// </summary>
+    /// <returns>A task that completes when every subscriber has finished (successfully or not).</returns>
     private async Task ExecuteReadySubscriptions()
     {
         var readyExecutors = Services.GetServices<IReadyExecutor>();
@@ -289,12 +319,22 @@ public class EeveeCore
         await Task.WhenAll(tasks);
     }
 
+    /// <summary>
+    ///     Forwards Discord client log messages into the Serilog-backed log writer.
+    /// </summary>
+    /// <param name="arg">The log message emitted by the Discord client.</param>
+    /// <returns>A completed task.</returns>
     private static Task Client_Log(LogMessage arg)
     {
         WriteDiscordLog(arg);
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Maps a Discord <see cref="LogMessage"/> onto the matching Serilog severity level, preserving
+    ///     the exception when present.
+    /// </summary>
+    /// <param name="arg">The log message to write.</param>
     private static void WriteDiscordLog(LogMessage arg)
     {
         var msg = arg.Message ?? arg.Exception?.Message ?? "";

@@ -42,7 +42,6 @@ public class ItemsController : ControllerBase
     {
         try
         {
-            // Get items from MongoDB shop collection
             var shopItems = await _mongoService.Shop
                 .Find(_ => true)
                 .ToListAsync();
@@ -65,21 +64,18 @@ public class ItemsController : ControllerBase
     {
         try
         {
-            // Get all items from shop
             var shopItems = await _mongoService.Shop
                 .Find(_ => true)
                 .ToListAsync();
 
-            // Get items that can't be equipped (active items)
             var activeItems = _itemsService.GetActiveItems();
             var berryItems = _itemsService.GetBerryItems();
 
-            // Equippable items are shop items + berries that are NOT in active items list
             var equippableItems = shopItems
                 .Where(item => !activeItems.Contains(item.Item))
                 .Select(item => item.Item)
                 .Concat(berryItems.Where(berry => !activeItems.Contains(berry)))
-                .Concat(["glitchy-orb"]) // Special case from service logic
+                .Concat(["glitchy-orb"])
                 .Distinct()
                 .ToList();
 
@@ -105,7 +101,7 @@ public class ItemsController : ControllerBase
             var berries = _itemsService.GetBerryItems();
             var allUsable = _itemsService.GetUsableItems();
 
-            await Task.CompletedTask; // Make it actually async
+            await Task.CompletedTask;
             return Ok(new { 
                 success = true, 
                 evolutionItems = activeItems, 
@@ -135,7 +131,6 @@ public class ItemsController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Verify user owns this Pokemon
             var pokemon = await (from ownership in db.UserPokemonOwnerships
                                join p in db.UserPokemon on ownership.PokemonId equals p.Id
                                where ownership.UserId == userId && p.Id == pokemonId
@@ -144,8 +139,6 @@ public class ItemsController : ControllerBase
             if (pokemon == null)
                 return NotFound(new { error = "Pokemon not found or not owned by user" });
 
-            // This would be more sophisticated in a real implementation
-            // You'd check the Pokemon's species, current evolution stage, etc.
             var applicableItems = new
             {
                 EvolutionStones = new List<string> { "fire-stone", "water-stone", "thunder-stone", "leaf-stone" },
@@ -292,8 +285,6 @@ public class ItemsController : ControllerBase
             if (string.IsNullOrWhiteSpace(request.ItemName))
                 return BadRequest(new { error = "Item name is required" });
 
-            // Note: Using null for channel since this is a web API endpoint
-            // The ItemsService might need to be modified to handle web-based item application
             var result = await _itemsService.Apply(userId, request.ItemName, null);
             
             if (result.Success)

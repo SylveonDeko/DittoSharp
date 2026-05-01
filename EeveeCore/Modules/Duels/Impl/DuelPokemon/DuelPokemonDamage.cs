@@ -82,21 +82,16 @@ public partial class DuelPokemon
     {
         var msg = "";
 
-        // Don't go through with an attack if the poke is already dead.
-        // If this is a bad idea for *some* reason, make sure to add an `attacker is self` check to INNARDS_OUT.
         if (Hp <= 0) return new Tuple<string, int>("", 0);
         var previousHp = Hp;
         damage = Math.Max(1, damage);
 
-        // Magic guard
         if (Ability(attacker, move) == Impl.Ability.MAGIC_GUARD && move == null && attacker != this)
             return new Tuple<string, int>($"{Name}'s magic guard protected it from damage!\n", 0);
 
-        // Substitute
         if (Substitute > 0 && move != null && move.IsAffectedBySubstitute() && !move.IsSoundBased() &&
             (attacker == null || attacker.Ability() != Impl.Ability.INFILTRATOR))
         {
-            // IsAffectedBySubstitute should be a superset of IsSoundBased, but it's better to check both to be sure.
             msg += $"{Name}'s substitute took {damage} damage{source}!\n";
             var max = Math.Max(0, Substitute - damage);
             var substitute = Substitute - max;
@@ -105,7 +100,6 @@ public partial class DuelPokemon
             return new Tuple<string, int>(msg, substitute);
         }
 
-        // Damage blocking forms / abilities
         if (move != null)
         {
             if (Ability(attacker, move) == Impl.Ability.DISGUISE && _name == "Mimikyu")
@@ -125,7 +119,6 @@ public partial class DuelPokemon
                 }
         }
 
-        // OHKO protection
         DmgThisTurn = true;
         if (damage >= Hp && move != null)
         {
@@ -152,7 +145,6 @@ public partial class DuelPokemon
             }
         }
 
-        // Apply the damage
         var droppedBelowHalf = Hp > StartingHp / 2;
         var droppedBelowQuarter = Hp > StartingHp / 4;
 
@@ -166,7 +158,6 @@ public partial class DuelPokemon
         msg += $"{Name} took {damage} damage{source}!\n";
         NumHits++;
 
-        // Drain
         if (drainHealRatio != null && attacker != null)
         {
             var heal = (int)(trueDamage * drainHealRatio.Value);
@@ -333,13 +324,11 @@ public partial class DuelPokemon
                     msg += NonVolatileEffect.ApplyStatus("b-poison", battle, attacker,
                         source: $"{attacker.Name}'s toxic chain");
                 if (attacker.HeldItem.Get() == "shell-bell")
-                    // Shell bell does not trigger when a move is buffed by sheer force.
                     if (attacker.Ability() != Impl.Ability.SHEER_FORCE || move.EffectChance == null)
                         msg += attacker.Heal(damage / 8, "its shell bell");
             }
         }
 
-        // Retreat
         if (droppedBelowHalf && Owner.Party.Count(x => x.Hp > 0) > 1)
         {
             if (Ability() == Impl.Ability.WIMP_OUT)
@@ -354,7 +343,6 @@ public partial class DuelPokemon
             }
         }
 
-        // Gulp Missile
         if (attacker != null && _name is "Cramorant-gulping" or "Cramorant-gorging" && Owner.HasAlivePokemon())
         {
             var prey = _name == "Cramorant-gorging" ? "pikachu" : "arrokuda";
@@ -374,13 +362,10 @@ public partial class DuelPokemon
             }
         }
 
-        // Berries
         if (HeldItem.ShouldEatBerryDamage(attacker)) msg += HeldItem.EatBerry(attacker: attacker, move: move);
 
-        // Contact
         if (move != null && attacker != null && move.MakesContact(attacker))
         {
-            // Affects ATTACKER
             if (attacker.HeldItem.Get() != "protective-pads")
             {
                 if (BeakBlast)
@@ -440,7 +425,6 @@ public partial class DuelPokemon
                     msg += attacker.Damage(attacker.StartingHp / 6, battle, source: $"{Name}'s rocky helmet");
             }
 
-            // Pickpocket is not included in the protective pads protection
             if (Ability() == Impl.Ability.PICKPOCKET && !HeldItem.HasItem() && attacker.HeldItem.HasItem() &&
                 attacker.HeldItem.CanRemove())
             {
@@ -455,13 +439,11 @@ public partial class DuelPokemon
                 }
             }
 
-            // Affects DEFENDER
             if (attacker.Ability() == Impl.Ability.POISON_TOUCH)
                 if (Random.Shared.Next(1, 101) <= 30)
                     msg += NonVolatileEffect.ApplyStatus("poison", battle, attacker, move,
                         source: $"{attacker.Name}'s poison touch");
 
-            // Affects BOTH
             if (attacker.HeldItem.Get() != "protective-pads")
                 if (Ability() == Impl.Ability.PERISH_BODY && !attacker.PerishSong.Active())
                 {
@@ -499,9 +481,7 @@ public partial class DuelPokemon
     {
         var msg = "";
         health = Math.Max(1, health);
-        // greater than is used to prevent zygarde's hp incresing form from losing its extra health
         if (Hp >= StartingHp) return msg;
-        // safety to prevent errors from "reviving" pokes
         if (Hp == 0) return msg;
         if (HealBlock.Active()) return msg;
         health = Math.Min(StartingHp - Hp, health);

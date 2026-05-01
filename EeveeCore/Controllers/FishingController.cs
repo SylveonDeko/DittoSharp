@@ -54,9 +54,8 @@ public class FishingController : ControllerBase
             if (user == null)
                 return NotFound(new { error = "User not found" });
 
-            // Calculate experience needed for next level (this logic would need to match the fishing service)
-            var expForNextLevel = (user.FishingLevel + 1) * 1000; // Placeholder calculation
-            var expProgress = user.FishingExp % 1000; // Placeholder calculation
+            var expForNextLevel = (user.FishingLevel + 1) * 1000;
+            var expProgress = user.FishingExp % 1000;
 
             var stats = new
             {
@@ -85,7 +84,6 @@ public class FishingController : ControllerBase
     {
         try
         {
-            // This should come from the fishing service or MongoDB configuration
             var fishingRods = new[]
             {
                 new { Name = "old-rod", RequiredLevel = 0, Description = "Basic fishing rod", ExpMultiplier = 1.0 },
@@ -94,7 +92,7 @@ public class FishingController : ControllerBase
                 new { Name = "master-rod", RequiredLevel = 50, Description = "Master fishing rod", ExpMultiplier = 2.0 }
             };
 
-            await Task.CompletedTask; // Make it actually async
+            await Task.CompletedTask;
             return Ok(new { success = true, rods = fishingRods });
         }
         catch (Exception ex)
@@ -137,7 +135,6 @@ public class FishingController : ControllerBase
     {
         try
         {
-            // This should ideally come from configuration or the fishing service
             var tiers = new[]
             {
                 new { Name = "common", Description = "Common fishing rewards", MinLevel = 0 },
@@ -147,7 +144,7 @@ public class FishingController : ControllerBase
                 new { Name = "legendary", Description = "Legendary fishing rewards", MinLevel = 50 }
             };
 
-            await Task.CompletedTask; // Make it actually async
+            await Task.CompletedTask;
             return Ok(new { success = true, tiers });
         }
         catch (Exception ex)
@@ -205,7 +202,6 @@ public class FishingController : ControllerBase
             if (user == null)
                 return NotFound(new { error = "User not found" });
 
-            // Parse inventory and filter for fishing-related items
             var inventory = new Dictionary<string, int>();
             if (!string.IsNullOrEmpty(user))
             {
@@ -220,7 +216,6 @@ public class FishingController : ControllerBase
                 }
                 catch (System.Text.Json.JsonException)
                 {
-                    // Handle invalid JSON gracefully
                     inventory = new Dictionary<string, int>();
                 }
             }

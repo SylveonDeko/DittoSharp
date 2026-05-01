@@ -15,7 +15,16 @@ namespace EeveeCore.Modules.Missions;
 [Group("missions", "Mission commands!")]
 public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
 {
-    // Store items are now loaded from MissionConstants.StoreItems
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="MissionsSlashCommands"/> class.
+    /// </summary>
+    /// <param name="httpClientFactory">Factory used to obtain pooled <see cref="HttpClient"/> instances for outbound HTTP calls (e.g. fetching user avatars).</param>
+    public MissionsSlashCommands(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
 
     /// <summary>
     ///     Opens the crystal slime exchange shop with a dropdown of purchasable items.
@@ -69,12 +78,11 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
             var (currentXp, level, crystalSlime) = await Service.GetUserXpInfoAsync(ctx.User.Id);
             var title = await Service.GetUserTitleAsync(ctx.User.Id);
 
-            // Download user avatar
             byte[]? avatarBytes = null;
             try
             {
                 var avatarUrl = ctx.User.GetAvatarUrl(size: 256) ?? ctx.User.GetDefaultAvatarUrl();
-                using var httpClient = new HttpClient();
+                var httpClient = _httpClientFactory.CreateClient();
                 avatarBytes = await httpClient.GetByteArrayAsync(avatarUrl);
             }
             catch (Exception ex)
@@ -82,7 +90,6 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
                 Log.Warning(ex, "Failed to download avatar for user {UserId}", ctx.User.Id);
             }
 
-            // Generate XP image
             var imageService = new XpImageGenerationService();
             var imageBytes = await imageService.GenerateXpImageAsync(
                 ctx.User.Username,
@@ -92,7 +99,6 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
                 title,
                 avatarBytes);
 
-            // Create file attachment
             using var stream = new MemoryStream(imageBytes);
             var attachment = new FileAttachment(stream, "xp_progress.png", "XP Progress Image");
 
@@ -128,7 +134,6 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
                 return;
             }
 
-            // Define progress bar emojis
             var fullBar = new[] { "<:bar1:1175119051568185455>", "<:bar2:1175119050112774195>", "<:bar3:1175119054084784149>" };
             var emptyBar = new[] { "<:bar1e:1175126117296902195>", "<:bar2e:1175126188742684833>", "<:bar3:1175126108459511959>" };
 
@@ -139,7 +144,6 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
                 var userMissionProgress = GetProgressForMission(userProgress, mission.Key);
                 var progressPercentage = Math.Min((int)((userMissionProgress / (double)mission.Target) * 10), 10);
 
-                // Construct progress bar
                 var progressBar = string.Join("", fullBar.Take(progressPercentage)) +
                                  string.Join("", emptyBar.Skip(progressPercentage));
 
@@ -198,7 +202,7 @@ public class MissionsSlashCommands : EeveeCoreSlashModuleBase<MissionService>
             {
                 var progress = GetProgressForMission(userProgress, mission.Key);
                 const string completed = MissionConstants.MissionEmojiId;
-                
+
                 embed.AddField(
                     $"{mission.Name} ({mission.Target})",
                     $"{progress}/{mission.Target} {completed}");

@@ -104,13 +104,11 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 _ => new List<ShopItem>()
             };
 
-            // Apply filters
             if (filters != null)
             {
                 items = ApplyFilters(items, filters, userCredits);
             }
 
-            // Apply sorting
             items = ApplySorting(items, sortOrder);
 
             return items;
@@ -135,21 +133,17 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         {
             var items = new List<ShopItem>(ShopConstants.DefaultItems);
 
-            // Add seasonal/event items
             var eventItems = await GetEventItemsAsync();
             items.AddRange(eventItems);
 
-            // Add shop items from MongoDB if available
             var mongoItems = await GetMongoShopItemsAsync();
             items.AddRange(mongoItems);
 
-            // Apply filters
             if (filters != null)
             {
                 items = ApplyFilters(items, filters, userCredits);
             }
 
-            // Apply sorting
             items = ApplySorting(items, sortOrder);
 
             return items;
@@ -194,35 +188,32 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
             var item = await GetShopItemAsync(itemId);
             if (item == null)
             {
-                return new PurchaseResult 
-                { 
-                    Success = false, 
+                return new PurchaseResult
+                {
+                    Success = false,
                     Message = "Item not found in shop.",
                     ErrorCode = "ITEM_NOT_FOUND"
                 };
             }
 
-            // Check stock availability
             if (item.Stock != -1 && item.Stock < quantity)
             {
-                return new PurchaseResult 
-                { 
-                    Success = false, 
+                return new PurchaseResult
+                {
+                    Success = false,
                     Message = $"Not enough stock available. Only {item.Stock} remaining.",
                     ErrorCode = "INSUFFICIENT_STOCK"
                 };
             }
 
-            // Calculate total cost
             var totalCost = item.Price * quantity;
 
-            // Check user credits
             var userCredits = await GetUserCreditsAsync(userId);
             if (userCredits < totalCost)
             {
-                return new PurchaseResult 
-                { 
-                    Success = false, 
+                return new PurchaseResult
+                {
+                    Success = false,
                     Message = $"Not enough credits. You need {totalCost} credits but only have {userCredits}.",
                     ErrorCode = "INSUFFICIENT_CREDITS",
                     TotalCost = totalCost,
@@ -230,35 +221,30 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 };
             }
 
-            // Process the purchase
             await using var db = await dbProvider.GetConnectionAsync();
             await using var transaction = await db.BeginTransactionAsync();
 
             try
             {
-                // Deduct credits
                 await db.GetTable<Database.Linq.Models.Bot.User>()
                     .Where(u => u.UserId == userId)
                     .Set(u => u.MewCoins, u => u.MewCoins - (ulong)totalCost)
                     .UpdateAsync();
 
-                // Add item to user's inventory
                 await AddItemToInventoryAsync(db, userId, item, quantity);
 
-                // Update stock if applicable
                 if (item.Stock != -1)
                 {
                     await UpdateItemStockAsync(db, itemId, item.Stock - quantity);
                 }
 
-                // Log the purchase
                 await LogPurchaseAsync(db, userId, item, quantity, totalCost);
 
                 await transaction.CommitAsync();
 
-                return new PurchaseResult 
-                { 
-                    Success = true, 
+                return new PurchaseResult
+                {
+                    Success = true,
                     Message = $"Successfully purchased {quantity}x {item.Name}!",
                     Item = item,
                     Quantity = quantity,
@@ -275,9 +261,9 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         catch (Exception e)
         {
             Log.Error(e, "Error purchasing item {ItemId} for user {UserId}", itemId, userId);
-            return new PurchaseResult 
-            { 
-                Success = false, 
+            return new PurchaseResult
+            {
+                Success = false,
                 Message = "An error occurred while processing your purchase.",
                 ErrorCode = "PURCHASE_ERROR"
             };
@@ -294,7 +280,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         try
         {
             await using var db = await dbProvider.GetConnectionAsync();
-            
+
             var pokemonCount = await db.GetTable<Database.Linq.Models.Pokemon.UserPokemonOwnership>()
                 .Where(p => p.UserId == userId)
                 .CountAsync();
@@ -318,7 +304,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         try
         {
             await using var db = await dbProvider.GetConnectionAsync();
-            
+
             var user = await db.GetTable<Database.Linq.Models.Bot.User>()
                 .Where(u => u.UserId == userId)
                 .FirstOrDefaultAsync();
@@ -351,10 +337,10 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Name = mongoItem.Item ?? "Unknown Item",
                     Description = mongoItem.Description ?? "No description available.",
                     Price = (int)mongoItem.Price,
-                    Category = "Radiant", // MongoDB items are radiant shop items
+                    Category = "Radiant",
                     IsConsumable = true,
-                    Stock = -1, // MongoDB items typically have unlimited stock
-                    Rarity = "Rare", // MongoDB items are typically rare
+                    Stock = -1,
+                    Rarity = "Rare",
                     ImageUrl = null,
                     Metadata = new Dictionary<string, object>
                     {
@@ -386,13 +372,12 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         {
             var items = new List<ShopItem>();
 
-            // Add seasonal items based on current date
             var currentDate = DateTimeOffset.UtcNow;
             var month = currentDate.Month;
 
             switch (month)
             {
-                case 12 or 1: // Winter/Holiday
+                case 12 or 1:
                     items.Add(new ShopItem
                     {
                         Id = "winter_boost",
@@ -407,7 +392,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     });
                     break;
 
-                case 6 or 7 or 8: // Summer
+                case 6 or 7 or 8:
                     items.Add(new ShopItem
                     {
                         Id = "summer_boost",
@@ -542,8 +527,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
     /// <param name="quantity">The quantity to add.</param>
     private static async Task AddItemToInventoryAsync(DittoDataConnection db, ulong userId, ShopItem item, int quantity)
     {
-        // Implementation would depend on your inventory system
-        // This is a placeholder for the actual inventory logic
         await Task.CompletedTask;
     }
 
@@ -555,8 +538,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
     /// <param name="newStock">The new stock count.</param>
     private static async Task UpdateItemStockAsync(DittoDataConnection db, string itemId, int newStock)
     {
-        // Implementation would depend on your item stock tracking system
-        // This is a placeholder for the actual stock update logic
         await Task.CompletedTask;
     }
 
@@ -570,8 +551,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
     /// <param name="totalCost">The total cost.</param>
     private static async Task LogPurchaseAsync(DittoDataConnection db, ulong userId, ShopItem item, int quantity, int totalCost)
     {
-        // Implementation would depend on your transaction logging system
-        // This is a placeholder for the actual purchase logging logic
         await Task.CompletedTask;
     }
 
@@ -975,7 +954,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 return CommandResult.Error(
                     $"You can't buy more than {maxChests} per week using credits! You've already bought {currentAmount}.");
 
-            // Update chest count
             switch (ct)
             {
                 case "legend":
@@ -1000,7 +978,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 .Set(u => u.MewCoins, u => u.MewCoins - price)
                 .UpdateAsync();
         }
-        else // redeems
+        else
         {
             if ((ulong)user.Redeems.GetValueOrDefault() < price)
                 return CommandResult.Error($"You do not have the {price} redeems you need to buy a {ct} chest!");
@@ -1131,7 +1109,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         {
             var items = new List<ShopItem>();
 
-            // Add basic items
             items.AddRange(new List<ShopItem>
             {
                 new() { Id = "market-space", Name = "Market Space", Description = "Expand your market slots to sell more Pokemon", Price = 10000, Category = "General", Stock = -1 },
@@ -1145,7 +1122,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 new() { Id = "rare-candy", Name = "Rare Candy", Description = "Increase Pokemon level by 1", Price = 100, Category = "General", Stock = -1 }
             });
 
-            // Add evolution stones and active items
             foreach (var item in _activeItemList)
             {
                 var displayName = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(item.Replace("-", " "));
@@ -1160,7 +1136,6 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                 });
             }
 
-            // Add berries
             foreach (var berry in _berryList)
             {
                 var displayName = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(berry.Replace("-", " "));
@@ -1194,11 +1169,9 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
         {
             var items = new List<ShopItem>(ShopConstants.DefaultItems);
 
-            // Add seasonal/event items
             var eventItems = await GetEventItemsAsync();
             items.AddRange(eventItems);
 
-            // Add shop items from MongoDB if available
             var mongoItems = await GetMongoShopItemsAsync();
             items.AddRange(mongoItems);
 
@@ -1226,7 +1199,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "credits-exchange",
                     Name = "Credits Exchange",
                     Description = "Exchange 150 Crystallized Slime for 100,000 credits",
-                    Price = 150, // In crystallized slime
+                    Price = 150,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "Credits" }, { "RewardAmount", 100000 } }
@@ -1236,7 +1209,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "friendship-stone",
                     Name = "Friendship Stone",
                     Description = "Increases Pokemon friendship/happiness instantly",
-                    Price = 10, // In crystallized slime
+                    Price = 10,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "Item" } }
@@ -1246,7 +1219,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "shadow-essence",
                     Name = "Shadow Essence",
                     Description = "Increase your shadow-chain by 15-75 (random)",
-                    Price = 100, // In crystallized slime
+                    Price = 100,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "ShadowChain" }, { "MinAmount", 15 }, { "MaxAmount", 75 } }
@@ -1256,7 +1229,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "meowth-ticket",
                     Name = "Meowth Ticket",
                     Description = "Try your luck with hidden credit amounts (up to 150,000)",
-                    Price = 75, // In crystallized slime
+                    Price = 75,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "Lottery" } }
@@ -1266,7 +1239,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "vip-token-1",
                     Name = "VIP Token",
                     Description = "Get exclusive VIP benefits and access",
-                    Price = 1000, // In crystallized slime
+                    Price = 1000,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "VIP" }, { "Amount", 1 } }
@@ -1276,7 +1249,7 @@ public class ShopService(LinqToDbConnectionProvider dbProvider, IMongoService mo
                     Id = "vip-token-3",
                     Name = "VIP Token Bundle (x3)",
                     Description = "Get 3 VIP tokens at a discount price",
-                    Price = 2500, // In crystallized slime
+                    Price = 2500,
                     Category = "CrystalSlime",
                     Stock = -1,
                     Metadata = new Dictionary<string, object> { { "RewardType", "VIP" }, { "Amount", 3 } }

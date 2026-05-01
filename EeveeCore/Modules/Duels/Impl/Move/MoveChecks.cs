@@ -42,17 +42,14 @@ public partial class Move
     public (bool, string) CheckProtect(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
         var msg = "";
-        // Moves that don't target the opponent can't be protected by the target.
         if (!TargetsOpponent()) return (true, msg);
 
-        // Moves which bypass all protection.
         if (new[] { 149, 224, 273, 360, 438, 489 }.Contains(Effect)) return (true, msg);
 
         if (attacker.Ability() == Ability.UNSEEN_FIST && MakesContact(attacker)) return (true, msg);
 
         if (defender.CraftyShield && DamageClass == DamageClass.STATUS) return (false, msg);
 
-        // Moves which bypass all protection except for crafty shield.
         if (new[] { 29, 107, 179, 412 }.Contains(Effect)) return (true, msg);
 
         if (defender.Protect) return (false, msg);
@@ -132,27 +129,21 @@ public partial class Move
         var micleBerryUsed = attacker.MicleBerryAte;
         attacker.MicleBerryAte = false;
 
-        // Moves that have a null accuracy always hit.
         if (Accuracy == null) return true;
 
-        // During hail, this bypasses accuracy checks
         if (Effect == 261 && battle.Weather.Get() == "hail") return true;
 
-        // During rain, this bypasses accuracy checks
         if (new[] { 153, 334, 357, 365, 396 }.Contains(Effect) &&
             new[] { "rain", "h-rain" }.Contains(battle.Weather.Get()))
             return true;
 
         switch (Effect)
         {
-            // If used by a poison type, this bypasses accuracy checks
             case 34 when attacker.TypeIds.Contains(ElementType.POISON):
-            // If used against a minimized poke, this bypasses accuracy checks
             case 338 when defender.Minimized:
                 return true;
         }
 
-        // These DO allow OHKO moves to bypass accuracy checks
         if (TargetsOpponent())
         {
             if (defender.MindReader.Active() && defender.MindReader.Item == attacker) return true;
@@ -162,18 +153,15 @@ public partial class Move
             if (defender.Ability(attacker, this) == Ability.NO_GUARD) return true;
         }
 
-        // OHKO moves
         if (Effect == 39)
         {
             var attackerLevel = 30 + (attacker.Level - defender.Level);
             return Random.Shared.NextDouble() * 100 <= attackerLevel;
         }
 
-        // This does NOT allow OHKO moves to bypass accuracy checks
         if (attacker.Telekinesis.Active()) return true;
 
         double accuracy = Accuracy.Value;
-        // When used during harsh sunlight, this has an accuracy of 50%
         if (new[] { 153, 334 }.Contains(Effect) && new[] { "sun", "h-sun" }.Contains(battle.Weather.Get()))
             accuracy = 50;
 
@@ -244,8 +232,6 @@ public partial class Move
     /// <returns>True if a move has an effect on a pokemon.</returns>
     public bool CheckEffective(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
-        // What if I :flushed: used Hold Hands :flushed: in a double battle :flushed: with you? :flushed:
-        // (and you weren't protected by Crafty Shield or in the semi-invulnerable turn of a move like Fly or Dig)
         if (new[] { 86, 174, 368, 370, 371, 389 }.Contains(Effect)) return false;
 
         if (!TargetsOpponent()) return true;
@@ -267,7 +253,6 @@ public partial class Move
         {
             if (DamageClass == DamageClass.STATUS) return false;
 
-            // If the attacker used a status move that called this move, even if this move is not a status move then it should still be considered affected by prankster.
             if (attacker.Owner.SelectedAction is Trainer.MoveAction { Move.DamageClass: DamageClass.STATUS })
                 return false;
         }
@@ -276,7 +261,6 @@ public partial class Move
             DamageClass == DamageClass.STATUS)
             return false;
 
-        // Status moves do not care about type effectiveness - except for thunder wave FOR SOME REASON...
         if (DamageClass == DamageClass.STATUS && Id != 86) return true;
 
         var currentType = GetType(attacker, defender, battle);
@@ -343,7 +327,6 @@ public partial class Move
 
         if (attacker != defender && defender.Imprison && defender.Moves.Any(m => m.Id == Id)) return false;
 
-        // Since we only have single battles, these moves always fail
         if (new[] { 173, 301, 308, 316, 363, 445, 494 }.Contains(Effect)) return false;
 
         if (new[] { 93, 98 }.Contains(Effect) && !attacker.NonVolatileEffect.Sleep()) return false;

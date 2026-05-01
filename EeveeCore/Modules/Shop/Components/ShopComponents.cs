@@ -27,7 +27,6 @@ public class ShopInteractionModule(ShopService shopService)
         {
             await DeferAsync();
 
-            // Check if user can access the radiant shop
             var canAccess = await shopService.CanAccessRadiantShopAsync(ctx.User.Id);
             if (!canAccess)
             {
@@ -54,7 +53,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Create new shop session
             var sessionId = Guid.NewGuid().ToString();
             var session = new ShopSession
             {
@@ -102,7 +100,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Update page number
             if (direction == "next")
             {
                 session.CurrentPage++;
@@ -179,9 +176,8 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Update filter
             session.Filters.PokemonType = selectedTypes.FirstOrDefault();
-            session.CurrentPage = 0; // Reset to first page
+            session.CurrentPage = 0;
             session.LastAccessed = DateTimeOffset.UtcNow;
             ShopSessionManager.StoreSession(session);
 
@@ -215,7 +211,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Extract item ID from the value format "shop_purchase:itemId"
             var selectedValue = selectedValues[0];
             if (!selectedValue.StartsWith("shop_purchase:"))
             {
@@ -258,7 +253,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Store selected item in session
             session.SelectedItemId = itemId;
             ShopSessionManager.StoreSession(session);
 
@@ -331,7 +325,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Update category and reset filters/pagination
             session.CurrentCategory = category;
             session.Filters.ClearFilters();
             session.CurrentPage = 0;
@@ -372,7 +365,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Clear all filters
             session.Filters.ClearFilters();
             session.CurrentPage = 0;
             session.LastAccessed = DateTimeOffset.UtcNow;
@@ -413,7 +405,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Apply filters from modal
             if (!string.IsNullOrWhiteSpace(modal.ItemName))
             {
                 session.Filters.ItemName = modal.ItemName;
@@ -479,7 +470,6 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Validate confirmation
             if (!modal.Confirmation.Equals("CONFIRM", StringComparison.OrdinalIgnoreCase))
             {
                 await ctx.Interaction.ModifyOriginalResponseAsync(x =>
@@ -489,14 +479,12 @@ public class ShopInteractionModule(ShopService shopService)
                 return;
             }
 
-            // Parse quantity
             var quantity = 1;
             if (!string.IsNullOrWhiteSpace(modal.Quantity) && int.TryParse(modal.Quantity, out var parsedQuantity))
             {
                 quantity = Math.Max(1, parsedQuantity);
             }
 
-            // Process the purchase
             var result = await shopService.PurchaseItemAsync(ctx.User.Id, itemId, quantity);
 
             if (result.Success)
@@ -536,7 +524,6 @@ public class ShopInteractionModule(ShopService shopService)
                 });
             }
 
-            // Update shop display
             session.LastAccessed = DateTimeOffset.UtcNow;
             ShopSessionManager.StoreSession(session);
         }
@@ -562,14 +549,12 @@ public class ShopInteractionModule(ShopService shopService)
             var userCredits = await shopService.GetUserCreditsAsync(session.UserId);
             var items = await shopService.GetShopItemsByCategoryAsync(session.CurrentCategory, session.Filters, session.SortOrder, userCredits);
 
-            // Calculate pagination
             var totalPages = (int)Math.Ceiling((double)items.Count / ShopConstants.ItemsPerPage);
             var currentPageItems = items
                 .Skip(session.CurrentPage * ShopConstants.ItemsPerPage)
                 .Take(ShopConstants.ItemsPerPage)
                 .ToList();
 
-            // Create Components V2 display
             var containerComponents = CreateShopContainer(session, currentPageItems, totalPages, userCredits);
 
             await ctx.Interaction.ModifyOriginalResponseAsync(x =>
@@ -599,37 +584,32 @@ public class ShopInteractionModule(ShopService shopService)
     {
         var categoryInfo = ShopConstants.CategoryInfo[session.CurrentCategory];
         var categoryColor = ShopConstants.CategoryColors[session.CurrentCategory];
-        
+
         var containerComponents = new List<IMessageComponentBuilder>();
 
-        // Add shop title and description
         containerComponents.Add(new TextDisplayBuilder()
             .WithContent($"# {categoryInfo.Emoji} {categoryInfo.DisplayName}\n{categoryInfo.Description}"));
 
-        // Add category tab buttons at the top
         var categoryRow = new ActionRowBuilder();
         foreach (var category in ShopConstants.ShopCategories)
         {
             var catInfo = ShopConstants.CategoryInfo[category];
             var isActive = session.CurrentCategory == category;
             var buttonStyle = isActive ? ButtonStyle.Success : ButtonStyle.Secondary;
-            
-            categoryRow.WithButton($"{catInfo.Emoji} {catInfo.DisplayName}", 
-                $"shop:category:{session.SessionId}:{category}", 
+
+            categoryRow.WithButton($"{catInfo.Emoji} {catInfo.DisplayName}",
+                $"shop:category:{session.SessionId}:{category}",
                 buttonStyle, disabled: isActive);
         }
         containerComponents.Add(categoryRow);
 
-        // Add separator after category buttons
         containerComponents.Add(new SeparatorBuilder());
 
-        // Add user info section
         var userInfoText = $"💰 **Your Credits:** {ShopConstants.Emojis.Credits} {userCredits:N0} | " +
                            $"📄 **Page:** {session.CurrentPage + 1}/{Math.Max(1, totalPages)} | ";
-        
+
         containerComponents.Add(new TextDisplayBuilder().WithContent(userInfoText));
 
-        // Add active filters info if any
         if (session.Filters.HasActiveFilters)
         {
             var filterInfo = new List<string>();
@@ -644,17 +624,15 @@ public class ShopInteractionModule(ShopService shopService)
                 .WithContent($"🔍 **Active Filters:** {string.Join(", ", filterInfo)}"));
         }
 
-        // Add separator before items
         containerComponents.Add(new SeparatorBuilder());
 
-        // Add items (combine all items into one text display to reduce component count)
         if (items.Any())
         {
             var itemsText = new List<string>();
-            
+
             foreach (var item in items)
             {
-                var typeEmoji = !string.IsNullOrEmpty(item.PokemonType) && 
+                var typeEmoji = !string.IsNullOrEmpty(item.PokemonType) &&
                               ShopConstants.TypeEmojis.TryGetValue(item.PokemonType, out var emoji) ? emoji : "";
                 var stockInfo = item.Stock == -1 ? "∞" : item.Stock.ToString();
                 var affordableIcon = item.Price <= userCredits ? "✅" : "❌";
@@ -662,29 +640,27 @@ public class ShopInteractionModule(ShopService shopService)
                 var itemText = $"**{affordableIcon} {typeEmoji} {item.Name}**\n" +
                               $"{item.Description}\n" +
                               $"**Price:** {ShopConstants.Emojis.Credits} {item.Price:N0} | **Stock:** {stockInfo} | **Rarity:** {item.Rarity}";
-                
+
                 itemsText.Add(itemText);
             }
 
             containerComponents.Add(new TextDisplayBuilder()
                 .WithContent(string.Join("\n\n", itemsText)));
 
-            // Add purchase select menu for all items
             if (items.Count > 0)
             {
-                var purchaseOptions = items.Select(item => 
+                var purchaseOptions = items.Select(item =>
                 {
                     var affordable = item.Price <= userCredits;
                     var affordableIcon = affordable ? "✅" : "❌";
-                    var typeEmoji = !string.IsNullOrEmpty(item.PokemonType) && 
+                    var typeEmoji = !string.IsNullOrEmpty(item.PokemonType) &&
                                   ShopConstants.TypeEmojis.TryGetValue(item.PokemonType, out var emoji) ? emoji : "";
-                    
+
                     var optionBuilder = new SelectMenuOptionBuilder()
                         .WithLabel($"{affordableIcon} {item.Name}")
                         .WithValue($"shop_purchase:{item.Id}")
                         .WithDescription($"{ShopConstants.Emojis.Credits} {item.Price:N0} | Stock: {(item.Stock == -1 ? "∞" : item.Stock.ToString())}");
-                    
-                    // Only add emoji if it's not empty and is a valid Unicode emoji
+
                     if (!string.IsNullOrEmpty(typeEmoji))
                     {
                         try
@@ -693,10 +669,9 @@ public class ShopInteractionModule(ShopService shopService)
                         }
                         catch
                         {
-                            // If emoji is invalid, skip adding it
                         }
                     }
-                    
+
                     return optionBuilder;
                 }).ToList();
 
@@ -717,24 +692,21 @@ public class ShopInteractionModule(ShopService shopService)
                 .WithContent("**No Items Found**\nNo items match your current filters. Try adjusting your search criteria."));
         }
 
-        // Add separator before controls
         containerComponents.Add(new SeparatorBuilder());
 
-        // Add navigation and control buttons
         var hasNextPage = session.CurrentPage < totalPages - 1;
         var hasPrevPage = session.CurrentPage > 0;
 
         var navigationRow = new ActionRowBuilder()
-            .WithButton("◀️ Previous", $"shop:navigate:{session.SessionId}:prev", 
+            .WithButton("◀️ Previous", $"shop:navigate:{session.SessionId}:prev",
                 ButtonStyle.Secondary, disabled: !hasPrevPage)
             .WithButton("🔍 Filter", $"shop:filter:{session.SessionId}", ButtonStyle.Primary)
             .WithButton("🔄 Refresh", $"shop:refresh:{session.SessionId}", ButtonStyle.Secondary)
-            .WithButton("▶️ Next", $"shop:navigate:{session.SessionId}:next", 
+            .WithButton("▶️ Next", $"shop:navigate:{session.SessionId}:next",
                 ButtonStyle.Secondary, disabled: !hasNextPage);
 
         containerComponents.Add(navigationRow);
 
-        // Add type filter dropdown if applicable
         if (ShopConstants.PokemonTypes.Length > 0)
         {
             var typeOptions = ShopConstants.PokemonTypes.Take(20).Select(type =>
@@ -753,7 +725,6 @@ public class ShopInteractionModule(ShopService shopService)
             containerComponents.Add(typeSelectRow);
         }
 
-        // Add clear filters button if needed
         if (session.Filters.HasActiveFilters)
         {
             var clearFiltersRow = new ActionRowBuilder()
@@ -761,7 +732,6 @@ public class ShopInteractionModule(ShopService shopService)
             containerComponents.Add(clearFiltersRow);
         }
 
-        // Create the main container with all components
         var mainContainer = new ContainerBuilder()
             .WithComponents(containerComponents)
             .WithAccentColor(categoryColor);

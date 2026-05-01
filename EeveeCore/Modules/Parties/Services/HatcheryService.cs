@@ -116,34 +116,28 @@ public class HatcheryService(
 
             var userId = message.Author.Id;
 
-            // Implement cooldown to prevent spam (similar to Python version)
             var now = DateTime.UtcNow;
             if (_userCooldowns.TryGetValue(userId, out var lastProcess) && now < lastProcess.AddSeconds(4))
                 return;
 
-            // Check if user exists
             await using var db = await dbContext.GetConnectionAsync();
             var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
             if (user == null) return;
 
             _userCooldowns[userId] = now;
 
-            // Process egg hatching for all hatchery groups
             var hatchedEggs = new List<(string EggName, Database.Linq.Models.Pokemon.Pokemon Pokemon)>();
 
-            // Process each hatchery group (1, 2, 3)
             for (short group = 1; group <= 3; group++)
             {
                 var groupHatched = await ProcessHatcheryGroup(userId, group, channel.Guild.Id);
                 hatchedEggs.AddRange(groupHatched);
             }
 
-            // Send hatching notifications and fire mission events
             if (hatchedEggs.Count > 0)
             {
                 await SendHatchingNotifications(message, hatchedEggs);
-                
-                // Fire mission events for each hatched Pokemon
+
                 foreach (var (eggName, pokemon) in hatchedEggs)
                 {
                     _ = Task.Run(async () => await _missionService.FirePokemonHatchedEvent(message, pokemon));
@@ -168,19 +162,16 @@ public class HatcheryService(
         var hatchedEggs = new List<(string, Database.Linq.Models.Pokemon.Pokemon)>();
 
         await using var db = await dbContext.GetConnectionAsync();
-        
-        // Get hatchery for this user and group
+
         var hatchery = await db.EggHatcheries
             .Where(e => e.UserId == userId && e.Group == group)
             .FirstOrDefaultAsync();
-            
+
         if (hatchery == null) return hatchedEggs;
 
-        // Calculate speed modifier based on hatchery group and premium status
         var speedModifier = await GetHatcherySpeedModifier(userId, group, guildId);
 
-        // Get all slot IDs from the hatchery
-        var slotIds = new[] { hatchery.Slot1, hatchery.Slot2, hatchery.Slot3, hatchery.Slot4, hatchery.Slot5, 
+        var slotIds = new[] { hatchery.Slot1, hatchery.Slot2, hatchery.Slot3, hatchery.Slot4, hatchery.Slot5,
                              hatchery.Slot6, hatchery.Slot7, hatchery.Slot8, hatchery.Slot9, hatchery.Slot10 }
             .Where(id => id.HasValue)
             .Select(id => id!.Value)
@@ -188,7 +179,6 @@ public class HatcheryService(
 
         if (slotIds.Count == 0) return hatchedEggs;
 
-        // Get all eggs in these slots with Pokemon data
         var eggs = await db.UserPokemonOwnerships
             .Where(p => slotIds.Contains(p.PokemonId))
             .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { Ownership = o, Pokemon = p })
@@ -196,21 +186,17 @@ public class HatcheryService(
 
         foreach (var egg in eggs)
         {
-            // Decrement counter based on speed modifier
             var newCounter = Math.Max(0, egg.Pokemon.Counter.GetValueOrDefault() - speedModifier);
-            
+
             if (newCounter == 0)
             {
-                // Egg is ready to hatch!
                 var pokemon = await HatchEggFromOwnership(egg.Pokemon);
                 if (pokemon != null)
                 {
                     hatchedEggs.Add((egg.Pokemon.PokemonName, pokemon));
-                    
-                    // Remove the egg from hatchery slot
+
                     await RemoveEggFromHatcherySlot(hatchery, egg.Pokemon.Id);
-                    
-                    // Chance for common chest drop (1 in 200, same as Python)
+
                     if (_random.Next(200) == 0)
                     {
                         await AddCommonChestToUser(userId);
@@ -219,7 +205,6 @@ public class HatcheryService(
             }
             else
             {
-                // Update the counter
                 await db.UserPokemon
                     .Where(p => p.Id == egg.Pokemon.Id)
                     .Set(p => p.Counter, newCounter)
@@ -239,15 +224,12 @@ public class HatcheryService(
     {
         try
         {
-            // The egg is already a Pokemon record, just update its Counter to 0
-            // and mark it as hatched by removing the Counter
             await using var db = await dbContext.GetConnectionAsync();
             await db.UserPokemon
                 .Where(p => p.Id == pokemon.Id)
                 .Set(p => p.Counter, 0)
                 .UpdateAsync();
 
-            // Return the Pokemon (already have the data)
             return pokemon;
         }
         catch (Exception ex)
@@ -265,8 +247,7 @@ public class HatcheryService(
         try
         {
             await using var db = await dbContext.GetConnectionAsync();
-            
-            // Find which slot contains this egg and clear it
+
             if (hatchery.Slot1 == eggId)
                 await db.EggHatcheries.Where(e => e.Id == hatchery.Id).Set(e => e.Slot1, (ulong?)null).UpdateAsync();
             else if (hatchery.Slot2 == eggId)
@@ -299,7 +280,6 @@ public class HatcheryService(
     /// </summary>
     private async Task<int> GetHatcherySpeedModifier(ulong userId, short group, ulong guildId)
     {
-        // Base speed: 1 per message
         const int baseSpeed = 1;
 
         return group switch
@@ -349,7 +329,6 @@ public class HatcheryService(
             {
                 notifications.Add($"Congratulations!\nYour {eggName} Egg has hatched!");
                 
-                // Check for common chest drops
                 if (_random.Next(200) == 0)
                 {
                     notifications.Add("How...\nIt was holding a common chest within its egg!");
@@ -384,25 +363,20 @@ public class HatcheryService(
     /// </returns>
     public async Task<EmbedBuilder> GetHatcheryViewEmbed(ulong userId, short group)
     {
-        // Validate group number
         if (group < 1 || group > 3) return null!;
 
-        // Get user's Patreon tier to determine available slots
         var patreonTier = await GetPatreonTier(userId);
         string maxMsg;
 
-        // Initialize embed
         var embed = new EmbedBuilder()
             .WithTitle($"{await GetUserNameAsync(userId)}'s Hatchery (Group #{group})")
             .WithColor(new Color(0xff, 0x00, 0x60));
 
-        // Get egg data from the hatchery group
         var eggData = await GetHatcheryData(userId, group, patreonTier);
         if (eggData.Item3.Count == 0) return null!;
 
         var (slots, maxSlots, slotData) = eggData;
 
-        // Format the slot information into the embed description
         var description = string.Empty;
         foreach (var (slotNumber, eggName, pokemonNumber, stepCounter) in slotData)
             if (!string.IsNullOrEmpty(eggName))
@@ -411,7 +385,6 @@ public class HatcheryService(
 
         embed.WithDescription(description);
 
-        // Add the maximum egg slots information
         switch (patreonTier)
         {
             case PatreonTier.None:
@@ -431,7 +404,6 @@ public class HatcheryService(
 
         embed.AddField("Max Egg Slots", maxMsg);
 
-        // Add footer based on group
         switch (group)
         {
             case 1:
@@ -469,39 +441,32 @@ public class HatcheryService(
         try
         {
             await using var db = await dbContext.GetConnectionAsync();
-            // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
 
-            // Get user's Patreon tier to check slot access
             var patreonTier = await GetPatreonTier(userId);
 
             switch (slot)
             {
-                // Check if the user has access to the specified slot based on their Patreon tier
                 case 7 when patreonTier < PatreonTier.Gold:
                     return (false, "You must be a Gold or Crystal Patreon to add eggs to slot 7.");
                 case >= 8 when patreonTier < PatreonTier.Crystal:
                     return (false, "You must be a Crystal Patreon to add eggs to slots 8-10.");
             }
 
-            // Convert from 1-based to 0-based indexing
             var position = eggIndex - 1;
 
-            // Get the egg from the ownership table by position
             var ownership = await db.GetTable<UserPokemonOwnership>()
                 .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == position);
 
             if (ownership == null)
                 return (false, "Invalid egg index.");
 
-            // Get the egg Pokémon
             var eggId = ownership.PokemonId;
             var egg = await db.GetTable<Database.Linq.Models.Pokemon.Pokemon>()
                 .FirstOrDefaultAsync(p => p.Id == eggId && p.PokemonName == "Egg");
 
             if (egg == null) return (false, "The provided ID is not a valid Egg or doesn't exist.");
 
-            // Check if this egg is already in any hatchery
             var hatcheriesWithEgg = await db.GetTable<EggHatchery>()
                 .Where(h => h.UserId == userId &&
                             (h.Slot1 == eggId || h.Slot2 == eggId || h.Slot3 == eggId ||
@@ -511,13 +476,11 @@ public class HatcheryService(
 
             if (hatcheriesWithEgg) return (false, "This Egg is already in a hatchery slot.");
 
-            // Get or create the hatchery record for this user and group
             var hatchery = await db.GetTable<EggHatchery>()
                 .FirstOrDefaultAsync(h => h.UserId == userId && h.Group == group);
 
             if (hatchery == null)
             {
-                // Create new hatchery record
                 hatchery = new EggHatchery
                 {
                     UserId = userId,
@@ -526,7 +489,6 @@ public class HatcheryService(
                 hatchery.Id = (ulong)await db.InsertWithInt64IdentityAsync(hatchery);
             }
 
-            // Check if the selected slot is already occupied
             var isSlotOccupied = false;
             switch (slot)
             {
@@ -544,7 +506,6 @@ public class HatcheryService(
 
             if (isSlotOccupied) return (false, $"Slot {slot} in group {group} is already occupied.");
 
-            // Update the hatchery record using LinqToDB Set pattern
             switch (slot)
             {
                 case 1:
@@ -613,7 +574,6 @@ public class HatcheryService(
         }
         catch (Exception ex)
         {
-            // Log the error
             if (client.GetChannel(1004311971853779005) is SocketTextChannel errorChannel)
                 await errorChannel.SendMessageAsync($"**__ERROR OCCURRED__**: ```{ex.Message}\n{ex.StackTrace}```");
 
@@ -637,16 +597,13 @@ public class HatcheryService(
         {
             await using var db = await dbContext.GetConnectionAsync();
 
-            // Validate parameters
             if (group < 1 || group > 3 || slot < 1 || slot > 10) return (false, "Invalid group or slot number.");
 
-            // Get the hatchery for this user and group
             var hatchery = await db.EggHatcheries
                 .FirstOrDefaultAsync(h => h.UserId == userId && h.Group == group);
 
             if (hatchery == null) return (false, $"You don't have a hatchery in group {group}.");
 
-            // Check if there's an egg in the selected slot
             ulong? eggId = null;
             switch (slot)
             {
@@ -664,7 +621,6 @@ public class HatcheryService(
 
             if (eggId == null) return (false, $"Slot {slot} in group {group} is empty.");
 
-            // Update the hatchery record using LinqToDB
             switch (slot)
             {
                 case 1:
@@ -733,7 +689,6 @@ public class HatcheryService(
         }
         catch (Exception ex)
         {
-            // Log the error
             if (client.GetChannel(1004311971853779005) is SocketTextChannel errorChannel)
                 await errorChannel.SendMessageAsync($"**__ERROR OCCURRED__**: ```{ex.Message}\n{ex.StackTrace}```");
 
@@ -768,7 +723,6 @@ public class HatcheryService(
         var slotArray = new[] { slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slot10 };
         var addedEggs = new Dictionary<int, List<int>>();
 
-        // Process each provided egg index
         for (var slotIndex = 0; slotIndex < slotArray.Length; slotIndex++)
         {
             var eggIndex = slotArray[slotIndex];
@@ -805,7 +759,6 @@ public class HatcheryService(
         {
             await using var db = await dbContext.GetConnectionAsync();
 
-            // Find which slots these eggs are in
             var hatcheries = await db.EggHatcheries
                 .Where(h => h.UserId == userId)
                 .ToListAsync();
@@ -817,7 +770,6 @@ public class HatcheryService(
             short? egg1Group = 0;
             short? egg2Group = 0;
 
-            // Find the first egg
             foreach (var hatchery in hatcheries)
             {
                 if (hatchery.Slot1 == egg1Id)
@@ -899,7 +851,6 @@ public class HatcheryService(
                 break;
             }
 
-            // Find the second egg
             foreach (var hatchery in hatcheries)
             {
                 if (hatchery.Slot1 == egg2Id)
@@ -986,7 +937,6 @@ public class HatcheryService(
             if (hatchery1 == null || hatchery2 == null)
                 return (false, "One or both of the provided egg IDs are not in the hatchery.");
 
-            // Swap the eggs
             ulong? temp = null;
             switch (egg1Slot)
             {
@@ -1096,7 +1046,6 @@ public class HatcheryService(
         }
         catch (Exception ex)
         {
-            // Log the error
             if (client.GetChannel(1004311971853779005) is SocketTextChannel errorChannel)
                 await errorChannel.SendMessageAsync($"**__ERROR OCCURRED__**: ```{ex.Message}\n{ex.StackTrace}```");
 
@@ -1124,7 +1073,6 @@ public class HatcheryService(
     {
         await using var db = await dbContext.GetConnectionAsync();
 
-        // Get max slots based on Patreon tier
         var maxSlots = patreonTier switch
         {
             PatreonTier.Crystal => 10,
@@ -1132,13 +1080,11 @@ public class HatcheryService(
             _ => 6
         };
 
-        // Get the hatchery data for this user and group
         var hatchery = await db.EggHatcheries
             .FirstOrDefaultAsync(h => h.UserId == userId && h.Group == group);
 
         if (hatchery == null)
         {
-            // Create a new hatchery for this user and group
             hatchery = new EggHatchery
             {
                 UserId = userId,
@@ -1147,11 +1093,9 @@ public class HatcheryService(
             hatchery.Id = (ulong)await db.InsertWithInt64IdentityAsync(hatchery);
         }
 
-        // Get all slots data
         var slotData = new List<(int SlotNumber, string EggName, int? PokemonNumber, int StepCounter)>();
         var availableSlots = 0;
 
-        // Helper function to process each slot
         async Task ProcessSlot(int slotNumber, ulong? eggId)
         {
             if (eggId is > 0)
@@ -1161,12 +1105,11 @@ public class HatcheryService(
 
                 if (pokemon != null)
                 {
-                    // Find the Pokemon's index by querying the ownership table
                     var ownership = await db.GetTable<UserPokemonOwnership>()
                         .Where(o => o.UserId == userId && o.PokemonId == eggId.Value)
                         .FirstOrDefaultAsync();
 
-                    var pokemonIndex = ownership != null ? (int)(ownership.Position + 1) : -1; // Convert to 1-based if found
+                    var pokemonIndex = ownership != null ? (int)(ownership.Position + 1) : -1;
                     slotData.Add((slotNumber, pokemon.Name ?? "Unknown", pokemonIndex, pokemon.Counter ?? 0));
                 }
                 else
@@ -1182,7 +1125,6 @@ public class HatcheryService(
             }
         }
 
-        // Process all slots
         await ProcessSlot(1, hatchery.Slot1);
         await ProcessSlot(2, hatchery.Slot2);
         await ProcessSlot(3, hatchery.Slot3);
@@ -1190,7 +1132,6 @@ public class HatcheryService(
         await ProcessSlot(5, hatchery.Slot5);
         await ProcessSlot(6, hatchery.Slot6);
 
-        // Process premium slots based on Patreon tier
         if (patreonTier >= PatreonTier.Gold) await ProcessSlot(7, hatchery.Slot7);
 
         if (patreonTier >= PatreonTier.Crystal)

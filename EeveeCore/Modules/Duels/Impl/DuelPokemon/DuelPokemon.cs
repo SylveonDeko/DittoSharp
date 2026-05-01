@@ -66,7 +66,6 @@ public partial class DuelPokemon
         _illusionName = null;
         _illusionDisplayName = null;
 
-        // Stats
         FullName = fullname;
         BaseStats = baseStats;
         Hp = hp;
@@ -107,7 +106,7 @@ public partial class DuelPokemon
         StartingSpAtkEV = spatkEV;
         StartingSpDefEV = spdefEV;
         StartingSpeedEV = speedEV;
-        StartingMoves = new List<Move.Move>(moves); // Shallow copy to keep the objects but not the list itself
+        StartingMoves = new List<Move.Move>(moves);
         StartingAbilityId = abilityId;
         StartingTypeIds = new List<ElementType>(typeIds);
         StartingWeight = Math.Max(1, weight);
@@ -148,7 +147,6 @@ public partial class DuelPokemon
         EverSentOut = false;
         ShouldMegaEvolve = false;
 
-        // Moves
         LastMove = null;
         LastMoveDamage = null;
         LastMoveFailed = false;
@@ -238,7 +236,6 @@ public partial class DuelPokemon
         SyrupBomb = new ExpiringEffect(0);
         NumHits = 0;
 
-        // Abilities
         FlashFire = false;
         TruantTurn = 0;
         IceRepaired = false;

@@ -21,7 +21,6 @@ public class TradeService : INService
     private readonly ITradeLockService _tradeLockService;
     private readonly TradeEvolutionService _evolutionService;
     
-    // In-memory trade session cache
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, TradeSession> _activeSessions = new();
     
     private const string TradeSessionPrefix = "trade_session:";
@@ -55,14 +54,12 @@ public class TradeService : INService
     /// <returns>A TradeResult containing the created session or error information.</returns>
     public async Task<TradeResult> CreateTradeSessionAsync(ulong player1Id, ulong player2Id, ulong channelId, ulong guildId)
     {
-        // Validate users exist and aren't trade locked
         var validationResult = await ValidateTradeParticipantsAsync(player1Id, player2Id);
         if (!validationResult.Success)
         {
             return validationResult;
         }
 
-        // Check if either user is already in a trade
         if (await IsUserInTradeAsync(player1Id) || await IsUserInTradeAsync(player2Id))
         {
             return TradeResult.Failure("One of the users is already in an active trade session.");
@@ -78,7 +75,6 @@ public class TradeService : INService
             ExpiresAt = DateTime.UtcNow.AddMinutes(SessionTimeoutMinutes)
         };
 
-        // Store session in memory and Redis
         _activeSessions[session.SessionId] = session;
         await StoreSessionInRedisAsync(session);
 
@@ -110,27 +106,23 @@ public class TradeService : INService
             return TradeResult.Failure("Trade session is not active.");
         }
 
-        // Validate and get Pokemon
         var pokemon = await GetPokemonByPosition(userId, (ulong)pokemonPosition);
         if (pokemon == null)
         {
             return TradeResult.Failure("You don't have that Pokemon or that Pokemon is currently in the market!");
         }
 
-        // Validate Pokemon is tradeable
         var validationResult = ValidatePokemonForTrade(pokemon, pokemonPosition);
         if (!validationResult.Success)
         {
             return validationResult;
         }
 
-        // Check if Pokemon is already in trade
         if (session.GetPokemonBy(userId).Any(p => p.PokemonId == pokemon.Id))
         {
             return TradeResult.Failure("You already have this Pokemon in your trade.");
         }
 
-        // Add to trade
         var entry = TradeEntry.ForPokemon(userId, pokemon);
         session.AddEntry(entry);
         await UpdateSessionInRedisAsync(session);
@@ -168,17 +160,14 @@ public class TradeService : INService
             return TradeResult.Failure("You need to add at least 1 credit!");
         }
 
-        // Check user has enough credits
         var userCredits = await GetUserCreditsAsync(userId);
         if (userCredits < credits)
         {
             return TradeResult.Failure("You don't have enough credits to cover that amount!");
         }
 
-        // Remove existing credits entry for this user
         session.RemoveEntriesBy(userId, TradeItemType.Credits);
 
-        // Add new credits entry
         var entry = TradeEntry.ForCredits(userId, credits);
         session.AddEntry(entry);
         await UpdateSessionInRedisAsync(session);
@@ -217,14 +206,12 @@ public class TradeService : INService
             return TradeResult.Failure("You need to add at least 1 token!");
         }
 
-        // Check user has enough tokens
         var userTokens = await GetUserTokensAsync(userId);
         if (!userTokens.TryGetValue(tokenType.GetDisplayName(), out var availableTokens) || availableTokens < count)
         {
             return TradeResult.Failure($"You don't have enough {tokenType.GetDisplayName()} tokens!");
         }
 
-        // Add tokens to existing entry or create new one
         var existingEntry = session.GetEntriesBy(userId)
             .FirstOrDefault(e => e.ItemType == TradeItemType.Tokens && e.TokenType == tokenType);
 
@@ -258,24 +245,21 @@ public class TradeService : INService
             return TradeResult.Failure("Trade session not found.");
         }
 
-        // Get Pokemon to find its ID
         var pokemon = await GetPokemonByPosition(userId, pokemonPosition);
         if (pokemon == null)
         {
             return TradeResult.Failure("Pokemon not found.");
         }
 
-        // Find and remove the entry - check if this specific Pokemon ID is in the trade
         var entry = session.GetPokemonBy(userId).FirstOrDefault(p => p.PokemonId == pokemon.Id);
         if (entry == null)
         {
-            // Show user which Pokemon are actually in their trade for debugging
             var pokemonInTrade = session.GetPokemonBy(userId).ToList();
             if (pokemonInTrade.Any())
             {
                 var tradeList = string.Join(", ", pokemonInTrade
                     .Where(e => e.PokemonId.HasValue)
-                    .Take(3) // Show max 3 for brevity
+                    .Take(3)
                     .Select(e => $"ID:{e.PokemonId}"));
                 return TradeResult.Failure($"Position {pokemonPosition} ({pokemon.PokemonName} ID:{pokemon.Id}) is not in your trade list! Current trade: {tradeList}");
             }
@@ -303,7 +287,6 @@ public class TradeService : INService
             return TradeResult.Failure("Trade session not found.");
         }
 
-        // Get user's Pokemon entries in the trade
         var userEntries = session.GetPokemonBy(userId).ToList();
         
         if (tradeEntryIndex >= (ulong)userEntries.Count)
@@ -312,8 +295,7 @@ public class TradeService : INService
         }
 
         var entry = userEntries[(int)tradeEntryIndex];
-        
-        // Get the Pokemon name for feedback
+
         var pokemonName = "Pokemon";
         if (entry.PokemonId.HasValue)
         {
@@ -357,8 +339,6 @@ public class TradeService : INService
             return TradeResult.Failure("Trade is already being processed.");
         }
 
-        // Fraud detection is now done during confirmation stage to prevent delays
-        // Only set status if not already processing (race condition protection)
         if (session.Status != TradeStatus.Processing)
         {
             session.Status = TradeStatus.Processing;
@@ -372,7 +352,6 @@ public class TradeService : INService
 
             await using var transaction = await db.BeginTransactionAsync();
 
-            // Revalidate all items before executing
             var revalidationResult = await RevalidateTradeItemsAsync(session);
             if (!revalidationResult.Success)
             {
@@ -381,21 +360,17 @@ public class TradeService : INService
                 return revalidationResult;
             }
 
-            // Execute the trade
             await TransferTokensAsync(session);
             await TransferCreditsAsync(session);
             var pokemonEvolutions = await TransferPokemonAsync(session);
 
             await transaction.CommitAsync();
 
-            // Mark session as completed
             session.Status = TradeStatus.Completed;
             await UpdateSessionInRedisAsync(session);
 
-            // Log the trade
             await LogTradeAsync(session);
 
-            // Send completion notifications
             await NotifyTradeCompletionAsync(session, pokemonEvolutions);
 
             return TradeResult.FromSuccess("Trade completed successfully!");
@@ -417,11 +392,8 @@ public class TradeService : INService
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task ClearOrphanedTradeLocksAsync(ulong userId)
     {
-        // Clear the current user's lock
         await _tradeLockService.RemoveTradeLockAsync(userId);
-        
-        // Find and clear any other users locked with this user
-        // Since we don't have the session, we need to check all active sessions
+
         var userSessions = _activeSessions.Values.Where(s => s.IsParticipant(userId)).ToList();
         
         foreach (var session in userSessions)
@@ -431,8 +403,7 @@ public class TradeService : INService
             {
                 await _tradeLockService.RemoveTradeLockAsync(otherParticipant.Value);
             }
-            
-            // Remove from active sessions
+
             _activeSessions.TryRemove(session.SessionId, out _);
         }
     }
@@ -444,13 +415,11 @@ public class TradeService : INService
     /// <returns>The trade session if found, null otherwise.</returns>
     public async Task<TradeSession?> GetTradeSessionAsync(Guid sessionId)
     {
-        // Try memory cache first
         if (_activeSessions.TryGetValue(sessionId, out var cachedSession))
         {
             return cachedSession;
         }
 
-        // Try Redis cache
         var database = _cache.Redis.GetDatabase();
         var sessionData = await database.StringGetAsync($"{TradeSessionPrefix}{sessionId}");
         
@@ -462,16 +431,14 @@ public class TradeService : INService
         var session = JsonSerializer.Deserialize<TradeSession>((string)sessionData!);
         if (session != null)
         {
-            // Check if session has expired
             if (DateTime.UtcNow > session.ExpiresAt)
             {
-                // Session expired, clean it up
                 await database.KeyDeleteAsync($"{TradeSessionPrefix}{sessionId}");
                 await _tradeLockService.RemoveTradeLockAsync(session.Player1Id);
                 await _tradeLockService.RemoveTradeLockAsync(session.Player2Id);
                 return null;
             }
-            
+
             _activeSessions[sessionId] = session;
         }
 
@@ -497,16 +464,13 @@ public class TradeService : INService
             return TradeResult.Failure("You are not a participant in this trade session.");
         }
 
-        // Remove trade locks for both participants
         await _tradeLockService.RemoveTradeLockAsync(session.Player1Id);
         await _tradeLockService.RemoveTradeLockAsync(session.Player2Id);
 
         session.Status = TradeStatus.Cancelled;
-        
-        // Update the interface to show cancelled state and disable buttons
+
         await UpdateCancelledTradeInterfaceAsync(session);
-        
-        // Remove from active sessions and Redis
+
         _activeSessions.TryRemove(sessionId, out _);
         var database = _cache.Redis.GetDatabase();
         await database.KeyDeleteAsync($"{TradeSessionPrefix}{sessionId}");
@@ -523,13 +487,11 @@ public class TradeService : INService
     {
         var summary = new StringBuilder();
 
-        // Player 1 offerings
         summary.AppendLine($"**<@{session.Player1Id}>** is offering:");
         await AppendUserOfferingsAsync(summary, session, session.Player1Id);
 
         summary.AppendLine("━━━━━━━━━━━━━━━━");
 
-        // Player 2 offerings
         summary.AppendLine($"**<@{session.Player2Id}>** is offering:");
         await AppendUserOfferingsAsync(summary, session, session.Player2Id);
 
@@ -579,8 +541,6 @@ public class TradeService : INService
         }
         catch
         {
-            // Message might have been deleted or we might not have permissions
-            // This is not a critical error, just continue
         }
     }
 
@@ -591,7 +551,6 @@ public class TradeService : INService
     /// <returns>True if the user has an active trade session, false otherwise.</returns>
     public async Task<bool> HasActiveTradeSessionAsync(ulong userId)
     {
-        // Check in-memory sessions first
         var hasInMemorySession = _activeSessions.Values.Any(s => 
             s.IsParticipant(userId) && 
             s.Status is TradeStatus.Active or TradeStatus.PendingConfirmation or TradeStatus.Processing);
@@ -601,8 +560,6 @@ public class TradeService : INService
             return true;
         }
 
-        // Check Redis for any sessions this user might be in
-        // This is more expensive but necessary for detecting broken states
         var database = _cache.Redis.GetDatabase();
         var server = _cache.Redis.GetServers().FirstOrDefault();
         if (server != null)
@@ -626,7 +583,6 @@ public class TradeService : INService
                 }
                 catch
                 {
-                    // If we can't deserialize or check a session, continue to the next one
                     continue;
                 }
             }
@@ -656,7 +612,6 @@ public class TradeService : INService
             .WithTimestamp(DateTimeOffset.UtcNow)
             .Build();
 
-        // Remove all buttons - trade is cancelled
         var components = new ComponentBuilder().Build();
 
         try
@@ -669,13 +624,18 @@ public class TradeService : INService
         }
         catch
         {
-            // Message might have been deleted or we might not have permissions
-            // This is not a critical error, just continue
         }
     }
 
     #region Private Helper Methods
 
+    /// <summary>
+    ///     Validates that both players exist (have started the game) and that neither is trade-locked.
+    ///     Also rejects self-trades.
+    /// </summary>
+    /// <param name="player1Id">The first participant's Discord ID.</param>
+    /// <param name="player2Id">The second participant's Discord ID.</param>
+    /// <returns>A successful <see cref="TradeResult"/> when both participants are eligible; otherwise a failure with a user-facing reason.</returns>
     private async Task<TradeResult> ValidateTradeParticipantsAsync(ulong player1Id, ulong player2Id)
     {
         if (player1Id == player2Id)
@@ -685,8 +645,7 @@ public class TradeService : INService
 
         await using var db = await _context.GetConnectionAsync();
         
-        // Check if users exist in database
-        var users = await db.Users
+                var users = await db.Users
             .Where(u => u.UserId == player1Id || u.UserId == player2Id)
             .ToListAsync();
 
@@ -696,8 +655,7 @@ public class TradeService : INService
             return TradeResult.Failure($"<@{missingUser}> has not started! Start with `/start` first!");
         }
 
-        // Check for trade locks
-        var tradeLocked = users.Where(u => u.TradeLock == true).ToList();
+                var tradeLocked = users.Where(u => u.TradeLock == true).ToList();
         if (tradeLocked.Any())
         {
             return TradeResult.Failure("A user is not allowed to trade.");
@@ -706,16 +664,20 @@ public class TradeService : INService
         return TradeResult.FromSuccess("Users validated for trading.");
     }
 
+    /// <summary>
+    ///     Determines whether a user is currently engaged in a live trade — either via an in-memory active session
+    ///     in a non-terminal state, or via the distributed trade lock held in Redis.
+    /// </summary>
+    /// <param name="userId">The Discord ID to check.</param>
+    /// <returns><c>true</c> if the user is in an ongoing trade; otherwise <c>false</c>.</returns>
     private async Task<bool> IsUserInTradeAsync(ulong userId)
     {
-        // Check in-memory sessions first
-        if (_activeSessions.Values.Any(s => s.IsParticipant(userId) && 
+        if (_activeSessions.Values.Any(s => s.IsParticipant(userId) &&
             s.Status is TradeStatus.Active or TradeStatus.PendingConfirmation or TradeStatus.Processing))
         {
             return true;
         }
 
-        // Check trade lock service
         return await _tradeLockService.IsUserTradeLockedAsync(userId);
     }
 
@@ -777,6 +739,11 @@ public class TradeService : INService
         return TradeResult.FromSuccess("Pokemon is valid for trading.");
     }
 
+    /// <summary>
+    ///     Reads the current MewCoin (credit) balance for a user.
+    /// </summary>
+    /// <param name="userId">The user's Discord ID.</param>
+    /// <returns>The user's credit balance, or 0 if the user record is missing.</returns>
     private async Task<ulong> GetUserCreditsAsync(ulong userId)
     {
         await using var db = await _context.GetConnectionAsync();
@@ -784,6 +751,12 @@ public class TradeService : INService
         return user?.MewCoins ?? 0;
     }
 
+    /// <summary>
+    ///     Loads and deserializes a user's type-token map. Returns an empty dictionary if the user has no
+    ///     stored tokens or the JSON is malformed.
+    /// </summary>
+    /// <param name="userId">The user's Discord ID.</param>
+    /// <returns>A dictionary keyed by Pokemon type name with current token counts.</returns>
     private async Task<Dictionary<string, int>> GetUserTokensAsync(ulong userId)
     {
         await using var db = await _context.GetConnectionAsync();
@@ -804,6 +777,12 @@ public class TradeService : INService
         }
     }
 
+    /// <summary>
+    ///     Serializes the trade session and writes it to Redis under the session prefix with a TTL one minute
+    ///     longer than the configured session timeout, ensuring the cache outlives the in-memory session.
+    /// </summary>
+    /// <param name="session">The session to persist.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task StoreSessionInRedisAsync(TradeSession session)
     {
         var database = _cache.Redis.GetDatabase();
@@ -823,12 +802,17 @@ public class TradeService : INService
         await StoreSessionInRedisAsync(session);
     }
 
+    /// <summary>
+    ///     Performs a final integrity check immediately before executing a trade: confirms each offered Pokemon
+    ///     is still owned by the offering player, and that credit/token balances cover what each side has staked.
+    ///     Guards against races where a player's state changed after they confirmed.
+    /// </summary>
+    /// <param name="session">The trade session whose entries should be revalidated.</param>
+    /// <returns>A successful <see cref="TradeResult"/> if every entry is still valid; otherwise a failure naming the offending player and reason.</returns>
     private async Task<TradeResult> RevalidateTradeItemsAsync(TradeSession session)
     {
         await using var db = await _context.GetConnectionAsync();
 
-        
-        // Revalidate Pokemon ownership and tradeability
         foreach (var pokemonEntry in session.TradeEntries.Where(e => e.ItemType == TradeItemType.Pokemon))
         {
             var pokemon = await db.UserPokemon.FirstOrDefaultAsync(p => p.Id == pokemonEntry.PokemonId);
@@ -845,7 +829,6 @@ public class TradeService : INService
             }
         }
 
-        // Revalidate credits
         foreach (var playerGroup in session.TradeEntries.Where(e => e.ItemType == TradeItemType.Credits).GroupBy(e => e.OfferedBy))
         {
             var totalCredits = playerGroup.Sum(e => (long)e.Credits);
@@ -856,7 +839,6 @@ public class TradeService : INService
             }
         }
 
-        // Revalidate tokens
         foreach (var playerGroup in session.TradeEntries.Where(e => e.ItemType == TradeItemType.Tokens).GroupBy(e => e.OfferedBy))
         {
             var userTokens = await GetUserTokensAsync(playerGroup.Key);
@@ -874,6 +856,12 @@ public class TradeService : INService
         return TradeResult.FromSuccess("All trade items revalidated successfully.");
     }
 
+    /// <summary>
+    ///     Applies token transfers between the two participants by adjusting each side's deserialized token map
+    ///     and writing both back to the database.
+    /// </summary>
+    /// <param name="session">The session whose token entries should be settled.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task TransferTokensAsync(TradeSession session)
     {
         await using var db = await _context.GetConnectionAsync();
@@ -881,7 +869,6 @@ public class TradeService : INService
         var p1Tokens = await GetUserTokensAsync(session.Player1Id);
         var p2Tokens = await GetUserTokensAsync(session.Player2Id);
 
-        // Transfer tokens from P1 to P2
         foreach (var tokenEntry in session.GetEntriesBy(session.Player1Id).Where(e => e.ItemType == TradeItemType.Tokens))
         {
             var tokenType = tokenEntry.TokenType!.Value.GetDisplayName();
@@ -889,7 +876,6 @@ public class TradeService : INService
             p2Tokens[tokenType] = p2Tokens.GetValueOrDefault(tokenType, 0) + tokenEntry.TokenCount;
         }
 
-        // Transfer tokens from P2 to P1
         foreach (var tokenEntry in session.GetEntriesBy(session.Player2Id).Where(e => e.ItemType == TradeItemType.Tokens))
         {
             var tokenType = tokenEntry.TokenType!.Value.GetDisplayName();
@@ -897,7 +883,6 @@ public class TradeService : INService
             p1Tokens[tokenType] = p1Tokens.GetValueOrDefault(tokenType, 0) + tokenEntry.TokenCount;
         }
 
-        // Update database
         await db.Users.Where(u => u.UserId == session.Player1Id)
             .Set(u => u.Tokens, JsonSerializer.Serialize(p1Tokens))
             .UpdateAsync();
@@ -907,6 +892,12 @@ public class TradeService : INService
             .UpdateAsync();
     }
 
+    /// <summary>
+    ///     Applies credit transfers between the two participants in a single round-trip per side. No-op if
+    ///     neither player offered any credits.
+    /// </summary>
+    /// <param name="session">The session whose credit entries should be settled.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task TransferCreditsAsync(TradeSession session)
     {
         await using var db = await _context.GetConnectionAsync();
@@ -929,15 +920,13 @@ public class TradeService : INService
     private async Task<List<(ulong PokemonId, string PokemonName, ulong NewOwnerId, string? Evolution)>> TransferPokemonAsync(TradeSession session)
     {
         var evolutions = new List<(ulong PokemonId, string PokemonName, ulong NewOwnerId, string? Evolution)>();
-        
-        // Transfer Pokemon from P1 to P2
+
         foreach (var pokemonEntry in session.GetPokemonBy(session.Player1Id))
         {
             var evolution = await TransferPokemonOwnershipAsync(pokemonEntry.PokemonId!.Value, session.Player1Id, session.Player2Id);
             evolutions.Add((pokemonEntry.PokemonId!.Value, pokemonEntry.Pokemon?.PokemonName ?? "Unknown", session.Player2Id, evolution));
         }
 
-        // Transfer Pokemon from P2 to P1
         foreach (var pokemonEntry in session.GetPokemonBy(session.Player2Id))
         {
             var evolution = await TransferPokemonOwnershipAsync(pokemonEntry.PokemonId!.Value, session.Player2Id, session.Player1Id);
@@ -947,9 +936,17 @@ public class TradeService : INService
         return evolutions;
     }
 
+    /// <summary>
+    ///     Reassigns ownership of a Pokemon to the receiving player by deleting the source ownership row,
+    ///     inserting a new one at the receiver's next available position, clearing the market-enlist flag,
+    ///     and finally checking whether the species triggers a trade-induced evolution.
+    /// </summary>
+    /// <param name="pokemonId">The ID of the Pokemon being transferred.</param>
+    /// <param name="fromUserId">The current owner's Discord ID.</param>
+    /// <param name="toUserId">The new owner's Discord ID.</param>
+    /// <returns>The evolved-form name if the trade triggered an evolution; otherwise <c>null</c>.</returns>
     private async Task<string?> TransferPokemonOwnershipAsync(ulong pokemonId, ulong fromUserId, ulong toUserId)
     {
-        // Remove from old owner
         await using var db = await _context.GetConnectionAsync();
 
         var oldOwnership = await db.UserPokemonOwnerships
@@ -962,12 +959,10 @@ public class TradeService : INService
                 .DeleteAsync();
         }
 
-        // Find next available position for new owner
         var maxPosition = await db.UserPokemonOwnerships
             .Where(o => o.UserId == toUserId)
             .MaxAsync(o => (ulong?)o.Position) ?? 0;
 
-        // Add to new owner
         var newOwnership = new UserPokemonOwnership
         {
             UserId = toUserId,
@@ -977,19 +972,22 @@ public class TradeService : INService
 
         await db.InsertAsync(newOwnership);
 
-        // Update Pokemon owner and reset market status
         await db.UserPokemon
             .Where(p => p.Id == pokemonId)
             .Set(p => p.MarketEnlist, false)
             .UpdateAsync();
-        
-        // Get the pokemon for evolution check
+
         var pokemon = await db.UserPokemon.FirstAsync(p => p.Id == pokemonId);
-        
-        // Check for trade evolution
+
         return await _evolutionService.CheckTradeEvolution(pokemon);
     }
 
+    /// <summary>
+    ///     Posts a formatted summary of the completed trade to the configured audit log channel.
+    ///     Failures are intentionally swallowed so logging issues don't fail the trade.
+    /// </summary>
+    /// <param name="session">The completed session to log.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task LogTradeAsync(TradeSession session)
     {
         try
@@ -1008,10 +1006,16 @@ public class TradeService : INService
         }
         catch
         {
-            // Logging errors are not critical
         }
     }
 
+    /// <summary>
+    ///     Hook for post-trade participant notifications (e.g. trade-evolution announcements).
+    ///     Failures are intentionally swallowed so notification issues don't fail the trade.
+    /// </summary>
+    /// <param name="session">The completed session.</param>
+    /// <param name="evolutions">The list of trade-induced evolutions produced by <see cref="TransferPokemonOwnershipAsync"/>.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task NotifyTradeCompletionAsync(TradeSession session, List<(ulong PokemonId, string PokemonName, ulong NewOwnerId, string? Evolution)> evolutions)
     {
         try
@@ -1028,14 +1032,20 @@ public class TradeService : INService
                         .Select(e => $"• {e.PokemonName} evolved into **{e.Evolution}**!"));
             }
 
-            // DM notifications removed per user request
         }
         catch
         {
-            // DM errors are not critical
         }
     }
 
+    /// <summary>
+    ///     Appends a markdown-formatted breakdown of one user's contributions (Pokemon, credits, tokens) to a
+    ///     trade-summary <see cref="StringBuilder"/>. Writes "Nothing Added" if the user offered nothing.
+    /// </summary>
+    /// <param name="summary">The summary buffer to append to.</param>
+    /// <param name="session">The trade session being summarized.</param>
+    /// <param name="userId">The Discord ID of the participant whose offerings should be rendered.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task AppendUserOfferingsAsync(StringBuilder summary, TradeSession session, ulong userId)
     {
         var userEntries = session.GetEntriesBy(userId).ToList();
@@ -1046,7 +1056,6 @@ public class TradeService : INService
             return;
         }
 
-        // Pokemon
         var pokemonEntries = userEntries.Where(e => e.ItemType == TradeItemType.Pokemon).ToList();
         if (pokemonEntries.Any())
         {
@@ -1057,14 +1066,12 @@ public class TradeService : INService
             }
         }
 
-        // Credits
         var creditsTotal = session.GetCreditsBy(userId);
         if (creditsTotal > 0)
         {
             summary.AppendLine($"**Credits**\n- `{creditsTotal:N0}`");
         }
 
-        // Tokens
         var tokens = session.GetTokensBy(userId);
         if (tokens.Any())
         {
@@ -1090,13 +1097,13 @@ public class TradeService : INService
             var userPokemon = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { o.Position, Pokemon = p })
-                .Where(x => x.Position > 1 && // Cannot trade position 1
-                           x.Pokemon.PokemonName != "Egg" && // Cannot trade eggs
-                           !x.Pokemon.Favorite && // Cannot trade favorited
-                           x.Pokemon.Tradable && // Must be tradable
-                           !x.Pokemon.MarketEnlist) // Cannot trade if on market
+                .Where(x => x.Position > 1 &&
+                           x.Pokemon.PokemonName != "Egg" &&
+                           !x.Pokemon.Favorite &&
+                           x.Pokemon.Tradable &&
+                           !x.Pokemon.MarketEnlist)
                 .OrderBy(x => x.Position)
-                .Take(20) // Limit to top 20 for select menu
+                .Take(20)
                 .Select(x => new TradeablePokemonInfo
                 {
                     Position = x.Position,

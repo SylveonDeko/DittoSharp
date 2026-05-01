@@ -28,7 +28,6 @@ public sealed class EventHandler : IDisposable
     {
         try
         {
-            // Unregister all events
             _client.MessageReceived -= ClientOnMessageReceived;
             _client.UserJoined -= ClientOnUserJoined;
             _client.UserLeft -= ClientOnUserLeft;
@@ -74,6 +73,10 @@ public sealed class EventHandler : IDisposable
         }
     }
 
+    /// <summary>
+    ///     Wires every Discord client event to its corresponding <c>ClientOn*</c> bridge so user code can
+    ///     subscribe to the strongly-typed events on this class instead.
+    /// </summary>
     private void RegisterEvents()
     {
         _client.MessageReceived += ClientOnMessageReceived;
@@ -122,6 +125,14 @@ public sealed class EventHandler : IDisposable
         _ = ExecuteHandlerAsync(handlerAction, eventName);
     }
 
+    /// <summary>
+    ///     Awaits a handler action and logs any exception (and inner exception) it throws, tagged with the
+    ///     originating event name. Used by <see cref="SafeExecuteHandler"/> to ensure subscriber faults
+    ///     never propagate back into the Discord gateway loop.
+    /// </summary>
+    /// <param name="handlerAction">The handler invocation to await.</param>
+    /// <param name="eventName">The event name used in error log messages.</param>
+    /// <returns>A task that completes once the handler finishes (succeeded or failed).</returns>
     private static async Task ExecuteHandlerAsync(Func<Task> handlerAction, string eventName)
     {
         try
@@ -130,13 +141,11 @@ public sealed class EventHandler : IDisposable
         }
         catch (Exception ex)
         {
-            // Use structured logging with Serilog
             Log.Error(ex,
                 "Error occurred in {EventName} handler: {ErrorMessage}",
                 eventName,
                 ex.Message);
 
-            // If there's an inner exception, log that too
             if (ex.InnerException != null)
                 Log.Error(ex.InnerException,
                     "Inner exception in {EventName} handler: {ErrorMessage}",
@@ -382,6 +391,13 @@ public sealed class EventHandler : IDisposable
 
     #region Event Handlers
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="InviteDeleted"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="InviteDeleted"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="InviteDeleted"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnInviteDeleted(SocketGuildChannel arg1, string arg2)
     {
         if (InviteDeleted is not null)
@@ -389,6 +405,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="InviteCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="InviteCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnInviteCreated(SocketInvite arg)
     {
         if (InviteCreated is not null)
@@ -396,6 +418,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="LeftGuild"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="LeftGuild"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnLeftGuild(SocketGuild arg)
     {
         if (LeftGuild is not null)
@@ -403,6 +431,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="GuildAvailable"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="GuildAvailable"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnGuildAvailable(SocketGuild arg)
     {
         if (GuildAvailable is not null)
@@ -410,6 +444,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="AuditLogCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="AuditLogCreated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="AuditLogCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnAuditLogCreated(SocketAuditLogEntry arg1, SocketGuild arg2)
     {
         if (AuditLogCreated is not null)
@@ -417,6 +458,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ThreadMemberLeft"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ThreadMemberLeft"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnThreadMemberLeft(SocketThreadUser arg)
     {
         if (ThreadMemberLeft is not null)
@@ -424,6 +471,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ThreadMemberJoined"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ThreadMemberJoined"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnThreadMemberJoined(SocketThreadUser arg)
     {
         if (ThreadMemberJoined is not null)
@@ -431,6 +484,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ThreadDeleted"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ThreadDeleted"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnThreadDeleted(Cacheable<SocketThreadChannel, ulong> arg)
     {
         if (ThreadDeleted is not null)
@@ -438,6 +497,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ThreadUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="ThreadUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="ThreadUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnThreadUpdated(Cacheable<SocketThreadChannel, ulong> arg1, SocketThreadChannel arg2)
     {
         if (ThreadUpdated is not null)
@@ -445,6 +511,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ThreadCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ThreadCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnThreadCreated(SocketThreadChannel arg)
     {
         if (ThreadCreated is not null)
@@ -452,6 +524,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="JoinedGuild"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="JoinedGuild"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnJoinedGuild(SocketGuild arg)
     {
         if (JoinedGuild is not null)
@@ -459,6 +537,14 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="PresenceUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="PresenceUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="PresenceUpdated"/> event subscribers.</param>
+    /// <param name="arg3">Forwarded to the <see cref="PresenceUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnPresenceUpdated(SocketUser arg1, SocketPresence arg2, SocketPresence arg3)
     {
         if (PresenceUpdated is not null)
@@ -466,6 +552,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserIsTyping"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserIsTyping"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserIsTyping"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserIsTyping(Cacheable<IUser, ulong> arg1, Cacheable<IMessageChannel, ulong> arg2)
     {
         if (UserIsTyping is not null)
@@ -473,6 +566,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="InteractionCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="InteractionCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnInteractionCreated(SocketInteraction arg)
     {
         if (InteractionCreated is not null)
@@ -480,6 +579,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ReactionsCleared"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="ReactionsCleared"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="ReactionsCleared"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnReactionsCleared(Cacheable<IUserMessage, ulong> arg1, Cacheable<IMessageChannel, ulong> arg2)
     {
         if (ReactionsCleared is not null)
@@ -487,6 +593,14 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ReactionRemoved"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="ReactionRemoved"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="ReactionRemoved"/> event subscribers.</param>
+    /// <param name="arg3">Forwarded to the <see cref="ReactionRemoved"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnReactionRemoved(Cacheable<IUserMessage, ulong> arg1, Cacheable<IMessageChannel, ulong> arg2,
         SocketReaction arg3)
     {
@@ -495,6 +609,14 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ReactionAdded"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="ReactionAdded"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="ReactionAdded"/> event subscribers.</param>
+    /// <param name="arg3">Forwarded to the <see cref="ReactionAdded"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnReactionAdded(Cacheable<IUserMessage, ulong> arg1, Cacheable<IMessageChannel, ulong> arg2,
         SocketReaction arg3)
     {
@@ -503,6 +625,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="RoleDeleted"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="RoleDeleted"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnRoleDeleted(SocketRole arg)
     {
         if (RoleDeleted is not null)
@@ -510,6 +638,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ChannelUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="ChannelUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="ChannelUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnChannelUpdated(SocketChannel arg1, SocketChannel arg2)
     {
         if (ChannelUpdated is not null)
@@ -517,6 +652,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ChannelDestroyed"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ChannelDestroyed"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnChannelDestroyed(SocketChannel arg)
     {
         if (ChannelDestroyed is not null)
@@ -524,6 +665,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="ChannelCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="ChannelCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnChannelCreated(SocketChannel arg)
     {
         if (ChannelCreated is not null)
@@ -531,6 +678,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserUpdated(SocketUser arg1, SocketUser arg2)
     {
         if (UserUpdated is not null)
@@ -538,6 +692,14 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserVoiceStateUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserVoiceStateUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserVoiceStateUpdated"/> event subscribers.</param>
+    /// <param name="arg3">Forwarded to the <see cref="UserVoiceStateUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserVoiceStateUpdated(SocketUser arg1, SocketVoiceState arg2, SocketVoiceState arg3)
     {
         if (UserVoiceStateUpdated is not null)
@@ -545,6 +707,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserUnbanned"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserUnbanned"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserUnbanned"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserUnbanned(SocketUser arg1, SocketGuild arg2)
     {
         if (UserUnbanned is not null)
@@ -552,6 +721,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserBanned"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserBanned"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserBanned"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserBanned(SocketUser arg1, SocketGuild arg2)
     {
         if (UserBanned is not null)
@@ -559,6 +735,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="MessagesBulkDeleted"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="MessagesBulkDeleted"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="MessagesBulkDeleted"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnMessagesBulkDeleted(IReadOnlyCollection<Cacheable<IMessage, ulong>> arg1,
         Cacheable<IMessageChannel, ulong> arg2)
     {
@@ -567,6 +750,14 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="MessageUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="MessageUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="MessageUpdated"/> event subscribers.</param>
+    /// <param name="arg3">Forwarded to the <see cref="MessageUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnMessageUpdated(Cacheable<IMessage, ulong> arg1, SocketMessage arg2, ISocketMessageChannel arg3)
     {
         if (MessageUpdated is not null)
@@ -574,6 +765,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="GuildMemberUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="GuildMemberUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="GuildMemberUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnGuildMemberUpdated(Cacheable<SocketGuildUser, ulong> arg1, SocketGuildUser arg2)
     {
         if (GuildMemberUpdated is not null)
@@ -581,6 +779,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="MessageDeleted"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="MessageDeleted"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="MessageDeleted"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnMessageDeleted(Cacheable<IMessage, ulong> arg1, Cacheable<IMessageChannel, ulong> arg2)
     {
         if (MessageDeleted is not null)
@@ -588,6 +793,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserLeft"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="UserLeft"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="UserLeft"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserLeft(SocketGuild arg1, SocketUser arg2)
     {
         if (UserLeft is not null)
@@ -595,6 +807,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="UserJoined"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="UserJoined"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnUserJoined(SocketGuildUser arg)
     {
         if (UserJoined is not null)
@@ -602,6 +820,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="MessageReceived"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg">Forwarded to the <see cref="MessageReceived"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnMessageReceived(SocketMessage arg)
     {
         if (MessageReceived is not null)
@@ -609,6 +833,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="EventCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="args">Forwarded to the <see cref="EventCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnEventCreated(SocketGuildEvent args)
     {
         if (EventCreated is not null)
@@ -616,6 +846,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="RoleUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="RoleUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="RoleUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnRoleUpdated(SocketRole arg1, SocketRole arg2)
     {
         if (RoleUpdated is not null)
@@ -623,6 +860,13 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="GuildUpdated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="arg1">Forwarded to the <see cref="GuildUpdated"/> event subscribers.</param>
+    /// <param name="arg2">Forwarded to the <see cref="GuildUpdated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnGuildUpdated(SocketGuild arg1, SocketGuild arg2)
     {
         if (GuildUpdated is not null)
@@ -630,6 +874,12 @@ public sealed class EventHandler : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Bridges the Discord client's underlying event to the strongly-typed <see cref="RoleCreated"/> event,
+    ///     dispatching to subscribers via <see cref="SafeExecuteHandler"/> so a failing subscriber cannot break the gateway loop.
+    /// </summary>
+    /// <param name="args">Forwarded to the <see cref="RoleCreated"/> event subscribers.</param>
+    /// <returns>A completed task; subscribers run on a background task.</returns>
     private Task ClientOnRoleCreated(SocketRole args)
     {
         if (RoleCreated is not null)

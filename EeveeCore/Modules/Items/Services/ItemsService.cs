@@ -192,7 +192,6 @@ public class ItemsService(
 
         await using var db = await dbContextProvider.GetConnectionAsync();
 
-        // Find the target Pokemon directly by its ID
         var targetPokemon = await db.UserPokemon
             .FirstOrDefaultAsync(p => p.Id == pokemonNumber && p.Owner == userId);
 
@@ -202,12 +201,10 @@ public class ItemsService(
         if (targetPokemon.HeldItem.ToLower() != "none")
             return new CommandResult { Message = "That Pokemon is already holding an item" };
 
-        // Remove item from source Pokemon
         await db.UserPokemon.Where(p => p.Id == pokemonNumber)
             .Set(p => p.HeldItem, "None")
             .UpdateAsync();
 
-        // Add item to target Pokemon
         await db.UserPokemon.Where(p => p.Id == targetPokemon.Id)
             .Set(p => p.HeldItem, prepResult.HeldItem)
             .UpdateAsync();
@@ -382,7 +379,6 @@ public class ItemsService(
             {
                 var updated = itemName switch
                 {
-                    // Validate itemName and set the appropriate property update
                     "calcium" => await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
                         .Set(p => p.SpecialAttackEv, x => x.SpecialAttackEv + 10).UpdateAsync(),
                     "carbos" => await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
@@ -744,7 +740,6 @@ public class ItemsService(
 
             var updated = itemName switch
             {
-                // Validate itemName and set the appropriate property update
                 "calcium" => await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
                     .Set(p => p.SpecialAttackEv, x => x.SpecialAttackEv + 10).UpdateAsync(),
                 "carbos" => await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
@@ -940,7 +935,6 @@ public class ItemsService(
                     Ephemeral = true
                 };
 
-            // Update chest count
             switch (ct)
             {
                 case "legend":
@@ -965,7 +959,7 @@ public class ItemsService(
                 .Set(u => u.MewCoins, u => u.MewCoins - price)
                 .UpdateAsync();
         }
-        else // redeems
+        else
         {
             if ((ulong)user.Redeems.GetValueOrDefault() < price)
                 return new CommandResult

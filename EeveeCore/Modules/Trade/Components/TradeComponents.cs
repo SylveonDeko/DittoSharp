@@ -49,7 +49,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
-            // Session not found - likely due to bot restart, clear trade locks for both participants
             await Service.ClearOrphanedTradeLocksAsync(ctx.User.Id);
             await FollowupAsync("Trade session not found (likely due to bot restart). Trade locks have been cleared for all participants. Please start a new trade.", ephemeral: true);
             return;
@@ -67,7 +66,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
         
-        // Prevent double-click race condition
         if (session.Status == TradeStatus.Processing)
         {
             await FollowupAsync("This trade is already being processed.", ephemeral: true);
@@ -80,7 +78,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Set user confirmation
         session.SetPlayerConfirmation(ctx.User.Id, true);
         session.Status = TradeStatus.PendingConfirmation;
 
@@ -93,16 +90,13 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         if (session.IsBothConfirmed())
         {
-            // Run fraud detection BEFORE trade execution to prevent delays
             var fraudResult = await _fraudDetectionService.AnalyzeTradeAsync(session);
             
             if (!fraudResult.IsAllowed)
             {
-                // Mark session as failed due to fraud detection
                 session.Status = TradeStatus.Failed;
                 await Service.UpdateSessionInRedisAsync(session);
                 
-                // Clear trade locks
                 await Service.ClearOrphanedTradeLocksAsync(session.Player1Id);
                 await Service.ClearOrphanedTradeLocksAsync(session.Player2Id);
                 
@@ -115,12 +109,10 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
                 await FollowupAsync(embed: embed);
                 return;
             }
-            
-            // Prevent race condition - mark as processing immediately
+
             session.Status = TradeStatus.Processing;
             await Service.UpdateSessionInRedisAsync(session);
-            
-            // Both players confirmed and fraud check passed, execute the trade
+
             var executeResult = await Service.ExecuteTradeAsync(sessionGuid);
             
             if (executeResult.Success)
@@ -133,7 +125,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
                 await FollowupAsync(embed: embed);
 
-                // Check for trade evolutions
                 await ProcessTradeEvolutionsAsync(session);
             }
             else
@@ -149,7 +140,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         }
         else
         {
-            // Waiting for other player
             var embed = new EmbedBuilder()
                 .WithTitle("✅ Trade Confirmed")
                 .WithDescription($"You have confirmed the trade. Waiting for <@{otherPlayerId}> to confirm...")
@@ -175,19 +165,15 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
-            // Session doesn't exist, clear any orphaned locks and exit without response
             await Service.ClearOrphanedTradeLocksAsync(ctx.User.Id);
             return;
         }
 
-        // Check if session is already cancelled or completed
         if (session.Status is TradeStatus.Cancelled or TradeStatus.Completed or TradeStatus.Failed)
         {
-            // Trade is already finished, no response needed
             return;
         }
 
@@ -217,7 +203,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -232,7 +217,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Try to get quick Pokemon select menu first
         var quickPokemonOptions = await GetQuickPokemonSelectOptions(ctx.User.Id);
         
         if (quickPokemonOptions.Any())
@@ -253,7 +237,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         }
         else
         {
-            // Fallback to modal if no tradeable Pokemon found
             await RespondWithModalAsync<TradeAddPokemonModal>($"trade_add_pokemon_modal:{sessionId}");
         }
     }
@@ -272,7 +255,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -306,7 +288,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
                 return;
             }
 
-            // Check if session exists, if not clear trade lock
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session == null)
             {
@@ -321,7 +302,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
                 return;
             }
 
-            // Create select menu for credit amounts
             var creditOptions = new List<SelectMenuOptionBuilder>
             {
                 new SelectMenuOptionBuilder()
@@ -413,7 +393,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -428,7 +407,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Create select menu for token types
         var tokenOptions = new List<SelectMenuOptionBuilder>();
         
         foreach (var tokenType in Enum.GetValues<TokenType>())
@@ -475,7 +453,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Show modal for token amount
         await RespondWithModalAsync<TradeAddTokenAmountModal>($"trade_add_token_amount:{sessionId}:{selectedTokenType}");
     }
 
@@ -493,7 +470,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -534,7 +510,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -555,7 +530,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added {credits:N0} credits to the trade.", ephemeral: true);
             
-            // Update the trade interface
             if (session != null)
             {
                 await Service.UpdateTradeInterfaceAsync(session);
@@ -581,7 +555,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -606,7 +579,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         var itemsDescription = "**Your items in this trade:**\n";
         
-        // Group items by type
         var pokemonItems = userEntries.Where(e => e.ItemType == TradeItemType.Pokemon).ToList();
         var creditsTotal = session.GetCreditsBy(ctx.User.Id);
         var tokens = session.GetTokensBy(ctx.User.Id);
@@ -660,7 +632,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Check if session exists, if not clear trade locks for both participants
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -683,7 +654,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Remove the last added item
         var lastItem = userEntries.Last();
         session.RemoveEntry(lastItem.Id);
 
@@ -696,8 +666,7 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         };
 
         await FollowupAsync($"Removed {itemDescription} from your trade.", ephemeral: true);
-        
-        // Update the trade interface
+
         await Service.UpdateTradeInterfaceAsync(session);
     }
 
@@ -726,7 +695,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
 
         if (selectedValue == "custom")
         {
-            // Show modal for custom amount
             await RespondWithModalAsync<TradeAddCreditsModal>($"trade_add_credits_modal:{sessionId}");
             return;
         }
@@ -745,7 +713,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added {credits:N0} credits to the trade.", ephemeral: true);
             
-            // Update the trade interface
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session != null)
             {
@@ -772,7 +739,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Check if session exists
         var session = await Service.GetTradeSessionAsync(sessionGuid);
         if (session == null)
         {
@@ -787,7 +753,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Directly open the custom credits modal
         await RespondWithModalAsync<TradeAddCreditsModal>($"trade_add_credits_modal:{sessionId}");
     }
 
@@ -820,7 +785,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added Pokemon at position {pokemonPosition} to the trade.", ephemeral: true);
             
-            // Update the trade interface
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session != null)
             {
@@ -861,7 +825,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
                 var displayName = CreatePokemonDisplayName(pokemon.PokemonName, pokemon.Nickname, pokemon.Position, pokemon.Level, pokemon.Shiny, pokemon.Radiant);
                 var description = $"Level {pokemon.Level} • Position #{pokemon.Position}";
                 
-                // Add special indicators to description
                 if (pokemon.Radiant == true)
                     description += " • Radiant 💎";
                 else if (pokemon.Shiny == true)
@@ -914,14 +877,12 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
     {
         try
         {
-            // Check evolutions for Pokemon that went to Player 1
             foreach (var pokemonEntry in session.GetPokemonBy(session.Player2Id))
             {
                 await _tradeEvolutionService.CheckAndProcessTradeEvolutionAsync(
                     pokemonEntry.PokemonId!.Value, session.Player1Id, ctx.Interaction);
             }
 
-            // Check evolutions for Pokemon that went to Player 2
             foreach (var pokemonEntry in session.GetPokemonBy(session.Player1Id))
             {
                 await _tradeEvolutionService.CheckAndProcessTradeEvolutionAsync(
@@ -930,7 +891,6 @@ public class TradeComponents : EeveeCoreSlashModuleBase<TradeService>
         }
         catch (Exception ex)
         {
-            // Evolution errors should not break the trade completion message
             Log.Information($"Error processing trade evolutions: {ex.Message}");
         }
     }

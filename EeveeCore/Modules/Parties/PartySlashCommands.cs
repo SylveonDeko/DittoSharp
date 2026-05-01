@@ -21,7 +21,6 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
     [SlashCommand("setup", "Menu for party configuration")]
     public async Task PartySetup([Autocomplete(typeof(PartyNameAutocompleteHandler))] string partyName)
     {
-        // Fetches party information and creates a party configuration menu
         var (description, party, partyPokeIds, pokemonIndices, pokemonNames) =
             await Service.GetPartySetupData(ctx.User.Id, partyName);
 
@@ -37,10 +36,8 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
             .WithColor(new Color(0xDD, 0x00, 0xDD))
             .WithFooter("Use the Buttons below to set your party");
 
-        // Create component builder with party buttons
         var components = new ComponentBuilder();
 
-        // Add slot buttons - Row 1
         components.WithButton(customId: $"party:slot:1:{partyName}", emote: new Emoji("<:1:1013539737014907030>"),
             label: pokemonNames![0]!, style: ButtonStyle.Secondary, row: 0);
         components.WithButton(customId: $"party:slot:2:{partyName}", emote: new Emoji("<:2:1013539739263041618>"),
@@ -48,7 +45,6 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
         components.WithButton(customId: $"party:slot:3:{partyName}", emote: new Emoji("<:3:1013539741502812310>"),
             label: pokemonNames![2]!, style: ButtonStyle.Secondary, row: 0);
 
-        // Add slot buttons - Row 2
         components.WithButton(customId: $"party:slot:4:{partyName}", emote: new Emoji("<:4:1013539744027783208>"),
             label: pokemonNames![3]!, style: ButtonStyle.Secondary, row: 1);
         components.WithButton(customId: $"party:slot:5:{partyName}", emote: new Emoji("<:5:1013539745692909740>"),
@@ -56,7 +52,6 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
         components.WithButton(customId: $"party:slot:6:{partyName}", emote: new Emoji("<:6:1013539747517444208>"),
             label: pokemonNames![5]!, style: ButtonStyle.Secondary, row: 1);
 
-        // Add close button - Row 3
         components.WithButton(customId: "party:close", label: "Close Menu",
             emote: new Emoji("<:delete:1051241645447848009>"), style: ButtonStyle.Danger, row: 2);
 
@@ -166,7 +161,6 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
     {
         partyName = partyName.ToLower();
 
-        // Check if the party exists
         var partyExists = await Service.DoesPartyExist(ctx.User.Id, partyName);
 
         if (!partyExists)
@@ -175,7 +169,6 @@ public class PartyModule : EeveeCoreSlashModuleBase<PartyService>
             return;
         }
 
-        // Confirm deletion
         var confirmed =
             await PromptUserConfirmAsync($"Are you sure you want to deregister party `{partyName}`?", ctx.User.Id);
 
@@ -254,7 +247,6 @@ public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
     [ComponentInteraction("party:slot:*:*")]
     public async Task HandlePartySlot(string slotNumber, string partyName)
     {
-        // Create and show modal for adding Pokémon
         var modal = new ModalBuilder()
             .WithTitle("Add a pokemon to your party")
             .WithCustomId($"party:add:{slotNumber}:{partyName}")
@@ -292,7 +284,6 @@ public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
                 return;
             }
 
-            // Get updated party details and create updated UI
             var (description, updatedParty, partyPokeIds, pokemonIndices, pokemonNames) =
                 await Service.GetPartySetupData(ctx.User.Id, partyName);
 
@@ -302,10 +293,8 @@ public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
                 .WithColor(new Color(0xDD, 0x00, 0xDD))
                 .WithFooter($"Updated Pokemon Party | Party: {partyName}");
 
-            // Create component builder with updated party buttons
             var components = new ComponentBuilder();
 
-            // Add slot buttons - Row 1
             components.WithButton(customId: $"party:slot:1:{partyName}", emote: new Emoji("<:1:1013539737014907030>"),
                 label: pokemonNames![0]!, style: ButtonStyle.Secondary, row: 0);
             components.WithButton(customId: $"party:slot:2:{partyName}", emote: new Emoji("<:2:1013539739263041618>"),
@@ -313,7 +302,6 @@ public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
             components.WithButton(customId: $"party:slot:3:{partyName}", emote: new Emoji("<:3:1013539741502812310>"),
                 label: pokemonNames![2]!, style: ButtonStyle.Secondary, row: 0);
 
-            // Add slot buttons - Row 2
             components.WithButton(customId: $"party:slot:4:{partyName}", emote: new Emoji("<:4:1013539744027783208>"),
                 label: pokemonNames![3]!, style: ButtonStyle.Secondary, row: 1);
             components.WithButton(customId: $"party:slot:5:{partyName}", emote: new Emoji("<:5:1013539745692909740>"),
@@ -321,7 +309,6 @@ public class PartyInteractionModule : EeveeCoreSlashModuleBase<PartyService>
             components.WithButton(customId: $"party:slot:6:{partyName}", emote: new Emoji("<:6:1013539747517444208>"),
                 label: pokemonNames![5]!, style: ButtonStyle.Secondary, row: 1);
 
-            // Add close button - Row 3
             components.WithButton(customId: "party:close", label: "Close Menu",
                 emote: new Emoji("<:delete:1051241645447848009>"), style: ButtonStyle.Danger, row: 2);
 

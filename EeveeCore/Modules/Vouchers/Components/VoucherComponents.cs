@@ -129,7 +129,6 @@ public class VoucherInteractionModule(VoucherService voucherService)
                 return;
             }
 
-            // Get the target guild and forum channel
             var guild = await ctx.Client.GetGuildAsync(VoucherConstants.VoucherGuildId);
             if (guild == null)
             {
@@ -154,7 +153,6 @@ public class VoucherInteractionModule(VoucherService voucherService)
                 return;
             }
 
-            // Create the request embed
             var requestEmbed = new EmbedBuilder()
                 .WithTitle("New Voucher Request")
                 .WithDescription($"Requested by {ctx.User.Mention}")
@@ -166,23 +164,19 @@ public class VoucherInteractionModule(VoucherService voucherService)
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build();
 
-            // Create status management view
             var statusView = new StatusManagementView();
 
-            // Create the forum thread
             var thread = await forumChannel.CreatePostAsync(
                 $"Voucher Request - {ctx.User.Username}",
                 embed: requestEmbed,
                 components: statusView.Build());
 
-            // Save the request to database
             await voucherService.CreateVoucherRequestAsync(
                 ctx.User.Id,
                 formData,
                 thread.Id,
                 thread.Id);
 
-            // Clean up form data
             VoucherFormManager.RemoveFormData(formId);
 
             await ctx.Interaction.ModifyOriginalResponseAsync(x =>
@@ -302,7 +296,6 @@ public class VoucherInteractionModule(VoucherService voucherService)
         {
             await DeferAsync(ephemeral: true);
 
-            // Check if user has permission to manage voucher requests
             if (!VoucherConstants.AllowedManagerIds.Contains(ctx.User.Id))
             {
                 await ctx.Interaction.FollowupAsync("You don't have permission to manage voucher requests.", ephemeral: true);
@@ -417,13 +410,11 @@ public class VoucherInteractionModule(VoucherService voucherService)
     {
         var builder = new ComponentBuilder();
 
-        // First row - main form fields
         builder.WithButton("🎯 Pokemon", $"voucher:pokemon:{formId}", ButtonStyle.Primary)
                .WithButton("🎨 Appearance", $"voucher:appearance:{formId}", ButtonStyle.Primary)
                .WithButton("💰 Payment", $"voucher:payment:{formId}", ButtonStyle.Primary)
                .WithButton("👨‍🎨 Artist", $"voucher:artist:{formId}", ButtonStyle.Secondary);
 
-        // Second row - submit button
         builder.WithButton("📤 Submit Request", $"voucher:submit:{formId}", ButtonStyle.Success, row: 1);
 
         return builder.Build();
@@ -512,8 +503,6 @@ public static class VoucherFormManager
     {
         lock (Lock)
         {
-            // In a real implementation, you'd track creation times
-            // For now, we'll just clear all forms older than the timeout
             FormData.Clear();
         }
     }

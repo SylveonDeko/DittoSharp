@@ -17,10 +17,8 @@ namespace EeveeCore.Modules.Breeding.Services;
 /// </summary>
 public class BreedingService : INService
 {
-    // Dictionary to track users with auto-breeding enabled
     private readonly Dictionary<ulong, int?> _autoRedo = new();
 
-    // Dictionary to track auto-breeding attempts
     private readonly Dictionary<(ulong UserId, int MaleId), int> _breedRetries = new();
     private readonly LinqToDbConnectionProvider _dbContextProvider;
     private readonly IMongoService _mongoService;
@@ -67,9 +65,7 @@ public class BreedingService : INService
         _redisCache = redisCache;
         _achievementService = achievementService;
         _missionService = missionService;
-        new HttpClient();
 
-        // Initialize the cache for breed cooldowns
         _ = InitializeAsync();
     }
 
@@ -102,7 +98,6 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Clear all breeding female flags for this user
         await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.IsBreedingFemale)
             .Set(o => o.IsBreedingFemale, false)
@@ -180,8 +175,6 @@ public class BreedingService : INService
         {
             await using var db = await _dbContextProvider.GetConnectionAsync();
 
-            // Single optimized update: set all to false first, then set specified ones to true
-            // This is faster than separate operations and avoids transaction issues
             await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .Set(o => o.IsBreedingFemale, o => femalePositions.Contains(o.Position))
@@ -208,7 +201,7 @@ public class BreedingService : INService
         return await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.IsBreedingFemale)
             .OrderBy(o => o.Position)
-            .Select(o => o.Position + 1) // Convert to 1-based positions
+            .Select(o => o.Position + 1)
             .ToListAsync();
     }
 
@@ -224,7 +217,7 @@ public class BreedingService : INService
         var firstFemale = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.IsBreedingFemale)
             .OrderBy(o => o.Position)
-            .Select(o => o.Position + 1) // Convert to 1-based position
+            .Select(o => o.Position + 1)
             .FirstOrDefaultAsync();
 
         return firstFemale == 0 ? null : firstFemale;
@@ -239,7 +232,6 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Find the first breeding female (by position order)
         var firstFemale = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.IsBreedingFemale)
             .OrderBy(o => o.Position)
@@ -247,7 +239,6 @@ public class BreedingService : INService
 
         if (firstFemale == null) return;
 
-        // Remove the breeding female flag
         await db.UserPokemonOwnerships
             .Where(o => o.Id == firstFemale.Id)
             .Set(o => o.IsBreedingFemale, false)
@@ -300,7 +291,6 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Check cooldown
         var breedResetResult =
             await _redisCache.Redis.GetDatabase().ExecuteAsync("HMGET", "breedcooldowns", userId.ToString());
         double cooldownTime = 0;
@@ -319,14 +309,12 @@ public class BreedingService : INService
             };
         }
 
-        // Set cooldown
         await _redisCache.Redis.GetDatabase().ExecuteAsync(
             "HMSET",
             "breedcooldowns",
             userId.ToString(),
             (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 10).ToString());
 
-        // Basic validation
         if (maleId == femaleId)
         {
             await ResetCooldownAsync(userId);
@@ -337,7 +325,6 @@ public class BreedingService : INService
             };
         }
 
-        // Fetch the user
         var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         if (user == null)
         {
@@ -349,7 +336,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check if the user has enough daycare slots
         var pokemonCount = await db.UserPokemon
             .CountAsync(p => p.Owner == userId && p.PokemonName == "Egg");
 
@@ -363,7 +349,6 @@ public class BreedingService : INService
             };
         }
 
-        // Get the male and female Pokémon by position
         var malePosition = maleId - 1;
         var femalePosition = femaleId - 1;
 
@@ -383,7 +368,6 @@ public class BreedingService : INService
             };
         }
 
-        // Get the Pokémon details
         var fatherDetails = await db.UserPokemon
             .FirstOrDefaultAsync(p => p.Id == maleOwnership.PokemonId);
 
@@ -400,7 +384,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check if the Pokémon are eggs
         if (fatherDetails.PokemonName == "Egg" || motherDetails.PokemonName == "Egg")
         {
             await ResetCooldownAsync(userId);
@@ -411,7 +394,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check if the Pokémon are Dittos
         if (fatherDetails.PokemonName == "Ditto" && motherDetails.PokemonName == "Ditto")
         {
             await ResetCooldownAsync(userId);
@@ -422,7 +404,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check if the father is male or a Ditto
         if (fatherDetails.Gender != "-m" && fatherDetails.Gender != "-x" && fatherDetails.PokemonName != "Ditto")
         {
             await ResetCooldownAsync(userId);
@@ -433,7 +414,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check if the Pokémon are breedable
         if (!fatherDetails.Breedable || !motherDetails.Breedable)
         {
             await ResetCooldownAsync(userId);
@@ -445,7 +425,6 @@ public class BreedingService : INService
             };
         }
 
-        // Ditto is always the father since mother passes the pokename
         if (motherDetails.PokemonName == "Ditto") (motherDetails, fatherDetails) = (fatherDetails, motherDetails);
 
         var motherRecord = await db.Mothers
@@ -453,13 +432,11 @@ public class BreedingService : INService
 
         if (motherRecord != null)
         {
-            // Check if the cooldown period has elapsed
-            var cooldownHours = 2; // 2-hour cooldown
+            var cooldownHours = 2;
             var cooldownEnds = motherRecord.EntryTime?.AddHours(cooldownHours) ?? DateTime.UtcNow;
 
             if (DateTime.UtcNow < cooldownEnds)
             {
-                // Still on cooldown
                 var timeRemaining = cooldownEnds - DateTime.UtcNow;
                 await ResetCooldownAsync(userId);
                 return new BreedingResult
@@ -470,12 +447,10 @@ public class BreedingService : INService
             }
             else
             {
-                // Cooldown expired, remove the entry
                 await db.DeleteAsync(motherRecord);
             }
         }
 
-        // Get parent Pokémon data for breeding
         var father = await GetParentAsync(fatherDetails);
         var mother = await GetParentAsync(motherDetails);
 
@@ -499,7 +474,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check egg groups
         if (_undiscoveredEggGroups.Any(g => father.EggGroups.Contains(g)) ||
             _undiscoveredEggGroups.Any(g => mother.EggGroups.Contains(g)))
         {
@@ -511,7 +485,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check IV limits (preventing hexas)
         var fatherTotalIv = father.Hp + father.Attack + father.Defense + father.SpAtk + father.SpDef + father.Speed;
         var motherTotalIv = mother.Hp + mother.Attack + mother.Defense + mother.SpAtk + mother.SpDef + mother.Speed;
 
@@ -525,7 +498,6 @@ public class BreedingService : INService
             };
         }
 
-        // Check compatibility
         var breedable = father.EggGroups.Any(g => mother.EggGroups.Contains(g));
         var dittoed = father.Name == "Ditto" || mother.Name == "Ditto";
         var manaphied = (father.Name == "Manaphy" || father.Name == "Phione" ||
@@ -541,16 +513,13 @@ public class BreedingService : INService
             };
         }
 
-        // Get user's inventory
         var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ??
                         new Dictionary<string, int>();
 
-        // Get shiny multiplier and determine if child will be shiny
         var shinyMultiplier = inventory.GetValueOrDefault("shiny-multiplier", 0);
         var shinyThreshold = 8000 - (int)(8000 * (shinyMultiplier / 100.0));
         var isShiny = _random.Next(0, shinyThreshold) == 0;
 
-        // Generate child
         var (child, counter, inheritedStats) = await GetChildAsync(mother, father, isShiny);
 
         if (child == null)
@@ -563,19 +532,16 @@ public class BreedingService : INService
             };
         }
 
-        // Calculate chance of success
         if (fatherTotalIv < 40) fatherTotalIv = 120;
         if (motherTotalIv < 40) motherTotalIv = 120;
 
         var chance = (double)(Math.Min(100, father.CaptureRate) + Math.Min(100, mother.CaptureRate)) /
                      ((fatherTotalIv + motherTotalIv) * 3);
 
-        // Apply breeding multiplier
         var breedMultiplier = inventory.GetValueOrDefault("breeding-multiplier", 0);
-        var multiplier = breedMultiplier / 50.0 + 1.0; // 1.0 - 2.0
+        var multiplier = breedMultiplier / 50.0 + 1.0;
         chance *= multiplier;
 
-        // Determine if breeding is successful
         var success = _random.NextDouble() < chance;
 
         if (!success)
@@ -587,16 +553,12 @@ public class BreedingService : INService
                 Child = null
             };
 
-        // Check for shadow hunt
         var isShadow = false;
         if (!isShiny)
-            // This would be a call to a service
             isShadow = await CheckShadowHuntAsync(userId, child.Name);
 
-        // If successful, add egg to user's Pokémon
         await InsertEggAsync(userId, child, counter, isShadow);
 
-        // Add mother to cooldown table
         await db.InsertAsync(new Mother
         {
             PokemonId = motherDetails.Id,
@@ -604,7 +566,6 @@ public class BreedingService : INService
             EntryTime = DateTime.UtcNow
         });
 
-        // Update achievements
         if (isShadow)
             await db.Achievements
                 .Where(a => a.UserId == userId)
@@ -621,12 +582,10 @@ public class BreedingService : INService
                 .Set(a => a.BreedSuccess, a => a.BreedSuccess + 1)
                 .UpdateAsync();
 
-        // Comprehensive achievement tracking with IV analysis and milestones
         try
         {
             var childIvs = new[] { child.Hp, child.Attack, child.Defense, child.SpAtk, child.SpDef, child.Speed };
             
-            // Track comprehensive breeding achievements including milestones and rewards
             await _achievementService.TrackBreedingAsync(userId, childIvs, isShiny, isShadow);
         }
         catch (Exception ex)
@@ -655,32 +614,26 @@ public class BreedingService : INService
     {
         var pokemonName = pokemon.PokemonName.ToLower();
 
-        // Get PFile for the Pokémon
         var pokemonPFile = await _mongoService.PFile.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
 
         if (pokemonPFile == null && pokemonName.Contains("alola"))
-            // Try without alola suffix
             pokemonPFile = await _mongoService.PFile
                 .Find(f => f.Identifier == pokemonName.Substring(0, pokemonName.Length - 5)).FirstOrDefaultAsync();
 
         if (pokemonPFile == null) return null;
 
-        // Get the form info
         var formInfo = await _mongoService.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
         if (formInfo == null) return null;
 
-        // Get abilities
         var abilityIds = new List<int>();
         await _mongoService.PokeAbilities
             .Find(a => a.PokemonId == formInfo.PokemonId)
             .ForEachAsync(a => abilityIds.Add(a.AbilityId));
 
-        // Get egg groups
         var eggGroupsRecord =
             await _mongoService.EggGroups.Find(e => e.SpeciesId == formInfo.PokemonId).FirstOrDefaultAsync();
-        var eggGroups = eggGroupsRecord?.Groups?.ToList() ?? [1]; // Default to 'Monster' group
+        var eggGroups = eggGroupsRecord?.Groups?.ToList() ?? [1];
 
-        // Get base Pokémon in evolution chain
         var pokemonName2 = pokemonPFile.Identifier;
         var currentPFile = pokemonPFile;
 
@@ -691,8 +644,6 @@ public class BreedingService : INService
             if (currentPFile == null) break;
             pokemonName2 = currentPFile.Identifier;
         }
-
-        // Handle manaphy/phione special case
         if (pokemonName2 == "manaphy")
         {
             var phione = await _mongoService.PFile.Find(f => f.Identifier == "phione").FirstOrDefaultAsync();
@@ -703,7 +654,6 @@ public class BreedingService : INService
             }
         }
 
-        // Create the parent Pokémon
         return new BreedingPokemon
         {
             Name = pokemon.PokemonName,
@@ -717,7 +667,7 @@ public class BreedingService : INService
             Level = pokemon.Level,
             Shiny = pokemon.Shiny.GetValueOrDefault(),
             HeldItem = pokemon.HeldItem,
-            Happiness = 0, // Default to 0 for breeding
+            Happiness = 0,
             AbilityId = abilityIds.Count > pokemon.AbilityIndex
                 ? abilityIds[pokemon.AbilityIndex]
                 : abilityIds.FirstOrDefault(),
@@ -738,13 +688,11 @@ public class BreedingService : INService
     private async Task<(BreedingPokemon? Child, int Counter, List<string>? InheritedStats)> GetChildAsync(
         BreedingPokemon mother, BreedingPokemon father, bool shiny)
     {
-        // Determine nature
         var natures = new List<string>();
         if (father.HeldItem == "everstone") natures.Add(father.Nature);
         if (mother.HeldItem == "everstone") natures.Add(mother.Nature);
         var nature = natures.Count > 0 ? natures[_random.Next(natures.Count)] : _natures[_random.Next(_natures.Count)];
 
-        // Determine base stats
         var threshold = _random.Next(0, 30) == 0 ? 25 : 22;
 
         var hp = _random.Next(0, threshold + 1);
@@ -754,13 +702,11 @@ public class BreedingService : INService
         var specialDefense = _random.Next(0, threshold + 1);
         var speed = _random.Next(0, threshold + 1);
 
-        // Get species info for the mother
         var identifier = mother.Name.ToLower();
         var pokemonPFile = await _mongoService.PFile.Find(f => f.Identifier == identifier).FirstOrDefaultAsync();
 
         if (pokemonPFile == null) return (null, 0, null);
 
-        // Get the base evolution
         while (pokemonPFile.EvolvesFromSpeciesId.HasValue)
         {
             pokemonPFile = await _mongoService.PFile.Find(f => f.PokemonId == pokemonPFile.EvolvesFromSpeciesId.Value)
@@ -768,7 +714,6 @@ public class BreedingService : INService
             if (pokemonPFile == null) return (null, 0, null);
         }
 
-        // Handle manaphy -> phione case
         if (pokemonPFile.Identifier == "manaphy")
             pokemonPFile = await _mongoService.PFile.Find(f => f.Identifier == "phione").FirstOrDefaultAsync();
 
@@ -777,20 +722,17 @@ public class BreedingService : INService
         var id = pokemonPFile.PokemonId;
         var counter = pokemonPFile.HatchCounter.GetValueOrDefault() * 2;
 
-        // Get ability IDs
         var abilityIds = new List<int>();
         await _mongoService.PokeAbilities
             .Find(a => a.PokemonId == id)
             .ForEachAsync(a => abilityIds.Add(a.AbilityId));
 
-        // Get egg groups
         var eggGroups = await _mongoService.EggGroups
             .Find(e => e.SpeciesId == id)
             .FirstOrDefaultAsync();
 
         if (eggGroups == null) eggGroups = new EggGroup { Groups = [1] };
 
-        // Inherit stats from parents
         var stats = new List<string> { "hp", "attack", "defense", "spatk", "spdef", "speed" };
         var parents = new List<BreedingPokemon> { father, mother };
         var inheritedStats = stats.OrderBy(_ => _random.Next()).Take(2).ToList();
@@ -823,7 +765,6 @@ public class BreedingService : INService
             }
         }
 
-        // Handle destiny knot
         var knotted = false;
         var numStats = 0;
         BreedingPokemon? knotParent = null;
@@ -857,10 +798,8 @@ public class BreedingService : INService
 
         if (knotted)
         {
-            // Remove already inherited stats
             var remainingStats = stats.Except(inheritedStats).ToList();
 
-            // Select additional stats to inherit
             knotStats = remainingStats.OrderBy(_ => _random.Next()).Take(numStats).ToList();
 
             foreach (var stat in knotStats)
@@ -887,10 +826,8 @@ public class BreedingService : INService
                 }
         }
 
-        // Calculate steps (for evolution)
         var steps = counter * 257 / 20;
 
-        // Determine gender
         string gender;
 
         if (name.Contains("nidoran"))
@@ -900,13 +837,12 @@ public class BreedingService : INService
         else if (name.ToLower() == "volbeat")
             gender = "-m";
         else if (genderRate == -1)
-            gender = "-x"; // Genderless
+            gender = "-x";
         else if (_random.Next(0, 8) < genderRate)
             gender = "-f";
         else
             gender = "-m";
 
-        // Determine ability
         int abilityIdx;
         var motherAbilityIds = mother.AbilityIds.Select(id => abilityIds.IndexOf(id)).Where(idx => idx >= 0).ToList();
 
@@ -915,7 +851,6 @@ public class BreedingService : INService
         else
             abilityIdx = _random.Next(abilityIds.Count);
 
-        // Create the child Pokémon
         var child = new BreedingPokemon
         {
             Name = name.Capitalize(),
@@ -937,7 +872,6 @@ public class BreedingService : INService
             CaptureRate = 0
         };
 
-        // Combine inherited stats lists
         var allInheritedStats = inheritedStats.Concat(knotStats).ToList();
 
         return (child, counter, allInheritedStats);
@@ -962,10 +896,9 @@ public class BreedingService : INService
 
         if (user.Hunt.ToLower() == pokemonName.ToLower())
         {
-            // Calculate shadow chance based on chain
             var chain = user.Chain;
-            var baseChance = 0.001; // 0.1% base chance
-            var bonusChance = chain * 0.001; // 0.1% per chain level
+            var baseChance = 0.001;
+            var bonusChance = chain * 0.001;
 
             return _random.NextDouble() < baseChance + bonusChance;
         }
@@ -987,7 +920,6 @@ public class BreedingService : INService
         {
             await using var db = await _dbContextProvider.GetConnectionAsync();
 
-            // Create new egg Pokémon
             var eggPokemon = new Database.Linq.Models.Pokemon.Pokemon
             {
                 PokemonName = "Egg",
@@ -1030,23 +962,20 @@ public class BreedingService : INService
                 Timestamp = DateTime.UtcNow
             };
 
-            // Save the egg to get its ID (no transaction to avoid LinqToDB ID issues)
             eggPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(eggPokemon);
 
-            // Find the highest position for this user's Pokémon
             var highestPosition = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.Position)
                 .Select(o => (int?)o.Position)
                 .FirstOrDefaultAsync() ?? -1;
 
-            // Add a new ownership entry with the next position
             var ownership = new UserPokemonOwnership
             {
                 UserId = userId,
                 PokemonId = eggPokemon.Id,
                 Position = (ulong)(highestPosition + 1),
-                IsBreedingFemale = false // Eggs are not breeding females
+                IsBreedingFemale = false
             };
 
             await db.InsertAsync(ownership);
@@ -1054,7 +983,7 @@ public class BreedingService : INService
         catch (Exception e)
         {
             Log.Error(e, "Error inserting egg for user {UserId}", userId);
-            throw; // Re-throw so the caller can handle the error properly
+            throw;
         }
     }
 
@@ -1067,7 +996,6 @@ public class BreedingService : INService
     /// <returns>A byte array containing the image data.</returns>
     public async Task<byte[]> CreateSuccessImageAsync(BreedingResult result, string fatherName, string motherName)
     {
-        // Determine image path based on result
         string imagePath;
         if (result.IsShadow)
             imagePath = Path.Combine("data", "images", "eggstatsshadow2.png");
@@ -1076,20 +1004,17 @@ public class BreedingService : INService
         else
             imagePath = Path.Combine("data", "images", "eggstats.png");
 
-        // Load image with SkiaSharp
         if (!File.Exists(imagePath))
         {
             throw new FileNotFoundException($"Egg stats image not found at: {imagePath}");
         }
-        
+
         using var bitmap = SKBitmap.Decode(imagePath);
         using var surface = SKSurface.Create(new SKImageInfo(bitmap.Width, bitmap.Height));
         var canvas = surface.Canvas;
 
-        // Draw background image
         canvas.DrawBitmap(bitmap, 0, 0);
 
-        // Create font + paint objects for different colors and styles
         var arialBold = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Bold, SKFontStyleWidth.Normal,
             SKFontStyleSlant.Upright);
         using var font35 = new SKFont(arialBold, 35);
@@ -1102,7 +1027,6 @@ public class BreedingService : INService
         var whitePaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
         var blackPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
 
-        // Get child stats
         var statsValues = new[]
         {
             result!.Child!.Hp,
@@ -1113,7 +1037,6 @@ public class BreedingService : INService
             result.Child.Speed
         };
 
-        // Format inherited stats
         var inheritedStats = result.InheritedStats.Count > 5
             ? result.InheritedStats.GetRange(0, 5)
             : [..result.InheritedStats];
@@ -1126,7 +1049,6 @@ public class BreedingService : INService
             if (inheritedStats[i] == "defense") inheritedStats[i] = "def";
         }
 
-        // Define positions for stats
         var statsPositions = new[]
         {
             new SKPoint(748, 356),
@@ -1137,7 +1059,6 @@ public class BreedingService : INService
             new SKPoint(760, 659)
         };
 
-        // Define positions for inherited stats
         var inheritedPositions = new[]
         {
             new SKPoint(205, 375),
@@ -1147,15 +1068,12 @@ public class BreedingService : INService
             new SKPoint(193, 623)
         };
 
-        // Draw stats values
         for (var i = 0; i < statsValues.Length; i++)
             canvas.DrawText(statsValues[i].ToString(), statsPositions[i], font35, greenPaint);
 
-        // Draw inherited stats
         for (var i = 0; i < inheritedStats.Count; i++)
             canvas.DrawText(inheritedStats[i], inheritedPositions[i], font25, redPaint);
 
-        // Determine gender text
         var genderSign = result.Child.Gender switch
         {
             "-m" => "Male ",
@@ -1163,16 +1081,13 @@ public class BreedingService : INService
             _ => ""
         };
 
-        // Draw parent names
         canvas.DrawText(fatherName, 635, 861, font35, bluePaint);
         canvas.DrawText(motherName, 205, 861, font35, pinkPaint);
 
-        // Draw egg info
         canvas.DrawText($"{genderSign}{result.Child.Name} Egg!", 326, 136, font35, whitePaint);
         canvas.DrawText($"IV % {result.Child.CalculateIvPercentage()}", 590, 202, font35, blackPaint);
         canvas.DrawText(result.Child.Nature, 693, 713, font35, blackPaint);
 
-        // Convert to bytes
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         var bytes = data.ToArray();
@@ -1188,22 +1103,18 @@ public class BreedingService : INService
     /// <returns>A byte array containing the image data.</returns>
     public async Task<byte[]> CreateFailureImageAsync(int retryCount, bool auto)
     {
-        // Load the failure image from local data
         var failureImagePath = Path.Combine("data", "images", "failure.png");
         if (!File.Exists(failureImagePath))
         {
             throw new FileNotFoundException($"Failure image not found at: {failureImagePath}");
         }
 
-        // Load image with SkiaSharp
         using var bitmap = SKBitmap.Decode(failureImagePath);
         using var surface = SKSurface.Create(new SKImageInfo(bitmap.Width, bitmap.Height));
         var canvas = surface.Canvas;
 
-        // Draw background image
         canvas.DrawBitmap(bitmap, 0, 0);
 
-        // Create font + paint objects
         using var smallFont = new SKFont(
             SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
                 SKFontStyleSlant.Italic), 10);
@@ -1213,12 +1124,10 @@ public class BreedingService : INService
 
         var blackPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
 
-        // Draw text
         canvas.DrawText("IV: 0% - Cooldown Started", 48, 250, smallFont, blackPaint);
 
         if (auto) canvas.DrawText($"Attempt #{retryCount} out of 15", 16, 195, bigFont, blackPaint);
 
-        // Convert to bytes
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
@@ -1236,23 +1145,20 @@ public class BreedingService : INService
         {
             await using var db = await _dbContextProvider.GetConnectionAsync();
 
-            // Convert to 0-based positions for database lookup
             var positions = pokemonIds.Select(id => id - 1).ToList();
 
-            // Single query to get all Pokemon data at once
             var pokemonData = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId && positions.Contains(o.Position))
                 .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new 
                 { 
-                    Position = o.Position + 1, // Convert back to 1-based
+                    Position = o.Position + 1,
                     p.Gender, 
                     p.PokemonName 
                 })
                 .ToListAsync();
 
-            // Create result dictionary
             var results = new Dictionary<ulong, bool>();
-            
+
             foreach (var id in pokemonIds)
             {
                 var pokemon = pokemonData.FirstOrDefault(p => p.Position == id);
@@ -1262,7 +1168,6 @@ public class BreedingService : INService
                 }
                 else
                 {
-                    // Valid if the Pokémon is female or a Ditto
                     results[id] = pokemon.Gender == "-f" || pokemon.PokemonName.ToLower() == "ditto";
                 }
             }
@@ -1286,20 +1191,17 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-        // Convert to 0-based positions for database lookup
         var zeroBasedPositions = femalePositions.Select(p => p - 1).ToList();
 
-        // Single query with JOIN to get all Pokemon data at once
         var pokemonWithPositions = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && zeroBasedPositions.Contains(o.Position))
             .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new 
             { 
                 Pokemon = p,
-                Position = o.Position + 1 // Convert back to 1-based for display
+                Position = o.Position + 1
             })
             .ToListAsync();
 
-        // Maintain the original order based on femalePositions
         var result = new List<(Database.Linq.Models.Pokemon.Pokemon, ulong)>();
         foreach (var position in femalePositions)
         {
@@ -1337,7 +1239,6 @@ public class BreedingService : INService
     {
         await using var db = await _dbContextProvider.GetConnectionAsync();
 
-
         var maleOwnership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.Position == malePosition)
             .FirstOrDefaultAsync();
@@ -1349,7 +1250,6 @@ public class BreedingService : INService
         if (maleOwnership == null || femaleOwnership == null)
             return ("Unknown", "Unknown");
 
-        // Get the father and mother details
         var fatherDetails = await db.UserPokemon
             .Where(p => p.Id == maleOwnership.PokemonId)
             .Select(p => new { p.PokemonName, p.Gender })
@@ -1363,8 +1263,6 @@ public class BreedingService : INService
         if (fatherDetails == null || motherDetails == null)
             return ("Unknown", "Unknown");
 
-        // Swap father and mother if the "mother" is a Ditto
-        // Since Ditto is always treated as the father in breeding
         if (motherDetails.PokemonName == "Ditto")
             return (motherDetails.PokemonName, fatherDetails.PokemonName);
 

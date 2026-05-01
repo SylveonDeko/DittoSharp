@@ -45,7 +45,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
             await DeferAsync();
 
-            // Check if users are trade banned
             await using var db = await _dbProvider.GetConnectionAsync();
             var currentUser = await db.Users
                 .Where(u => u.UserId == ctx.User.Id)
@@ -69,7 +68,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
                 return;
             }
 
-            // Check if either user is already trade locked
             if (await tradeLockService.IsUserTradeLockedAsync(ctx.User.Id))
             {
                 await FollowupAsync(
@@ -86,7 +84,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
                 return;
             }
 
-            // Create trade confirmation embed
             var confirmEmbed = new EmbedBuilder()
                 .WithTitle("🔄 Trade Request")
                 .WithDescription($"{ctx.User.Mention} has requested a trade with {user.Mention}!")
@@ -102,7 +99,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
             var confirmMessage = await FollowupAsync(embed: confirmEmbed, components: confirmButton);
 
-            // Wait for response with timeout
             var response = await interactivity.NextInteractionAsync(
                 x => x is IComponentInteraction component &&
                      component.Data.CustomId.StartsWith("trade_") &&
@@ -136,7 +132,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             }
             else
             {
-                // Timeout
                 var timeoutEmbed = new EmbedBuilder()
                     .WithTitle("⏰ Trade Request Expired")
                     .WithDescription($"{user.Mention} took too long to respond to the trade request.")
@@ -188,7 +183,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
         await DeferAsync();
 
-        // Check if either user is already trade locked
         if (await tradeLockService.IsUserTradeLockedAsync(ctx.User.Id))
         {
             await FollowupAsync($"{ctx.User.Username} is currently in a trade! Use `/canceltrades` if you think this is an error.", ephemeral: true);
@@ -201,7 +195,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             return;
         }
 
-        // Create trade confirmation embed with Pokemon info
         var confirmEmbed = new EmbedBuilder()
             .WithTitle("🔄 Quick Trade Request")
             .WithDescription($"{ctx.User.Mention} wants to trade their Pokemon at position **{pokemonPosition}** with {user.Mention}!")
@@ -217,7 +210,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
         var confirmMessage = await FollowupAsync(embed: confirmEmbed, components: confirmButton);
 
-        // Wait for response with timeout
         var response = await interactivity.NextInteractionAsync(
             x => x is IComponentInteraction component &&
                  component.Data.CustomId.StartsWith("quicktrade_") &&
@@ -251,7 +243,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
         }
         else
         {
-            // Timeout
             var timeoutEmbed = new EmbedBuilder()
                 .WithTitle("⏰ Quick Trade Request Expired")
                 .WithDescription($"{user.Mention} took too long to respond to the quick trade request.")
@@ -297,15 +288,12 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
         var session = (TradeSession)sessionResult.Data!;
 
-        // Lock both users
         await tradeLockService.AddTradeLockAsync(player1Id);
         await tradeLockService.AddTradeLockAsync(player2Id);
 
-        // Add the Pokemon to the trade
         var addResult = await Service.AddPokemonToTradeAsync(session.SessionId, player1Id, pokemonPosition);
         if (!addResult.Success)
         {
-            // If we can't add the Pokemon, cancel the trade
             await Service.CancelTradeSessionAsync(session.SessionId, player1Id);
             await tradeLockService.RemoveTradeLockAsync(player1Id);
             await tradeLockService.RemoveTradeLockAsync(player2Id);
@@ -324,7 +312,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             return;
         }
 
-        // Create trade interface
         await UpdateTradeInterface(session, message);
     }
 
@@ -358,11 +345,9 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
 
         var session = (TradeSession)sessionResult.Data!;
 
-        // Lock both users
         await tradeLockService.AddTradeLockAsync(player1Id);
         await tradeLockService.AddTradeLockAsync(player2Id);
 
-        // Create trade interface
         await UpdateTradeInterface(session, message);
     }
 
@@ -385,23 +370,19 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             .Build();
 
         var components = new ComponentBuilder()
-            // Row 1: Add Items
             .WithButton("🎯 Add Pokemon", $"trade_add_pokemon:{session.SessionId}", ButtonStyle.Secondary, row: 0)
             .WithButton("💰 Add Credits", $"trade_add_credits:{session.SessionId}", ButtonStyle.Secondary, row: 0)
             .WithButton("🎫 Add Tokens", $"trade_add_tokens:{session.SessionId}", ButtonStyle.Secondary, row: 0)
             
-            // Row 2: Quick Credits
             .WithButton("1K", $"trade_quick_credits:{session.SessionId}:1000", ButtonStyle.Primary, row: 1)
             .WithButton("5K", $"trade_quick_credits:{session.SessionId}:5000", ButtonStyle.Primary, row: 1)
             .WithButton("10K", $"trade_quick_credits:{session.SessionId}:10000", ButtonStyle.Primary, row: 1)
             .WithButton("Custom", $"trade_custom_credits:{session.SessionId}", ButtonStyle.Secondary, row: 1)
             
-            // Row 3: Management
             .WithButton("📋 View Items", $"trade_view_items:{session.SessionId}", ButtonStyle.Secondary, row: 2)
             .WithButton("🗑️ Remove Last", $"trade_remove_last:{session.SessionId}", ButtonStyle.Secondary, row: 2)
             .WithButton("🔄 Remove Tokens", $"trade_remove_tokens:{session.SessionId}", ButtonStyle.Secondary, row: 2)
             
-            // Row 4: Confirmation
             .WithButton("✅ Confirm Trade", $"trade_confirm:{session.SessionId}", ButtonStyle.Success, row: 3, 
                 disabled: !session.HasItems())
             .WithButton("❌ Cancel Trade", $"trade_cancel:{session.SessionId}", ButtonStyle.Danger, row: 3)
@@ -425,8 +406,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
     {
         await DeferAsync(ephemeral: true);
 
-        // This would require additional tracking in TradeService
-        // For now, just show if user is trade locked
         var isLocked = await tradeLockService.IsUserTradeLockedAsync(ctx.User.Id);
         
         if (isLocked)
@@ -448,7 +427,6 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
     {
         await DeferAsync(ephemeral: true);
 
-        // Check if user is trade banned
         await using var db = await _dbProvider.GetConnectionAsync();
         var user = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
@@ -461,10 +439,8 @@ public class TradeSlashCommands(InteractiveService interactivity, ITradeLockServ
             return;
         }
 
-        // Clear all trade locks for this user (more robust than single remove)
         await tradeLockService.ClearAllTradeLocksAsync(ctx.User.Id);
         
-        // Also clear any orphaned session data
         await Service.ClearOrphanedTradeLocksAsync(ctx.User.Id);
         
         await FollowupAsync("All your trade sessions have been cancelled and trade locks cleared.", ephemeral: true);

@@ -41,7 +41,6 @@ public class VoucherService(LinqToDbConnectionProvider dbProvider) : INService
 
             await using var db = await dbProvider.GetConnectionAsync();
             
-            // Insert into voucher_requests table
             await db.GetTable<Database.Linq.Models.Bot.VoucherRequest>()
                 .InsertAsync(() => new Database.Linq.Models.Bot.VoucherRequest
                 {
@@ -82,7 +81,7 @@ public class VoucherService(LinqToDbConnectionProvider dbProvider) : INService
                 Status = r.Status?.ToList() ?? new List<string> { "Created" },
                 Artist = r.ArtistId.GetValueOrDefault(),
                 MessageId = r.MessageId,
-                CreatedAt = DateTimeOffset.UtcNow // Note: We don't have created_at in the DB model
+                CreatedAt = DateTimeOffset.UtcNow
             }).ToList();
         }
         catch (Exception e)
@@ -189,7 +188,6 @@ public class VoucherService(LinqToDbConnectionProvider dbProvider) : INService
         if (statuses == null || statuses.Count == 0)
             return Color.LightGrey;
 
-        // Use the most recent/important status for color
         var primaryStatus = statuses.LastOrDefault() ?? "Created";
         
         return VoucherConstants.StatusColors.TryGetValue(primaryStatus, out var color) 

@@ -12,7 +12,6 @@ public partial class Move
         var msg = "";
 
         var i = 0;
-        // Turn 1 hit moves
         if (Effect == 81 && attacker.LockedMove != null)
         {
             if (attacker.LockedMove.Turn == 0)
@@ -21,7 +20,6 @@ public partial class Move
                 msg += msgadd;
             }
         }
-        // Turn 2 hit moves
         else if (new[] { 40, 76, 146, 152, 156, 256, 257, 264, 273, 332, 333, 366, 451, 502 }.Contains(Effect) &&
                  attacker.LockedMove != null)
         {
@@ -36,7 +34,6 @@ public partial class Move
         {
             switch (Effect)
             {
-                // Turn 3 hit moves
                 case 27:
                 {
                     if (attacker!.LockedMove!.Turn == 2)
@@ -49,7 +46,6 @@ public partial class Move
 
                     break;
                 }
-                // Counter attack moves
                 case 228:
                     msg += defender.Damage((int)(1.5 * attacker!.LastMoveDamage!.Item1), battle, this,
                         currentType, attacker);
@@ -65,7 +61,6 @@ public partial class Move
                         attacker);
                     i = 1;
                     break;
-                // Static-damage moves
                 case 41:
                     msg += defender.Damage(defender.Hp / 2, battle, this, currentType, attacker);
                     i = 1;
@@ -80,7 +75,6 @@ public partial class Move
                     break;
                 case 89:
                 {
-                    // 0.5-1.5, increments of .1
                     var scale = Random.Shared.Next(0, 11) / 10.0 + 0.5;
                     msg += defender.Damage((int)(attacker.Level * scale), battle, this, currentType,
                         attacker);
@@ -109,7 +103,6 @@ public partial class Move
                         attacker);
                     i = 1;
                     break;
-                // Beat up, a stupid move
                 case 155:
                 {
                     foreach (var poke in attacker.Owner.Party)
@@ -154,7 +147,6 @@ public partial class Move
 
                     break;
                 }
-                // Other damaging moves
                 default:
                 {
                     if (DamageClass is DamageClass.PHYSICAL or DamageClass.SPECIAL)

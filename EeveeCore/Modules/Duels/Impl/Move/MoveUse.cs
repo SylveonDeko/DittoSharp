@@ -28,19 +28,16 @@ public partial class Move
         var effectChance = GetEffectChance(attacker, defender, battle);
         var msg = "";
 
-        // Check status conditions that may prevent move usage
         var (statusMsg, shouldAbortStatus) = CheckStatusConditions(attacker, defender, battle, usePP, overrideSleep);
         msg += statusMsg;
         if (shouldAbortStatus) return msg;
 
-        // Move announcement and PP management
         if (!bounced)
         {
             msg += $"{attacker.Name} used {PrettyName}!\n";
             attacker.Metronome.Use(Name);
         }
 
-        // PP
         if (attacker.LockedMove == null && usePP)
         {
             PP -= 1;
@@ -51,7 +48,6 @@ public partial class Move
             if (PP == 0) msg += "It ran out of PP!\n";
         }
 
-        // User is using a choice item and had not used a move yet, set that as their only move.
         if (attacker.ChoiceMove == null && usePP)
         {
             if (attacker.HeldItem == "choice-scarf" || attacker.HeldItem == "choice-band" ||
@@ -60,20 +56,16 @@ public partial class Move
             else if (attacker.Ability() == Ability.GORILLA_TACTICS) attacker.ChoiceMove = this;
         }
 
-        // Stance change
         msg += HandleStanceChange(attacker);
 
-        // Powder damage
         var (powderMsg, shouldAbortPowder) = HandlePowderEffects(attacker, defender, battle, currentType);
         msg += powderMsg;
         if (shouldAbortPowder) return msg;
 
-        // Snatch steal
         var (snatchMsg, shouldAbortSnatch) = HandleSnatch(attacker, defender, battle);
         msg += snatchMsg;
         if (shouldAbortSnatch) return msg;
 
-        // Check Fail
         if (!CheckExecutable(attacker, defender, battle))
         {
             msg += "But it failed!\n";
@@ -83,41 +75,30 @@ public partial class Move
             return msg;
         }
 
-        // Setup for multi-turn moves
         msg += SetupMultiTurnMoves(attacker, defender, battle);
 
-        // Process move effects
         msg += ProcessMoveEffects(attacker, defender, battle, currentType, effectChance, bounced);
 
-        // Calculate damage if applicable (skip if move failed)
         var numHits = 0;
         if (!attacker.LastMoveFailed)
         {
             msg += CalculateDamage(attacker, defender, battle, currentType, ref numHits);
         }
 
-        // Fusion Flare/Bolt effect tracking
         battle.LastMoveEffect = Effect;
 
-        // Apply post-damage effects
         msg += ApplyPostEffects(attacker, defender, battle, effectChance, numHits);
 
-        // Apply stat changes
         msg += ApplyStatChanges(attacker, defender, battle, effectChance);
 
-        // Apply flinch effects
         msg += ApplyFlinchEffects(attacker, defender, battle, effectChance, numHits);
 
-        // Handle move locking, protection, weather, terrain
         msg += HandleSpecialEffects(attacker, defender, battle, effectChance);
 
-        // Handle swap-outs
         msg += HandleSwapEffects(attacker, defender, battle);
 
-        // Handle life orb
         msg += HandleLifeOrb(attacker, defender, battle);
 
-        // Dancer Ability - Runs at the end of move usage
         if (defender.Ability(attacker, this) != Ability.DANCER || !IsDance() || !usePP) return msg;
         var hm = defender.HasMoved;
         msg += Use(defender, attacker, battle, false);

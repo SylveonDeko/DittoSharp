@@ -10,7 +10,6 @@ namespace EeveeCore.Common.AutoCompletes;
 /// </summary>
 public class PokemonAutocompleteHandler : AutocompleteHandler
 {
-    // Cache for user Pokemon to reduce database queries (cache for 30 seconds)
     private static readonly ConcurrentDictionary<ulong, (DateTime Expiry, List<AutocompleteResult> Pokemon)> PokemonCache = new();
     private readonly LinqToDbConnectionProvider _dbProvider;
     private const int CacheTimeoutSeconds = 30;
@@ -47,24 +46,22 @@ public class PokemonAutocompleteHandler : AutocompleteHandler
 
         try
         {
-            // Check cache first
             if (PokemonCache.TryGetValue(userId, out var cached) && DateTime.UtcNow < cached.Expiry)
             {
                 var filteredResults = FilterPokemonResults(cached.Pokemon, currentValue);
                 return AutocompletionResult.FromSuccess(filteredResults);
             }
 
-            // Get user's Pokemon from database
             await using var db = await _dbProvider.GetConnectionAsync();
             
             var userPokemon = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { o.Position, Pokemon = p })
-                .Where(x => x.Position > 1 && // Cannot trade position 1
-                           x.Pokemon.PokemonName != "Egg" && // Cannot trade eggs
-                           !x.Pokemon.Favorite && // Cannot trade favorited
-                           x.Pokemon.Tradable && // Must be tradable
-                           !x.Pokemon.MarketEnlist) // Cannot trade if on market
+                .Where(x => x.Position > 1 &&
+                           x.Pokemon.PokemonName != "Egg" &&
+                           !x.Pokemon.Favorite &&
+                           x.Pokemon.Tradable &&
+                           !x.Pokemon.MarketEnlist)
                 .OrderBy(x => x.Position)
                 .Select(x => new
                 {
@@ -77,24 +74,20 @@ public class PokemonAutocompleteHandler : AutocompleteHandler
                 })
                 .ToListAsync();
 
-            // Create autocomplete results
             var pokemonResults = userPokemon.Select(p => 
             {
                 var displayName = CreateDisplayName(p.PokemonName!, p.Nickname, p.Position, p.Level, p.Shiny, p.Radiant);
                 return new AutocompleteResult(displayName, p.Position.ToString());
             }).ToList();
 
-            // Cache the results
             var expiry = DateTime.UtcNow.AddSeconds(CacheTimeoutSeconds);
             PokemonCache[userId] = (expiry, pokemonResults);
 
-            // Filter and return results
             var filtered = FilterPokemonResults(pokemonResults, currentValue);
             return AutocompletionResult.FromSuccess(filtered);
         }
         catch (Exception ex)
         {
-            // Log the error and return empty result
             Log.Information($"Error in PokemonAutocompleteHandler: {ex.Message}");
             return AutocompletionResult.FromSuccess([]);
         }
@@ -136,13 +129,11 @@ public class PokemonAutocompleteHandler : AutocompleteHandler
             return allResults.Take(MaxResults).ToList();
         }
 
-        // Filter by Pokemon name, nickname, or position
         var filtered = allResults.Where(result =>
             result.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
             result.Value.ToString()!.Contains(filter))
             .ToList();
 
-        // Prioritize exact matches at the start
         var exactMatches = filtered.Where(r => 
             r.Name.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
             .ToList();

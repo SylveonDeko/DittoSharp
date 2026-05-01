@@ -19,7 +19,6 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
     [SlashCommand("view", "View your egg hatchery groups")]
     public async Task ViewHatchery()
     {
-        // Create embeds for all three groups
         var embedPages = new List<EmbedBuilder>();
 
         for (short group = 1; group <= 3; group++)
@@ -40,23 +39,18 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
             case 0:
                 await ErrorAsync("Could not retrieve hatchery information.");
                 return;
-            // If there's only one page, just send it directly
             case 1:
                 await ctx.Interaction.RespondAsync(embed: embedPages[0].Build());
                 return;
         }
 
-        // Create pagination components
         var components = new ComponentBuilder()
             .WithButton(customId: "hatchery:prev", emote: new Emoji("<a:leftarrow:1061558390809174066>"),
                 style: ButtonStyle.Primary)
             .WithButton(customId: "hatchery:next", emote: new Emoji("<a:rightarrow:1061557943398580275>"),
                 style: ButtonStyle.Primary);
 
-        // Send the first page
         await ctx.Interaction.RespondAsync(embed: embedPages[0].Build(), components: components.Build());
-
-        // Store the pagination state
         await Service.StorePagedResult(ctx.User.Id, embedPages, 0);
     }
 
@@ -97,7 +91,6 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
             return;
         }
 
-        // Add the eggs to the hatchery
         var addedEggs = await Service.SetMultipleEggs(
             ctx.User.Id, group, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slot10);
 
@@ -107,7 +100,6 @@ public class HatcheryModule : EeveeCoreSlashModuleBase<HatcheryService>
             return;
         }
 
-        // Create a confirmation embed
         var embed = new EmbedBuilder()
             .WithTitle("Eggs Added to Hatchery")
             .WithColor(EeveeCore.OkColor);

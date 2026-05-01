@@ -51,7 +51,6 @@ public class DuelService : INService
         _redis = redis;
         _gameData = gameData;
 
-        // Initialize Redis cooldown storage
         _ = InitializeAsync();
     }
 
@@ -64,16 +63,12 @@ public class DuelService : INService
     {
         try
         {
-            // Initialize Redis cooldown hash maps
             var db = _redis.Redis.GetDatabase();
 
-            // Make sure the duelcooldowns hash exists
             await db.HashSetAsync("duelcooldowns", "examplekey", "examplevalue");
 
-            // Make sure the daily cooldowns hash exists
             await db.HashSetAsync("dailyduelcooldowns", "examplekey", "examplevalue");
 
-            // Get or set the duel reset time
             var resetTime = await db.StringGetAsync("duelcooldownreset");
             if (!resetTime.HasValue)
             {
@@ -108,13 +103,11 @@ public class DuelService : INService
         try
         {
             await using var db = await _db.GetConnectionAsync();
-            // Get the user's current party from Parties table
             var currentParty = await db.Parties
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.IsCurrentParty);
 
-            if (currentParty == null) return duelPokemon; // Return empty list
+            if (currentParty == null) return duelPokemon;
 
-            // Get party Pokemon IDs from slots
             var partyIds = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
                                   currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
                 .Where(id => id.HasValue && id.Value > 0)
@@ -122,31 +115,25 @@ public class DuelService : INService
                 .ToList();
             if (!partyIds.Any()) return duelPokemon;
 
-            // Fetch all Pokémon data for the party in a single query
             var partyPokemon = await db.UserPokemon
                 .Where(x => x.Owner.HasValue)
                 .Where(p => partyIds.Contains(p.Id))
                 .ToListAsync();
 
-            // Filter out eggs
             partyPokemon = partyPokemon
                 .Where(p => !p.PokemonName.Equals("Egg", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // Sort the Pokémon in the order they appear in the party array
             partyPokemon = partyPokemon
                 .OrderBy(p => partyIds.IndexOf(p.Id))
                 .ToList();
 
-            // Create DuelPokemon objects for each party Pokémon
             foreach (var pokemon in partyPokemon)
             {
-                // Use the factory method to create a DuelPokemon object
                 var duelPoke = await DuelPokemon.Create(ctx, pokemon, _mongoService, _gameData);
                 if (duelPoke != null) duelPokemon.Add(duelPoke);
             }
 
-            // Create a MemberTrainer to be the owner of these Pokémon
             if (duelPokemon.Any())
             {
                 var trainer = new MemberTrainer(
@@ -154,7 +141,6 @@ public class DuelService : INService
                     duelPokemon
                 );
 
-                // Set the owner reference for each Pokémon
                 foreach (var pokemon in duelPokemon) pokemon.Owner = trainer;
             }
 
@@ -186,22 +172,17 @@ public class DuelService : INService
             Log.Debug("Registering battle {BattleId} between users {User1} and {User2}",
                 interactionId, userId1, userId2);
 
-            // Add to local dictionary
             _activeBattles[(userId1, userId2)] = battle;
 
-            // If it's a PvP battle, add the reverse mapping too for easier lookup
             if (userId2 != 0)
                 _activeBattles[(userId2, userId1)] = battle;
 
-            // Store in Redis
             var db = _redis.Redis.GetDatabase();
 
-            // Mark users as in battle
             await db.StringSetAsync($"user_in_battle:{userId1}", "true", TimeSpan.FromHours(2));
             if (userId2 != 0)
                 await db.StringSetAsync($"user_in_battle:{userId2}", "true", TimeSpan.FromHours(2));
 
-            // Store battle metadata in a hash
             var battleKey = $"battle:{interactionId}";
             await db.HashSetAsync(battleKey, [
                 new HashEntry("user1", userId1),
@@ -209,10 +190,8 @@ public class DuelService : INService
                 new HashEntry("created", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
             ]);
 
-            // Set expiration to 2 hours (max battle duration)
             await db.KeyExpireAsync(battleKey, TimeSpan.FromHours(2));
 
-            // Create user-to-battle mapping for quick lookup
             await db.StringSetAsync($"user_battle:{userId1}", interactionId, TimeSpan.FromHours(2));
             if (userId2 != 0)
                 await db.StringSetAsync($"user_battle:{userId2}", interactionId, TimeSpan.FromHours(2));
@@ -240,7 +219,6 @@ public class DuelService : INService
         {
             var battle = kvp.Value;
 
-            // Check if user is either trainer
             if ((battle.Trainer1 as MemberTrainer)?.Id == userId ||
                 (battle.Trainer2 as MemberTrainer)?.Id == userId)
                 return battle;
@@ -260,11 +238,9 @@ public class DuelService : INService
     /// </returns>
     public async Task<bool> IsUserInBattle(ulong userId)
     {
-        // Check local dictionary first
         if (FindBattle(userId) != null)
             return true;
 
-        // If not found locally, check Redis
         try
         {
             var db = _redis.Redis.GetDatabase();
@@ -291,7 +267,6 @@ public class DuelService : INService
     {
         try
         {
-            // Get user IDs
             ulong user1Id = 0;
             ulong user2Id = 0;
 
@@ -303,7 +278,6 @@ public class DuelService : INService
 
             Log.Debug("Ending battle between users {User1} and {User2}", user1Id, user2Id);
 
-            // Remove from dictionary
             if (user1Id != 0 && user2Id != 0)
             {
                 _activeBattles.Remove((user1Id, user2Id));
@@ -314,25 +288,20 @@ public class DuelService : INService
                 _activeBattles.Remove((user1Id, 0));
             }
 
-            // Clean up Redis
             var db = _redis.Redis.GetDatabase();
 
-            // Remove user battle flags
             if (user1Id != 0)
                 await db.KeyDeleteAsync($"user_in_battle:{user1Id}");
             if (user2Id != 0)
                 await db.KeyDeleteAsync($"user_in_battle:{user2Id}");
 
-            // If we have a battle ID, clean up battle metadata
             if (!string.IsNullOrEmpty(battleId))
             {
-                // Delete user-to-battle mappings
                 if (user1Id != 0)
                     await db.KeyDeleteAsync($"user_battle:{user1Id}");
                 if (user2Id != 0)
                     await db.KeyDeleteAsync($"user_battle:{user2Id}");
 
-                // Delete battle metadata
                 await db.KeyDeleteAsync($"battle:{battleId}");
 
                 Log.Information("Battle metadata removed: {BattleId}", battleId);

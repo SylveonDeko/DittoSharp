@@ -54,16 +54,13 @@ public class TradeAnalyticsController : ControllerBase
             var funnels = await _networkAnalysisService.DetectFunnelPatternsAsync(timeWindowDays);
             var circularFlows = await _networkAnalysisService.DetectCircularFlowsAsync(timeWindowDays);
 
-            // Calculate basic statistics
             var totalTrades = network.Edges.Sum(e => e.TradeCount);
             var totalValue = network.Edges.Sum(e => e.TotalValue);
             var uniqueTraders = network.Nodes.Count;
             var avgTradeValue = totalTrades > 0 ? totalValue / totalTrades : 0;
 
-            // Mock data for time series (would come from actual database queries)
             var volumeTimeSeries = GenerateMockTimeSeries(start, end, totalTrades, totalValue, uniqueTraders);
 
-            // Top trading pairs
             var topTradingPairs = network.Edges
                 .OrderByDescending(e => e.TradeCount)
                 .Take(10)
@@ -81,7 +78,6 @@ public class TradeAnalyticsController : ControllerBase
                 })
                 .ToList();
 
-            // Mock data for most traded items
             var topTradedItems = new List<ItemTradeStatsDto>
             {
                 new() { ItemName = "Rare Pokemon Card", TradeCount = 150, TotalValue = 50000, AverageValue = 333, UniqueTraders = 45, LastTradeTime = DateTime.UtcNow.AddHours(-2) },
@@ -89,7 +85,6 @@ public class TradeAnalyticsController : ControllerBase
                 new() { ItemName = "Shiny Pokemon", TradeCount = 200, TotalValue = 75000, AverageValue = 375, UniqueTraders = 120, LastTradeTime = DateTime.UtcNow.AddHours(-1) }
             };
 
-            // Trade type statistics
             var tradeTypeStats = new Dictionary<string, TradeTypeStatsDto>
             {
                 ["Direct"] = new() { Count = (int)(totalTrades * 0.7), TotalValue = totalValue * 0.6m, AverageValue = avgTradeValue * 0.8m, Percentage = 70.0, AverageRiskScore = 0.3 },
@@ -97,7 +92,6 @@ public class TradeAnalyticsController : ControllerBase
                 ["Auction"] = new() { Count = (int)(totalTrades * 0.1), TotalValue = totalValue * 0.3m, AverageValue = avgTradeValue * 3.0m, Percentage = 10.0, AverageRiskScore = 0.2 }
             };
 
-            // Detected patterns
             var detectedPatterns = new List<TradingPatternDto>
             {
                 new()
@@ -124,12 +118,11 @@ public class TradeAnalyticsController : ControllerBase
                 }
             };
 
-            // Suspicious activity summary
             var suspiciousActivity = new SuspiciousActivitySummaryDto
             {
                 SuspiciousTradeCount = network.Edges.Count(e => e.RiskScore > 0.6),
                 SuspiciousTradeValue = network.Edges.Where(e => e.RiskScore > 0.6).Sum(e => e.TotalValue),
-                BlockedTradeCount = 0, // Would come from actual blocking system
+                BlockedTradeCount = 0,
                 BlockedTradeValue = 0,
                 FlaggedUserCount = network.Nodes.Values.Count(n => n.RiskScore > 0.6),
                 CommonSuspiciousPatterns =
@@ -144,7 +137,7 @@ public class TradeAnalyticsController : ControllerBase
                 TotalValueTraded = totalValue,
                 UniqueTraders = uniqueTraders,
                 AverageTradeValue = avgTradeValue,
-                MedianTradeValue = avgTradeValue * 0.7m, // Mock calculation
+                MedianTradeValue = avgTradeValue * 0.7m,
                 VolumeTimeSeries = volumeTimeSeries,
                 TopTradingPairs = topTradingPairs,
                 TopTradedItems = topTradedItems,
@@ -293,9 +286,8 @@ public class TradeAnalyticsController : ControllerBase
             var currentNetwork = await _networkGraphService.GetTradeNetworkAsync(currentPeriodDays);
             var previousNetwork = await _networkGraphService.GetTradeNetworkAsync(currentPeriodDays + comparisonPeriodDays);
 
-            // Calculate metrics for both periods
             var currentMetrics = CalculatePeriodMetrics(currentNetwork);
-            var previousMetrics = CalculatePeriodMetrics(previousNetwork, currentPeriodDays); // Offset for previous period
+            var previousMetrics = CalculatePeriodMetrics(previousNetwork, currentPeriodDays);
 
             var comparison = new
             {
@@ -379,6 +371,16 @@ public class TradeAnalyticsController : ControllerBase
 
     #region Private Helper Methods
 
+    /// <summary>
+    ///     Synthesizes a per-day trade-volume time series by jittering the supplied aggregate totals across
+    ///     the date range. Used as a stand-in until persisted daily aggregates are available.
+    /// </summary>
+    /// <param name="startDate">Inclusive start of the range.</param>
+    /// <param name="endDate">Exclusive end of the range.</param>
+    /// <param name="totalTrades">Total trade count to distribute across the range.</param>
+    /// <param name="totalValue">Total trade value to distribute across the range.</param>
+    /// <param name="uniqueTraders">Total unique-trader count to distribute across the range.</param>
+    /// <returns>One <see cref="TradeVolumeTimeSeriesDto"/> per day in the range.</returns>
     private List<TradeVolumeTimeSeriesDto> GenerateMockTimeSeries(DateTime startDate, DateTime endDate, int totalTrades, decimal totalValue, int uniqueTraders)
     {
         var timeSeries = new List<TradeVolumeTimeSeriesDto>();
@@ -405,6 +407,13 @@ public class TradeAnalyticsController : ControllerBase
         return timeSeries;
     }
 
+    /// <summary>
+    ///     Reduces a trade network graph into a flat metrics object (totals, averages, high-risk count) suitable
+    ///     for direct serialization into the analytics response.
+    /// </summary>
+    /// <param name="network">The trade network graph to summarize.</param>
+    /// <param name="offsetDays">Reserved for future period-shifted comparisons; not currently used.</param>
+    /// <returns>An anonymous DTO with the computed period metrics.</returns>
     private dynamic CalculatePeriodMetrics(TradeNetworkGraph network, int offsetDays = 0)
     {
         var totalTrades = network.Edges.Sum(e => e.TradeCount);
@@ -423,11 +432,16 @@ public class TradeAnalyticsController : ControllerBase
         };
     }
 
+    /// <summary>
+    ///     Serializes a <see cref="TradeAnalyticsDto"/> into a CSV report with a top-line metrics block
+    ///     followed by a top-trading-pairs section.
+    /// </summary>
+    /// <param name="analytics">The analytics payload to render.</param>
+    /// <returns>The CSV-formatted report.</returns>
     private string ConvertToCsv(TradeAnalyticsDto analytics)
     {
         var csv = new System.Text.StringBuilder();
         
-        // Header
         csv.AppendLine("Metric,Value");
         csv.AppendLine($"Total Trades,{analytics.TotalTrades}");
         csv.AppendLine($"Total Value Traded,{analytics.TotalValueTraded}");

@@ -96,6 +96,12 @@ public class HelpSlashCommand(
         }).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Resolves which slash commands in a help category the invoking user is actually allowed to run by
+    ///     evaluating each command's preconditions in parallel.
+    /// </summary>
+    /// <param name="categoryKey">The category key whose commands should be filtered.</param>
+    /// <returns>A case-insensitive set of permitted command names for the current user.</returns>
     private async Task<HashSet<string>> GetPermittedCommandNamesAsync(string categoryKey)
     {
         var entry = Service.GetCategories().FirstOrDefault(c =>

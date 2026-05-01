@@ -232,7 +232,6 @@ public partial class Move
             }
         }
 
-        // Remove existing types
         foreach (var t in attacker.TypeIds) newTypes.Remove(t);
 
         if (newTypes.Count == 0) return null;

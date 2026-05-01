@@ -166,25 +166,19 @@ public partial class DuelPokemon
                 throw new ArgumentException($"invalid stat {stat}");
         }
 
-        // Cap stat stages within -6 to 6
         if (delta < 0)
         {
-            //-6 -5 -4 ..  2
-            // 0 -1 -2 .. -8
             var cap = currentStage * -1 - 6;
             delta = Math.Max(delta, cap);
             if (delta == 0) return $"{Name}'s {stat} won't go any lower!\n";
         }
         else
         {
-            // 6  5  4 .. -2
-            // 0  1  2 ..  8
             var cap = currentStage * -1 + 6;
             delta = Math.Min(delta, cap);
             if (delta == 0) return $"{Name}'s {stat} won't go any higher!\n";
         }
 
-        // Prevent stat changes
         if (delta < 0 && attacker != this)
         {
             if (Ability(attacker, move) == Impl.Ability.CLEAR_BODY ||
@@ -216,7 +210,6 @@ public partial class DuelPokemon
 
         switch (delta)
         {
-            // Remember if stats were changed for certain moves
             case > 0:
                 StatIncreased = true;
                 break;
@@ -255,12 +248,10 @@ public partial class DuelPokemon
         var formattedDelta = Math.Min(Math.Max(delta, -3), 3);
         msg += deltaMessages[formattedDelta];
 
-        // TODO: fix this hacky way of doing this, but probably not until multi battles...
         var battle = HeldItem.Battle;
 
         switch (delta)
         {
-            // Effects that happen after a pokemon gains stats
             case < 0:
             {
                 if (attacker != this)
@@ -273,14 +264,12 @@ public partial class DuelPokemon
 
                 if (HeldItem.Get() == "eject-pack")
                 {
-                    // This assumes that neither attacker or poke are needed if not checking traps
                     var swaps = Owner.ValidSwaps(null, null, false);
                     if (swaps.Count > 0)
                     {
                         msg += $"{Name} is switched out by its eject pack!\n";
                         HeldItem.Use();
                         msg += Remove(battle);
-                        // Force this pokemon to immediately return to be attacked
                         Owner.MidTurnRemove = true;
                     }
                 }

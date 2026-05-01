@@ -4,6 +4,7 @@ using System.Reflection;
 namespace EeveeCore.Database;
 
 /// <summary>
+///     Manages database migrations using DbUp.
 /// </summary>
 public class DatabaseMigrator : INService
 {
@@ -31,7 +32,6 @@ public class DatabaseMigrator : INService
         {
             _logger.LogInformation("Starting database migration...");
 
-            // Run synchronously to ensure proper transaction handling
             return await Task.Run(() =>
             {
                 var upgrader = DeployChanges.To
@@ -57,7 +57,6 @@ public class DatabaseMigrator : INService
 
                 _logger.LogInformation("Database migration completed successfully");
                 
-                // Force garbage collection to ensure all database connections are properly disposed
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 

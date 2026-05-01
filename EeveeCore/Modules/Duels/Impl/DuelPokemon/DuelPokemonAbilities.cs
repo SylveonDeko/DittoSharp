@@ -12,9 +12,6 @@ public partial class DuelPokemon
     /// <returns>The effective ability, or 0 if the ability is being ignored.</returns>
     public Ability Ability(DuelPokemon? attacker = null, Move.Move? move = null)
     {
-        // Currently there are two categories of ability ignores, and both only apply when a move is used.
-        // Since this could change, the method signature is flexible. However, without both present, it
-        // should not consider the existing options.
         if (move == null || attacker == null || attacker == this) return (Ability)AbilityId;
         if (!AbilityIgnorable()) return (Ability)AbilityId;
         if (move.Effect is 411 or 460) return 0;

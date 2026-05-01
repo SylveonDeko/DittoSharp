@@ -339,10 +339,8 @@ public class Trainer
     /// </returns>
     public ValidMovesResult ValidMoves(DuelPokemon.DuelPokemon defender)
     {
-        // Check if they are FORCED to use a certain move
         if (CurrentPokemon.LockedMove != null) return ValidMovesResult.Forced(CurrentPokemon.LockedMove.Move);
 
-        // Remove all moves not matching a restriction
         var result = new List<int>();
         for (var idx = 0; idx < CurrentPokemon.Moves.Count; idx++)
         {
@@ -537,7 +535,6 @@ public class NPCTrainer : Trainer
         }
 
         Event.SetResult(true);
-        // TODO: npc ai?
     }
 
     /// <summary>
@@ -555,11 +552,9 @@ public class NPCTrainer : Trainer
         var pokeIdx = validSwaps[Random.Shared.Next(validSwaps.Count)];
         SwitchPoke(pokeIdx, midTurn);
 
-        // Also set this as the selected action if it's not a mid-turn swap
         if (!midTurn) SelectedAction = new SwitchAction(pokeIdx);
 
         Event.SetResult(true);
-        // TODO: npc ai?
     }
 
     /// <summary>

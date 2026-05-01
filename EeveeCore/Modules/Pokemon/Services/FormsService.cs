@@ -43,7 +43,6 @@ public class FormsService(
     {
         try
         {
-            // Input validation
             if (string.IsNullOrWhiteSpace(formName))
                 return (false, "Please specify a form name!");
 
@@ -52,48 +51,39 @@ public class FormsService(
 
             formName = formName.Trim().ToLower();
             
-            // Prevent common user mistakes
             if (formName.Contains(" "))
             {
                 formName = formName.Replace(" ", "-");
             }
 
-            // Block inappropriate inputs
             if (formName.Contains("shit") || formName.Contains("fuck") || formName.Contains("damn"))
                 return (false, "Please use appropriate form names!");
 
-            // Block certain regional forms and unavailable forms
             if (IsBlockedForm(formName))
                 return (false, GetBlockedFormMessage(formName));
 
-            // Check for mega evolution redirect
             if (formName.Contains("mega"))
                 return (false, "Use `/pokemon forms mega evolve` for mega evolutions.");
 
             await using var db = await dbProvider.GetConnectionAsync();
             
-            // Get selected Pokemon
             var selectedPokemon = await pokemonService.GetSelectedPokemonAsync(userId);
             if (selectedPokemon == null)
                 return (false, "You do not have a Pokemon selected!\nSelect one with `/pokemon select` first.");
 
             var pokemonName = selectedPokemon.PokemonName.ToLower();
 
-            // Block fusion Pokemon
             if (pokemonName == "kyurem")
                 return (false, "Please use `/pokemon forms fuse` for Kyurem and `/pokemon forms lunarize` / `/pokemon forms solarize` for Necrozma fusions.");
 
-            // Check specific Pokemon requirements
             var validationResult = await ValidateFormTransformation(selectedPokemon, formName);
             if (!validationResult.Success)
                 return validationResult;
 
-            // Validate form exists in database
             var formExists = await ValidateFormExists(pokemonName, formName);
             if (!formExists.Success)
                 return formExists;
 
-            // Apply transformation
             var newFormName = BuildFormName(pokemonName, formName);
             await db.UserPokemon
                 .Where(p => p.Id == selectedPokemon.Id)
@@ -129,7 +119,6 @@ public class FormsService(
             if (originalFormInfo == null)
                 return (false, "This Pokemon is not in a form that can be deformed!");
 
-            // Handle special Tauros forms
             if (pokemonName.ToLower() == "tauros-blaze-paldea" || pokemonName.ToLower() == "tauros-aqua-paldea")
             {
                 await using var db = await dbProvider.GetConnectionAsync();
@@ -141,11 +130,9 @@ public class FormsService(
                 return (true, $"You have deformed your {pokemonName}.");
             }
 
-            // Check if Pokemon is actually formed
             if (!IsFormed(pokemonName) || pokemonName.ToLower().EndsWith("-alola"))
                 return (false, "This Pokemon is not in a form that can be deformed!");
 
-            // Build base name
             var baseFormName = GetBaseFormName(pokemonName);
             
             await using var dbConnection = await dbProvider.GetConnectionAsync();
@@ -174,7 +161,6 @@ public class FormsService(
     {
         try
         {
-            // Input validation
             if (string.IsNullOrWhiteSpace(fusionType))
                 return (false, "Please specify a fusion type!");
 
@@ -206,7 +192,6 @@ public class FormsService(
             if (!success)
                 return (false, message);
 
-            // Apply the fusion
             await using var db = await dbProvider.GetConnectionAsync();
             await db.UserPokemon
                 .Where(p => p.Id == selectedPokemon.Id)
@@ -232,7 +217,6 @@ public class FormsService(
     {
         try
         {
-            // Input validation
             if (lunalaNumber == 0)
                 return (false, "Pokemon number must be greater than 0!");
 
@@ -280,7 +264,6 @@ public class FormsService(
     {
         try
         {
-            // Input validation
             if (solgaleoNumber == 0)
                 return (false, "Pokemon number must be greater than 0!");
 
@@ -336,7 +319,6 @@ public class FormsService(
             if (!MegaEvolvablePokemon.Contains(pokemonName))
                 return (false, "That Pokemon cannot mega evolve!");
 
-            // Special case for Rayquaza
             if (pokemonName == "rayquaza")
             {
                 if (selectedPokemon.Moves?.Contains("dragon-ascent") != true)
@@ -349,7 +331,6 @@ public class FormsService(
                     return (false, "This Pokemon is not holding a Mega Stone!");
             }
 
-            // Get the mega form from MongoDB
             var megaForm = await GetMegaFormName(pokemonName);
             if (string.IsNullOrEmpty(megaForm))
                 return (false, "This Pokemon cannot mega evolve!");
@@ -532,7 +513,6 @@ public class FormsService(
     {
         var pokemonName = pokemon.PokemonName.ToLower();
 
-        // Special cases for specific Pokemon
         return pokemonName switch
         {
             "eevee" or "pikachu" => ValidateEeveePikachuForm(pokemon, formName),
@@ -748,7 +728,6 @@ public class FormsService(
         var parts = pokemonName.Split('-');
         var baseName = parts[0].Capitalize();
 
-        // Handle regional forms
         if (parts.Length > 1 && parts[^1].ToLower() == "galar")
             baseName += "-galar";
 

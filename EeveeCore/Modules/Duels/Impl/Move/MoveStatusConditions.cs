@@ -30,7 +30,7 @@ public partial class Move
                 msg += $"{attacker.Name} is frozen solid!\n";
                 if (Effect == 28) attacker.LockedMove = null;
 
-                return (msg, true); // Abort move execution
+                return (msg, true);
             }
         }
 
@@ -39,7 +39,7 @@ public partial class Move
             msg += $"{attacker.Name} is paralyzed! It can't move!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
         if (attacker.Infatuated == defender && Random.Shared.Next(0, 2) == 0)
@@ -47,7 +47,7 @@ public partial class Move
             msg += $"{attacker.Name} is in love with {defender.Name} and can't bare to hurt them!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
         if (attacker.Flinched)
@@ -55,7 +55,7 @@ public partial class Move
             msg += $"{attacker.Name} flinched! It can't move!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
         if (attacker.NonVolatileEffect.Sleep())
@@ -70,7 +70,7 @@ public partial class Move
                 msg += $"{attacker.Name} is fast asleep!\n";
                 if (Effect == 28) attacker.LockedMove = null;
 
-                return (msg, true); // Abort move execution
+                return (msg, true);
             }
         }
 
@@ -83,7 +83,7 @@ public partial class Move
             msg += msgadd;
             if (Effect == 28) attacker.LockedMove = null;
 
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
         if (attacker.Ability() == Ability.TRUANT && attacker.TruantTurn % 2 == 1)
@@ -91,10 +91,10 @@ public partial class Move
             msg += $"{attacker.Name} is loafing around!\n";
             if (Effect == 28) attacker.LockedMove = null;
 
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
-        return (msg, false); // Continue move execution
+        return (msg, false);
     }
 
     /// <summary>
@@ -105,7 +105,6 @@ public partial class Move
     {
         var msg = "";
 
-        // Stance change
         if (attacker.Ability() == Ability.STANCE_CHANGE)
         {
             if (attacker.Name == "Aegislash" &&
@@ -130,14 +129,13 @@ public partial class Move
     {
         var msg = "";
 
-        // Powder damage
         if (attacker.Powdered && currentType == ElementType.FIRE && battle.Weather.Get() != "h-rain")
         {
             msg += attacker.Damage(attacker.StartingHp / 4, battle, source: "its powder exploding");
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
-        return (msg, false); // Continue move execution
+        return (msg, false);
     }
 
     /// <summary>
@@ -148,14 +146,13 @@ public partial class Move
     {
         var msg = "";
 
-        // Snatch steal
         if (defender.Snatching && SelectableBySnatch())
         {
             msg += $"{defender.Name} snatched the move!\n";
             msg += Use(defender, attacker, battle, false);
-            return (msg, true); // Abort move execution
+            return (msg, true);
         }
 
-        return (msg, false); // Continue move execution
+        return (msg, false);
     }
 }

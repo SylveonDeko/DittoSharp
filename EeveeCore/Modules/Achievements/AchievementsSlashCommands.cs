@@ -40,7 +40,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
             var targetUser = user ?? ctx.User;
             var userId = targetUser.Id;
 
-            // Get achievement values and progress
             var achievementValues = await Service.GetAchievementValuesAsync(userId);
             var loyalty = await Service.GetLoyaltyAsync(userId);
 
@@ -50,10 +49,8 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 return;
             }
 
-            // Filter by category if specified
             var filteredAchievements = FilterAchievementsByCategory(achievementValues, category);
 
-            // Create embed
             var embed = new EmbedBuilder()
                 .WithTitle($"🏆 {targetUser.Username}'s Achievements")
                 .WithColor(AchievementConstants.GoldTierColor)
@@ -64,10 +61,8 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 embed.WithDescription($"**Category:** {char.ToUpper(category[0]) + category[1..]}");
             }
 
-            // Add achievement fields
             await AddAchievementFieldsAsync(embed, filteredAchievements, userId);
 
-            // Add summary information
             var totalMilestones = await GetTotalMilestonesAsync(userId);
             var loyaltyPoints = loyalty.LoyaltyPoints;
             var dailyStreak = loyalty.DailyStreak;
@@ -120,11 +115,9 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
             var lastMilestone = await Service.GetLastMilestoneAsync(userId, achievement);
             var displayName = AchievementConstants.AchievementDisplayNames.GetValueOrDefault(achievement, achievement);
 
-            // Find next milestone
             var nextMilestone = milestones.FirstOrDefault(m => m > currentValue);
             var progressToNext = nextMilestone > 0 ? (double)currentValue / nextMilestone : 1.0;
 
-            // Create progress bar
             var progressBar = CreateProgressBar(progressToNext);
 
             var embed = new EmbedBuilder()
@@ -139,7 +132,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 (nextMilestone > 0 ? $"**Next Milestone:** {nextMilestone:N0}\n{progressBar}" : "**All milestones completed!**"), 
                 false);
 
-            // Show completed milestones
             var completedMilestones = milestones.Where(m => currentValue >= m).ToArray();
             if (completedMilestones.Any())
             {
@@ -147,7 +139,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 embed.AddField($"✅ Completed Milestones ({completedMilestones.Length})", milestoneText, false);
             }
 
-            // Show upcoming milestones
             var upcomingMilestones = milestones.Where(m => currentValue < m).Take(5).ToArray();
             if (upcomingMilestones.Any())
             {
@@ -183,7 +174,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
             var loyaltyPoints = loyalty.LoyaltyPoints;
             var dailyStreak = loyalty.DailyStreak;
 
-            // Calculate tier
             var tier = CalculateLoyaltyTier(loyaltyPoints);
 
             var embed = new EmbedBuilder()
@@ -203,7 +193,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 $"Next bonus at: {GetNextStreakBonus(dailyStreak)} days", 
                 true);
 
-            // Show next tier if applicable
             var nextTier = GetNextLoyaltyTier(loyaltyPoints);
             if (nextTier != null)
             {
@@ -247,8 +236,6 @@ public class AchievementsSlashCommands : EeveeCoreSlashModuleBase<AchievementSer
                 return;
             }
 
-            // This would require a more complex query to get top users
-            // For now, show a placeholder
             var embed = new EmbedBuilder()
                 .WithTitle($"🏆 {AchievementConstants.AchievementDisplayNames.GetValueOrDefault(achievement, achievement)} Leaderboard")
                 .WithDescription("Leaderboard functionality coming soon!")

@@ -42,7 +42,7 @@ public interface IGameDataCache
     /// <summary>Pokemon species (PFile) indexed by <c>Identifier</c> (case-insensitive).</summary>
     IReadOnlyDictionary<string, PokemonFile> PFileByIdentifier { get; }
 
-    /// <summary>Pokemon species (PFile) grouped by <c>EvolvesFromSpeciesId</c> — used to find what a species evolves into.</summary>
+    /// <summary>Pokemon species (PFile) grouped by <c>EvolvesFromSpeciesId</c> - used to find what a species evolves into.</summary>
     IReadOnlyDictionary<int, IReadOnlyList<PokemonFile>> PFileByEvolvesFromSpeciesId { get; }
 
     /// <summary>Pokemon species (PFile) grouped by <c>EvolutionChainId</c>.</summary>

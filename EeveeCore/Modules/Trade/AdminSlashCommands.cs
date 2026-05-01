@@ -354,7 +354,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
 
         await using var db = await _context.GetConnectionAsync();
 
-        // Check if user is actually banned
         var userData = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == user.Id);
 
@@ -370,11 +369,9 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
             return;
         }
 
-        // Store ban history for audit trail
         var banHistory = $"Previous ban: {userData.TradeBanReason ?? userData.MarketBanReason} " +
                         $"(banned on {userData.TradeBanDate ?? userData.MarketBanDate:yyyy-MM-dd})";
 
-        // Remove trade and market bans
         var updated = await db.Users
             .Where(u => u.UserId == user.Id)
             .Set(u => u.TradeBanned, false)
@@ -387,7 +384,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
 
         if (updated > 0)
         {
-            // Log the unban action
             Serilog.Log.Warning("🔓 Trade ban removed by admin: User={UserId} ({Username}), Admin={AdminId} ({AdminUsername}), Reason={Reason}, PreviousBan={PreviousBan}",
                 user.Id, user.Username, ctx.User.Id, ctx.User.Username, reason, banHistory);
 
@@ -433,7 +429,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
 
         await using var db = await _context.GetConnectionAsync();
 
-        // Check if user already exists, create if not
         var userData = await db.Users
             .FirstOrDefaultAsync(u => u.UserId == user.Id);
 
@@ -442,7 +437,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
 
         if (userData == null)
         {
-            // Create new user record with ban
             var newUser = new Database.Linq.Models.Bot.User
             {
                 UserId = user.Id,
@@ -459,7 +453,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
         }
         else
         {
-            // Update existing user
             updated = await db.Users
                 .Where(u => u.UserId == user.Id)
                 .Set(u => u.TradeBanned, true)
@@ -473,7 +466,6 @@ public class TradeAdminSlashCommands : EeveeCoreSlashModuleBase<FraudDetectionSe
 
         if (updated > 0)
         {
-            // Log the ban action
             Serilog.Log.Warning("🔨 Trade ban applied by admin: User={UserId} ({Username}), Admin={AdminId} ({AdminUsername}), Reason={Reason}, MarketBan={MarketBan}",
                 user.Id, user.Username, ctx.User.Id, ctx.User.Username, reason, marketBan);
 

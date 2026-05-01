@@ -77,7 +77,6 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
 
         var selectedStarter = values[0];
 
-        // Register the user if they're new
         var registrationResult = await startService.RegisterNewUser(ctx.User.Id);
         if (!registrationResult.Success)
         {
@@ -85,7 +84,6 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
             return;
         }
 
-        // Create the starter Pokemon
         var starterResult = await startService.CreateStarterPokemon(ctx.User.Id, selectedStarter);
         if (!starterResult.Success)
         {
@@ -93,7 +91,6 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
             return;
         }
 
-        // Send welcome message
         var welcomeEmbed = new EmbedBuilder()
             .WithTitle("Welcome to EeveeCore")
             .WithDescription("See your owned Pokemon using `/p`\nSelect your starter with `/select 1`\n" +
@@ -106,7 +103,6 @@ public class StartInteractionModule(StartService startService) : EeveeCoreSlashM
 
         await ctx.Interaction.FollowupAsync(embed: welcomeEmbed.Build());
 
-        // Send additional info
         var infoEmbed = new EmbedBuilder()
             .WithTitle("Thank you for registering!")
             .WithDescription(

@@ -24,11 +24,9 @@ public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedCl
     {
         await using var db = await dbContext.GetConnectionAsync();
 
-        // Check if user already exists
         var exists = await db.Users.AnyAsync(u => u.UserId == userId);
         if (exists) return (false, "You have already registered");
 
-        // Create new user
         var newUser = new User
         {
             UserId = userId,
@@ -45,7 +43,6 @@ public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedCl
 
         await db.InsertAsync(newUser);
 
-        // Create achievement record (ON CONFLICT DO NOTHING equivalent)
         var existingAchievement = await db.Achievements.AnyAsync(a => a.UserId == userId);
         if (!existingAchievement)
         {
@@ -55,7 +52,6 @@ public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedCl
             });
         }
 
-        // Create egg hatchery entries for user (3 groups) - check for existing first
         for (short group = 1; group <= 3; group++)
         {
             var existingHatchery = await db.EggHatcheries.AnyAsync(h => h.UserId == userId && h.Group == group);
@@ -87,7 +83,6 @@ public class StartService(LinqToDbConnectionProvider dbContext, DiscordShardedCl
         }
         catch (Exception ex)
         {
-            // Log error to channel
             if (client.GetChannel(1351696540065857597) is IMessageChannel errorChannel)
                 await errorChannel.SendMessageAsync($"{userId} failed to create starter: {ex.Message}");
 

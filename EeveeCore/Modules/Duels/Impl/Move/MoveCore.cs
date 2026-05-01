@@ -33,7 +33,6 @@ public partial class Move
     /// <returns>The element type of this move, taking into account abilities and effects.</returns>
     public ElementType GetType(DuelPokemon.DuelPokemon attacker, DuelPokemon.DuelPokemon defender, Battle battle)
     {
-        // Abilities are first because those are intrinsic to the poke and would "apply" to the move first
         if (attacker.Ability() == Ability.REFRIGERATE && Type == ElementType.NORMAL) return ElementType.ICE;
 
         if (attacker.Ability() == Ability.PIXILATE && Type == ElementType.NORMAL) return ElementType.FAIRY;
@@ -67,7 +66,6 @@ public partial class Move
             }
             case 136:
             {
-                // Uses starting IVs as its own IVs should be used even if transformed
                 var typeIdx = attacker.StartingHpIV % 2;
                 typeIdx += 2 * (attacker.StartingAtkIV % 2);
                 typeIdx += 4 * (attacker.StartingDefIV % 2);

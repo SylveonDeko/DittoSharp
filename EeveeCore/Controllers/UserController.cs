@@ -73,14 +73,11 @@ public class UserController : ControllerBase
                 return NotFound(new { error = "User not found", message = "Please use /start in Discord first" });
             }
 
-            // Get Pokemon count from ownership table
             var pokemonCount = await db.UserPokemonOwnerships.CountAsync(o => o.UserId == userId);
 
-            // Get selected Pokemon details with image path
             object? selectedPokemon = null;
             if (user.Selected.HasValue && user.Selected.Value > 0)
             {
-                // First verify ownership, then get Pokemon details
                 var selectedPokemonData = await (from ownership in db.UserPokemonOwnerships
                     join pokemon1 in db.UserPokemon on ownership.PokemonId equals pokemon1.Id
                     where ownership.UserId == userId && pokemon1.Id == user.Selected.Value
@@ -95,9 +92,8 @@ public class UserController : ControllerBase
                     var pokemonName = pokemon.PokemonName.ToLower();
                     var pokemonId = 0;
                     var formId = 0;
-                    var imagePath = "/images/regular/133-0-.png"; // default fallback
+                    var imagePath = "/images/regular/133-0-.png";
 
-                    // Find form info using same logic as GetPokemon
                     if (formsLookup.TryGetValue(pokemonName, out var identifier))
                     {
                         var suffix = identifier.FormIdentifier;
@@ -115,7 +111,6 @@ public class UserController : ControllerBase
                             pokemonId = identifier.PokemonId;
                         }
 
-                        // Build image path
                         var pathSegments = new List<string> { "/images", "regular" };
 
                         if (pokemon.Radiant == true) pathSegments.Add("radiant");
@@ -123,7 +118,6 @@ public class UserController : ControllerBase
                         if (!string.IsNullOrEmpty(pokemon.Skin) && pokemon.Skin != "None" && pokemon.Skin != "NULL")
                             pathSegments.Add(pokemon.Skin.TrimEnd('/'));
 
-                        // Handle file type (png vs gif)
                         var fileType = "png";
                         if (!string.IsNullOrEmpty(pokemon.Skin) && pokemon.Skin.EndsWith("_gif")) fileType = "gif";
 
@@ -159,7 +153,7 @@ public class UserController : ControllerBase
                 AvatarUrl = (await _client.GetUserAsync(userId, CacheMode.AllowDownload, RequestOptions.Default))
                     .GetAvatarUrl(),
                 user.TrainerNickname,
-                Credits = user.MewCoins, // Credits are stored as MewCoins
+                Credits = user.MewCoins,
                 user.Redeems,
                 user.Region,
                 user.Staff,
@@ -223,7 +217,6 @@ public class UserController : ControllerBase
 
             pageSize = Math.Min(pageSize, 100);
 
-            // Handle legacy shinyOnly parameter
             if (shinyOnly && filter == "all") filter = "shiny";
 
             return await GetFilteredPokemonInternal(userId, page, pageSize, search, sortBy, filter, gender, includeStats, null);
@@ -251,13 +244,11 @@ public class UserController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            // Verify user owns this Pokemon through ownership table
             var pokemonOwnership = await db.UserPokemonOwnerships
                 .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
 
             if (pokemonOwnership == null) return NotFound(new { error = "Pokemon not found or not owned by user" });
 
-            // Get Pokemon details through ownership join (ownership already verified above)
             var pokemon = await (from ownership in db.UserPokemonOwnerships
                 join p in db.UserPokemon on ownership.PokemonId equals p.Id
                 where ownership.UserId == userId && p.Id == pokemonId
@@ -352,10 +343,8 @@ public class UserController : ControllerBase
             var userId = GetCurrentUserId();
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
-            // Generate cache key based on all parameters including cache version
             var cacheKey = await GenerateFilterCacheKeyWithVersion(userId, request?.Criteria, page, pageSize, search, sortBy, filter, gender, includeStats);
-            
-            // Try to get cached result
+
             var cachedResult = await _redisCache.GetFromCache<object>(cacheKey);
             if (cachedResult != null)
             {
@@ -364,8 +353,7 @@ public class UserController : ControllerBase
             }
 
             var result = await GetFilteredPokemonInternal(userId, page, pageSize, search, sortBy, filter, gender, includeStats, request?.Criteria);
-            
-            // Cache the result for 5 minutes (filter results change less frequently than individual Pokemon)
+
             if (result is OkObjectResult okResult)
             {
                 await _redisCache.AddToCache(cacheKey, okResult.Value!, TimeSpan.FromMinutes(5));
@@ -396,7 +384,6 @@ public class UserController : ControllerBase
     {
         await using var db = await _dbProvider.GetConnectionAsync();
 
-        // Use single query to get user data and counts efficiently
         var userDataQuery = from u in db.Users
                            where u.UserId == userId
                            select new { u.Selected };
@@ -404,32 +391,27 @@ public class UserController : ControllerBase
         var userData = await userDataQuery.FirstOrDefaultAsync();
         if (userData == null) return NotFound(new { error = "User not found" });
 
-        // Create party lookup set from Parties table
         var currentParty = await db.Parties
             .Where(p => p.UserId == userId && p.IsCurrentParty)
             .FirstOrDefaultAsync();
 
         var partyLookup = currentParty != null
-            ? new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+            ? new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3,
                      currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
                 .Where(id => id.HasValue && id.Value > 0)
                 .Select(id => id!.Value)
                 .ToHashSet()
             : new HashSet<ulong>();
 
-        // Build base query with simple joins
         var baseQuery = from ownership in db.UserPokemonOwnerships
                        join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                        where ownership.UserId == userId
                        select new { Pokemon = pokemon, ownership.Position };
 
-        // Get total count before filters for pagination
         var totalCount = await baseQuery.CountAsync();
 
-        // Apply filters using LinqToDB's efficient where clauses
         var filteredQuery = baseQuery;
-        
-        // Apply standard filters with optimized predicates
+
         filteredQuery = filter switch
         {
             "shiny" => filteredQuery.Where(p => p.Pokemon.Shiny == true),
@@ -443,7 +425,6 @@ public class UserController : ControllerBase
             _ => filteredQuery
         };
 
-        // Apply gender filter with database-optimized comparisons
         filteredQuery = gender switch
         {
             "male" => filteredQuery.Where(p => p.Pokemon.Gender == "-m"),
@@ -452,7 +433,6 @@ public class UserController : ControllerBase
             _ => filteredQuery
         };
 
-        // Apply custom criteria filters with optimized database operations
         if (customCriteria != null && customCriteria.Any())
         {
             foreach (var criterion in customCriteria.OrderBy(c => c.CriterionOrder))
@@ -536,7 +516,6 @@ public class UserController : ControllerBase
             }
         }
 
-        // Calculate all statistics in a single query to avoid multiple database round trips
         var allFilteredPokemon = await filteredQuery.Select(p => new {
             p.Pokemon.Shiny,
             p.Pokemon.Radiant,
@@ -558,8 +537,7 @@ public class UserController : ControllerBase
         var maleCount = allFilteredPokemon.Count(p => p.Gender == "-m");
         var femaleCount = allFilteredPokemon.Count(p => p.Gender == "-f");
         var genderlessCount = allFilteredPokemon.Count(p => p.Gender == "-x");
-        
-        // Calculate legendary count from the same data
+
         var distinctPokemonNames = allFilteredPokemon.Select(p => p.PokemonName).Distinct().ToList();
         var legendaryCount = distinctPokemonNames.Count(name => PokemonList.LegendList.Contains(name));
 
@@ -579,15 +557,13 @@ public class UserController : ControllerBase
             { "Genderless", genderlessCount }
         };
 
-        // Apply search filter at database level before sorting and pagination
         if (!string.IsNullOrEmpty(search))
         {
-            filteredQuery = filteredQuery.Where(p => 
-                p.Pokemon.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) || 
+            filteredQuery = filteredQuery.Where(p =>
+                p.Pokemon.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 (p.Pokemon.Nickname != null && p.Pokemon.Nickname.Contains(search, StringComparison.OrdinalIgnoreCase)));
         }
 
-        // Apply optimized sorting with database-level operations
         var sortedQuery = sortBy.ToLower() switch
         {
             "iv" => filteredQuery.OrderByDescending(p =>
@@ -602,7 +578,6 @@ public class UserController : ControllerBase
             _ => filteredQuery.OrderBy(p => p.Position)
         };
 
-        // Apply pagination with optimized Skip/Take
         var skip = (page - 1) * pageSize;
         var pokemonData = await sortedQuery
             .Skip(skip)
@@ -611,7 +586,6 @@ public class UserController : ControllerBase
 
         var formsLookup = _gameData.FormsByIdentifier;
 
-        // Process each Pokemon to include form data and image paths
         var processedPokemon = pokemonData.Select(item =>
         {
             var pokemonName = item.Pokemon.PokemonName.ToLower();
@@ -619,7 +593,6 @@ public class UserController : ControllerBase
             var formId = 0;
             var imagePath = "/images/regular/133-0-.png";
 
-            // Find form info
             if (formsLookup.TryGetValue(pokemonName, out var identifier))
             {
                 var suffix = identifier.FormIdentifier;
@@ -637,7 +610,6 @@ public class UserController : ControllerBase
                     pokemonId = identifier.PokemonId;
                 }
 
-                // Build image path
                 var pathSegments = new List<string> { "/images", "regular" };
 
                 if (item.Pokemon.Radiant == true) pathSegments.Add("radiant");
@@ -891,7 +863,6 @@ public class UserController : ControllerBase
                 })
                 .ToListAsync();
 
-            // Get egg details for occupied slots with correct field names
             var allEggIds = hatcheries
                 .SelectMany(h => new[]
                     { h.Slot1, h.Slot2, h.Slot3, h.Slot4, h.Slot5, h.Slot6, h.Slot7, h.Slot8, h.Slot9, h.Slot10 })
@@ -899,7 +870,6 @@ public class UserController : ControllerBase
                 .Select(id => id!.Value)
                 .ToList();
 
-            // Get egg details through ownership join to ensure user owns them
             var eggs = await (from ownership in db.UserPokemonOwnerships
                 join p in db.UserPokemon on ownership.PokemonId equals p.Id
                 where ownership.UserId == userId && allEggIds.Contains(p.Id)
@@ -907,7 +877,7 @@ public class UserController : ControllerBase
                 {
                     p.Id,
                     p.PokemonName,
-                    p.Timestamp, // Correct field name
+                    p.Timestamp,
                     p.Nickname
                 }).ToListAsync();
 
@@ -1364,22 +1334,18 @@ public class UserController : ControllerBase
     private async Task<string> GenerateFilterCacheKeyWithVersion(ulong userId, List<UserFilterCriteria>? criteria, int page, int pageSize, 
         string? search, string sortBy, string filter, string gender, bool includeStats)
     {
-        // Get the current cache version for this user
         var versionKey = $"pokemon_filter_version:{userId}";
         var version = await _redisCache.GetFromCache<int>(versionKey);
         
         var keyBuilder = new StringBuilder($"pokemon_filter:v{version}:{userId}:");
         
-        // Add basic parameters
         keyBuilder.Append($"p{page}_ps{pageSize}_s{sortBy}_f{filter}_g{gender}_stats{includeStats}");
         
-        // Add search term if provided
         if (!string.IsNullOrEmpty(search))
         {
             keyBuilder.Append($"_search:{search.GetHashCode()}");
         }
         
-        // Add criteria hash if provided
         if (criteria != null && criteria.Any())
         {
             var criteriaHash = GenerateCriteriaHash(criteria);
@@ -1407,8 +1373,6 @@ public class UserController : ControllerBase
     {
         try
         {
-            // For now, we'll use a simpler approach and cache a "cache version" that we can increment
-            // This is more efficient than pattern-based deletion and works with the current Redis setup
             var versionKey = $"pokemon_filter_version:{userId}";
             var currentVersion = await _redisCache.GetFromCache<int>(versionKey);
             await _redisCache.AddToCache(versionKey, currentVersion + 1, TimeSpan.FromDays(30));
@@ -1441,7 +1405,6 @@ public class UserController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            // Find the Pokemon in the ownership table using position (1-based from frontend, 0-based in DB)
             var position = request.Position - 1;
             var ownership = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId && o.Position == position)
@@ -1456,7 +1419,6 @@ public class UserController : ControllerBase
             if (pokemon == null)
                 return NotFound(new { error = "Pokemon data not found" });
 
-            // Update the user's selected Pokemon
             await db.Users
                 .Where(u => u.UserId == userId)
                 .Set(u => u.Selected, (ulong?)pokemon.Id)

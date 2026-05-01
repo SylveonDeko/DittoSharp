@@ -103,13 +103,11 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
         {
             if (string.IsNullOrEmpty(setting))
             {
-                // Display current settings
                 var settings = await Service.GetGuildSettings(ctx.Guild.Id);
                 await FollowupAsync(embed: settings);
                 return;
             }
 
-            // Handle setting changes
             var result = await Service.UpdateGuildSetting(ctx.Guild.Id, setting.ToLower(), value);
             await FollowupAsync(embed: result);
         }
@@ -266,7 +264,6 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
     {
         await ctx.Interaction.DeferAsync();
 
-        // Check if pokemon is still available in the channel
         if (await ctx.Channel.GetMessageAsync(messageId) is not IUserMessage message ||
             message.Embeds.FirstOrDefault()?.Title == "Caught!")
         {
@@ -274,10 +271,8 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
             return;
         }
 
-        // Use the service's helper method for catch options instead of duplicating code
         var validNames = Service.GetCatchOptions(pokemonName);
 
-        // Check guess
         if (!validNames.Contains(modal.PokemonName.ToLower().Replace(" ", "-")))
         {
             await ctx.Interaction.FollowupAsync("Incorrect name! Try again :(", ephemeral: true);
@@ -287,7 +282,6 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
         var legChance = int.Parse(legendChance);
         var ultraChance = int.Parse(ubChance);
 
-        // Check if this Pokémon has already been caught using Redis
         if (await Service.IsPokemonAlreadyCaught(messageId))
         {
             await ctx.Interaction.FollowupAsync("This Pokémon has already been caught by someone else!",
@@ -295,7 +289,6 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
             return;
         }
 
-        // Try to acquire the catch lock using Redis
         if (!await Service.TryMarkPokemonAsCaught(messageId, ctx.User.Id))
         {
             await ctx.Interaction.FollowupAsync("This Pokémon has already been caught by someone else!",
@@ -303,7 +296,6 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
             return;
         }
 
-        // Handle the catch through service
         var result = await Service.HandleCatch(
             ctx.User.Id,
             ctx.Guild.Id,
@@ -312,15 +304,12 @@ public class SpawnSlashCommands(MissionService missionService) : EeveeCoreSlashM
             legChance,
             ultraChance);
 
-        // Send the catch message
         await ctx.Interaction.FollowupAsync(embed: result.ResponseEmbed);
 
         if (!result.Success) return;
 
-        // Fire mission event for successful catch
         _ = Task.Run(async () => await missionService.FirePokemonCaughtEvent(ctx.Interaction));
 
-        // Handle the original spawn message
         try
         {
             if (result.ShouldDeleteSpawn)

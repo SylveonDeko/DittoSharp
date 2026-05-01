@@ -65,7 +65,6 @@ public class BotCredentials : IBotCredentials
             Name = "Redis"
         };
 
-        // Web API Configuration
         IsApiEnabled = bool.Parse(config[nameof(IsApiEnabled)] ?? "false");
         ApiPort = int.Parse(config[nameof(ApiPort)] ?? "5000");
         JwtSecret = config[nameof(JwtSecret)] ?? "DefaultJwtSecret";

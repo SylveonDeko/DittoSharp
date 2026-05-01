@@ -20,29 +20,24 @@ public class FraudDetectionService : INService
 
     #region Constants and Thresholds
 
-    // Risk thresholds - aggressive blocking for fraud prevention
     private const double LogOnlyThreshold = 0.15;
     private const double ReviewThreshold = 0.25;
-    private const double BlockThreshold = 0.4;    // Lower threshold for faster blocking
-    private const double TempBanThreshold = 0.6;  // More aggressive banning
-    private const double CriticalThreshold = 0.75; // Immediate ban + investigation
+    private const double BlockThreshold = 0.4;
+    private const double TempBanThreshold = 0.6;
+    private const double CriticalThreshold = 0.75;
 
-    // Value analysis constants
     private const decimal MinValueForAnalysis = 1000m;
-    private const double ExtremeImbalanceThreshold = 0.85; // Force block for extreme imbalances
-    private const double SuspiciousImbalanceThreshold = 50.0; // 50:1 ratio threshold
+    private const double ExtremeImbalanceThreshold = 0.85;
+    private const double SuspiciousImbalanceThreshold = 50.0;
 
-    // Pattern detection constants
     private const int ChainDepthLimit = 5;
-    private const int BurstTradeWindow = 300; // 5 minutes
+    private const int BurstTradeWindow = 300;
     private const int BurstTradeCount = 5;
     private const int NetworkSizeThreshold = 3;
 
-    // Account age constants (in days)
     private const int NewAccountThreshold = 7;
     private const int SuspiciousAccountThreshold = 30;
 
-    // Admin notification channel
     private const ulong AdminChannelId = 1004571710323957830;
 
     #endregion
@@ -82,15 +77,13 @@ public class FraudDetectionService : INService
             Log.Information("🔍 Starting comprehensive fraud analysis for trade {TradeId} between {User1} and {User2}", 
                 session.SessionId, session.Player1Id, session.Player2Id);
 
-            // Step 1: Calculate trade values with detailed logging
-            var senderValue = await CalculateUserTradeValueAsync(session, session.Player1Id);
+                        var senderValue = await CalculateUserTradeValueAsync(session, session.Player1Id);
             var receiverValue = await CalculateUserTradeValueAsync(session, session.Player2Id);
             
             Log.Information("💰 Trade values calculated: Sender={SenderValue:C}, Receiver={ReceiverValue:C}, Ratio={Ratio:F2}x", 
                 senderValue, receiverValue, CalculateValueRatio(senderValue, receiverValue));
 
-            // Step 2: Immediate blocking checks for extreme cases
-            var immediateBlock = await CheckImmediateBlockConditionsAsync(session, senderValue, receiverValue);
+                        var immediateBlock = await CheckImmediateBlockConditionsAsync(session, senderValue, receiverValue);
             if (immediateBlock != null)
             {
                 Log.Warning("🚫 IMMEDIATE BLOCK triggered for trade {TradeId}: {Reason}", 
@@ -98,18 +91,15 @@ public class FraudDetectionService : INService
                 return immediateBlock;
             }
 
-            // Step 3: Comprehensive fraud analysis
-            var analysis = await PerformComprehensiveAnalysisAsync(session, senderValue, receiverValue);
+                        var analysis = await PerformComprehensiveAnalysisAsync(session, senderValue, receiverValue);
             
             Log.Information("📊 Comprehensive analysis completed: Risk={RiskScore:P2}, Level={RiskLevel}", 
                 analysis.ComprehensiveRiskScore, GetRiskLevel(analysis.ComprehensiveRiskScore));
 
-            // Step 4: Determine and execute action
-            var action = DetermineAutomatedAction(analysis.ComprehensiveRiskScore);
+                        var action = DetermineAutomatedAction(analysis.ComprehensiveRiskScore);
             var result = await ExecuteAutomatedActionAsync(session, analysis, action);
 
-            // Step 5: ALWAYS log fraud detection to database for stats
-            await LogFraudDetectionToDatabase(session, analysis, action, result);
+                        await LogFraudDetectionToDatabase(session, analysis, action, result);
 
             stopwatch.Stop();
             Log.Information("⏱️ Fraud analysis completed in {ElapsedMs}ms for trade {TradeId}", 
@@ -121,7 +111,6 @@ public class FraudDetectionService : INService
         {
             Log.Error(ex, "❌ Critical error during fraud analysis for trade {TradeId}", session.SessionId);
             
-            // Fail-safe: block the trade if analysis fails
             return new FraudDetectionResult
             {
                 IsAllowed = false,
@@ -145,19 +134,16 @@ public class FraudDetectionService : INService
     private async Task<FraudDetectionResult?> CheckImmediateBlockConditionsAsync(
         TradeSession session, decimal senderValue, decimal receiverValue)
     {
-        // Check 1: User ban status
-        var banCheck = await CheckUserBanStatusAsync(session.Player1Id, session.Player2Id);
+                var banCheck = await CheckUserBanStatusAsync(session.Player1Id, session.Player2Id);
         if (banCheck != null) return banCheck;
 
-        // Check 2: Extreme value imbalance (like the 14856.64x case)
-        var valueRatio = CalculateValueRatio(senderValue, receiverValue);
+                var valueRatio = CalculateValueRatio(senderValue, receiverValue);
         if (valueRatio >= SuspiciousImbalanceThreshold)
         {
             Log.Warning("🚨 EXTREME VALUE IMBALANCE detected: {Ratio:F2}x (threshold: {Threshold}x)", 
                 valueRatio, SuspiciousImbalanceThreshold);
             
-            // Check 2.5: Return Trade Detection - is this a legitimate "give back"?
-            var returnTradeCheck = await CheckForReturnTradeAsync(session, senderValue, receiverValue);
+                        var returnTradeCheck = await CheckForReturnTradeAsync(session, senderValue, receiverValue);
             if (returnTradeCheck.IsReturnTrade)
             {
                 Log.Information("✅ RETURN TRADE detected: {Reason} - allowing extreme imbalance", returnTradeCheck.Reason);
@@ -165,7 +151,7 @@ public class FraudDetectionService : INService
                 return new FraudDetectionResult
                 {
                     IsAllowed = true,
-                    RiskScore = 0.3, // Low risk for legitimate returns
+                    RiskScore = 0.3,
                     RiskLevel = RiskLevel.Low,
                     AutomatedAction = AutomatedAction.LogOnly,
                     Message = $"Return trade detected: {returnTradeCheck.Reason}",
@@ -189,11 +175,10 @@ public class FraudDetectionService : INService
             };
         }
 
-        // Check 3: Whitelisted relationship (allow with minimal risk)
-        var whitelistCheck = await CheckWhitelistedRelationshipAsync(session.Player1Id, session.Player2Id);
+                var whitelistCheck = await CheckWhitelistedRelationshipAsync(session.Player1Id, session.Player2Id);
         if (whitelistCheck != null) return whitelistCheck;
 
-        return null; // No immediate block needed
+        return null;
     }
 
     #endregion
@@ -207,8 +192,7 @@ public class FraudDetectionService : INService
     {
         decimal totalValue = 0;
 
-        // Calculate Pokemon values
-        foreach (var pokemonEntry in session.GetPokemonBy(userId))
+                foreach (var pokemonEntry in session.GetPokemonBy(userId))
         {
             if (pokemonEntry.PokemonId.HasValue)
             {
@@ -218,16 +202,14 @@ public class FraudDetectionService : INService
             }
         }
 
-        // Add credits (1:1 value)
-        var credits = session.GetCreditsBy(userId);
+                var credits = session.GetCreditsBy(userId);
         totalValue += credits;
         if (credits > 0)
         {
             Log.Debug("Credits value: {Value:C}", credits);
         }
 
-        // Add token values
-        var tokens = session.GetTokensBy(userId);
+                var tokens = session.GetTokensBy(userId);
         foreach (var (tokenType, count) in tokens)
         {
             var tokenValue = CalculateTokenValue(tokenType, count);
@@ -266,28 +248,24 @@ public class FraudDetectionService : INService
 
         if (pokemon == null) return 0;
 
-        decimal baseValue = 1000; // Base Pokemon value
+        decimal baseValue = 1000;
 
-        // Level multiplier
-        baseValue *= (1 + (pokemon.Level - 1) * 0.02m); // 2% per level above 1
+        baseValue *= (1 + (pokemon.Level - 1) * 0.02m);
 
-        // Special form multipliers
         if (pokemon.Radiant == true)
         {
-            baseValue *= 100m; // Radiant Pokemon are extremely valuable
+            baseValue *= 100m;
         }
         else if (pokemon.Shiny == true)
         {
-            baseValue *= 10m; // Shiny Pokemon are very valuable
+            baseValue *= 10m;
         }
 
-        // IV bonus (perfect IVs add significant value)
         var totalIvs = pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
                       pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv;
-        var ivPercentage = totalIvs / 186.0; // Max possible IVs is 31*6=186
-        baseValue *= (decimal)(1.0 + ivPercentage * 0.5); // Up to 50% bonus for perfect IVs
+        var ivPercentage = totalIvs / 186.0;
+        baseValue *= (decimal)(1.0 + ivPercentage * 0.5);
 
-        // Species-specific multipliers (simplified)
         var speciesMultiplier = pokemon.PokemonName?.ToLower() switch
         {
             "arceus" => 5.0m,
@@ -301,7 +279,7 @@ public class FraudDetectionService : INService
         };
         baseValue *= speciesMultiplier;
 
-        return Math.Max(baseValue, 100); // Minimum value of 100
+        return Math.Max(baseValue, 100);
     }
 
     /// <summary>
@@ -309,28 +287,27 @@ public class FraudDetectionService : INService
     /// </summary>
     private static decimal CalculateTokenValue(TokenType tokenType, int count)
     {
-        // Base token values (can be adjusted based on market conditions)
         var baseValue = tokenType switch
         {
-            TokenType.Dragon => 1500m,   // Dragon tokens are most valuable
-            TokenType.Psychic => 1200m,  // Psychic tokens are valuable
-            TokenType.Fairy => 1200m,    // Fairy tokens are valuable
-            TokenType.Steel => 1000m,    // Steel tokens are solid value
-            TokenType.Ghost => 1000m,    // Ghost tokens are solid value
-            TokenType.Fire => 800m,      // Starter type tokens
-            TokenType.Water => 800m,     // Starter type tokens  
-            TokenType.Grass => 800m,     // Starter type tokens
-            TokenType.Electric => 900m,  // Pikachu factor
-            TokenType.Ice => 700m,       // Ice tokens
-            TokenType.Dark => 700m,      // Dark tokens
-            TokenType.Fighting => 600m,  // Fighting tokens
-            TokenType.Flying => 600m,    // Flying tokens
-            TokenType.Rock => 500m,      // Rock tokens
-            TokenType.Ground => 500m,    // Ground tokens
-            TokenType.Poison => 400m,    // Less valuable
-            TokenType.Bug => 300m,       // Least valuable
-            TokenType.Normal => 200m,    // Least valuable
-            _ => 500m // Default fallback
+            TokenType.Dragon => 1500m,
+            TokenType.Psychic => 1200m,
+            TokenType.Fairy => 1200m,
+            TokenType.Steel => 1000m,
+            TokenType.Ghost => 1000m,
+            TokenType.Fire => 800m,
+            TokenType.Water => 800m,
+            TokenType.Grass => 800m,
+            TokenType.Electric => 900m,
+            TokenType.Ice => 700m,
+            TokenType.Dark => 700m,
+            TokenType.Fighting => 600m,
+            TokenType.Flying => 600m,
+            TokenType.Rock => 500m,
+            TokenType.Ground => 500m,
+            TokenType.Poison => 400m,
+            TokenType.Bug => 300m,
+            TokenType.Normal => 200m,
+            _ => 500m
         };
 
         return baseValue * count;
@@ -355,35 +332,32 @@ public class FraudDetectionService : INService
     /// </summary>
     public static double CalculateValueImbalanceScore(decimal senderValue, decimal receiverValue)
     {
-        // Handle zero-value cases (empty sides)
-        if (senderValue == 0 && receiverValue == 0)
+                if (senderValue == 0 && receiverValue == 0)
         {
-            return 0.0; // No items being traded
+            return 0.0;
         }
 
-        // Calculate ratio (always >= 1.0)
-        var ratio = CalculateValueRatio(senderValue, receiverValue);
+                var ratio = CalculateValueRatio(senderValue, receiverValue);
         
         Log.Information("💡 Value imbalance calculation: ${Value1} vs ${Value2} = {Ratio:F2}x ratio", 
             senderValue, receiverValue, ratio);
 
-        // AGGRESSIVE scaling for fraud prevention - no gift exceptions!
         var riskScore = ratio switch
         {
-            >= 10000 => 1.0,    // 10000:1+ = maximum risk
-            >= 5000 => 0.98,    // 5000:1 = near maximum  
-            >= 2000 => 0.95,    // 2000:1 = very high (covers user's 1885.95x case)
-            >= 1000 => 0.92,    // 1000:1 = very high risk
-            >= 500 => 0.9,      // 500:1 = high risk
-            >= 200 => 0.85,     // 200:1 = high risk
-            >= 100 => 0.8,      // 100:1 = significant risk
-            >= 50 => 0.75,      // 50:1 = significant risk
-            >= 20 => 0.65,      // 20:1 = moderate-high risk
-            >= 10 => 0.5,       // 10:1 = moderate risk
-            >= 5 => 0.3,        // 5:1 = low-moderate risk
-            >= 3 => 0.15,       // 3:1 = low risk
-            >= 2 => 0.05,       // 2:1 = minimal risk
-            _ => 0.0             // Balanced trades
+            >= 10000 => 1.0,
+            >= 5000 => 0.98,
+            >= 2000 => 0.95,
+            >= 1000 => 0.92,
+            >= 500 => 0.9,
+            >= 200 => 0.85,
+            >= 100 => 0.8,
+            >= 50 => 0.75,
+            >= 20 => 0.65,
+            >= 10 => 0.5,
+            >= 5 => 0.3,
+            >= 3 => 0.15,
+            >= 2 => 0.05,
+            _ => 0.0
         };
 
         Log.Information("🎯 Risk score calculated: {Ratio:F2}x ratio → {RiskScore:P2} risk", ratio, riskScore);
@@ -409,14 +383,11 @@ public class FraudDetectionService : INService
 
         try
         {
-            // Basic risk analysis
             analysis.BasicRiskAnalysis = await AnalyzeBasicTradeRiskAsync(session, senderValue, receiverValue);
             
-            // Advanced pattern detection (only if worth the computation cost)
             if (analysis.BasicRiskAnalysis.OverallRiskScore >= 0.3 || 
                 Math.Max(senderValue, receiverValue) >= 10000)
             {
-                // Run parallel fraud detection tasks
                 var chainTask1 = DetectChainTradingAsync(session.Player1Id, TimeSpan.FromDays(7));
                 var chainTask2 = DetectChainTradingAsync(session.Player2Id, TimeSpan.FromDays(7));
                 var burstTask1 = DetectBurstTradingAsync(session.Player1Id);
@@ -426,7 +397,6 @@ public class FraudDetectionService : INService
 
                 await Task.WhenAll(chainTask1, chainTask2, burstTask1, burstTask2, networkTask, marketTask);
                 
-                // Combine results
                 var chain1 = await chainTask1;
                 var chain2 = await chainTask2;
                 var burst1 = await burstTask1;
@@ -440,13 +410,10 @@ public class FraudDetectionService : INService
                 analysis.MarketManipulation = market;
             }
 
-            // Calculate comprehensive risk score
-            analysis.ComprehensiveRiskScore = CalculateComprehensiveRiskScore(analysis);
+                        analysis.ComprehensiveRiskScore = CalculateComprehensiveRiskScore(analysis);
             
-            // Generate actionable insights
             analysis.ActionableInsights = GenerateActionableInsights(analysis);
             
-            // Determine recommended action
             analysis.RecommendedAction = DetermineRecommendedAction(analysis);
         }
         catch (Exception ex)
@@ -454,7 +421,6 @@ public class FraudDetectionService : INService
             Log.Error(ex, "Error during comprehensive analysis for trade {TradeId}", session.SessionId);
             analysis.AnalysisErrors.Add($"Analysis error: {ex.Message}");
             
-            // Fallback to basic analysis only
             if (analysis.BasicRiskAnalysis != null)
             {
                 analysis.ComprehensiveRiskScore = analysis.BasicRiskAnalysis.OverallRiskScore;
@@ -480,16 +446,13 @@ public class FraudDetectionService : INService
             ValueRatio = CalculateValueRatio(senderValue, receiverValue)
         };
 
-        // Calculate component risk scores
-        analysis.ValueImbalanceScore = CalculateValueImbalanceScore(senderValue, receiverValue);
+                analysis.ValueImbalanceScore = CalculateValueImbalanceScore(senderValue, receiverValue);
         analysis.RelationshipRiskScore = await CalculateRelationshipRiskAsync(session.Player1Id, session.Player2Id);
         analysis.BehavioralRiskScore = await CalculateBehavioralRiskAsync(session);
         analysis.AccountAgeRiskScore = CalculateAccountAgeRisk(session.Player1Id, session.Player2Id);
 
-        // Calculate overall risk score with proper weighting
-        analysis.OverallRiskScore = CalculateOverallRiskScore(analysis);
+                analysis.OverallRiskScore = CalculateOverallRiskScore(analysis);
 
-        // Set fraud flags
         await SetFraudFlagsAsync(analysis, session);
 
         Log.Information("🎯 Basic risk scores - Overall: {Overall:P2}, Value: {Value:P2}, Relationship: {Relationship:P2}, Behavioral: {Behavioral:P2}, AccountAge: {AccountAge:P2}",
@@ -508,13 +471,12 @@ public class FraudDetectionService : INService
     /// </summary>
     private static double CalculateOverallRiskScore(TradeRiskAnalysis analysis)
     {
-        // Weighted combination with emphasis on value imbalance
         var weights = new Dictionary<string, double>
         {
-            ["ValueImbalance"] = 0.4,    // High weight for value imbalance
-            ["Relationship"] = 0.25,     // Relationship patterns
-            ["Behavioral"] = 0.2,        // Behavioral indicators
-            ["AccountAge"] = 0.15        // Account age factors
+            ["ValueImbalance"] = 0.4,
+            ["Relationship"] = 0.25,
+            ["Behavioral"] = 0.2,
+            ["AccountAge"] = 0.15
         };
 
         var weightedScore = 
@@ -534,26 +496,23 @@ public class FraudDetectionService : INService
         var basicAnalysis = analysis.BasicRiskAnalysis;
         if (basicAnalysis == null) return 0.0;
 
-        // CRITICAL: Handle extreme value imbalances
         if (basicAnalysis.ValueImbalanceScore >= ExtremeImbalanceThreshold)
         {
             Log.Warning("🚨 Extreme value imbalance override: {Score:P2} >= {Threshold:P2}", 
                 basicAnalysis.ValueImbalanceScore, ExtremeImbalanceThreshold);
-            return Math.Max(0.9, basicAnalysis.ValueImbalanceScore); // Force near-maximum risk
+            return Math.Max(0.9, basicAnalysis.ValueImbalanceScore);
         }
 
-        // Handle multiple fraud flags
-        var flagCount = GetFraudFlagCount(basicAnalysis);
+                var flagCount = GetFraudFlagCount(basicAnalysis);
         if (flagCount >= 3)
         {
             Log.Warning("🚩 Multiple fraud flags detected: {Count} flags", flagCount);
             return Math.Max(0.8, basicAnalysis.OverallRiskScore);
         }
 
-        // Standard comprehensive scoring
         var scores = new List<(double score, double weight)>
         {
-            (basicAnalysis.OverallRiskScore, 0.5), // Increased weight for basic analysis
+            (basicAnalysis.OverallRiskScore, 0.5),
             (analysis.ChainTradingAnalysis?.RiskScore ?? 0, 0.15),
             (analysis.BurstTradingAnalysis?.RiskScore ?? 0, 0.15),
             (analysis.NetworkAnalysis?.NetworkRiskScore ?? 0, 0.1),
@@ -565,7 +524,6 @@ public class FraudDetectionService : INService
         
         var comprehensiveScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
-        // Boost for multiple fraud types detected
         var detectedTypes = CountDetectedFraudTypes(analysis);
         if (detectedTypes >= 2)
         {
@@ -623,16 +581,14 @@ public class FraudDetectionService : INService
         {
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Look back 30 days for previous trades between these users
             var cutoffDate = DateTime.UtcNow.AddDays(-30);
             
-            // Find recent trades where roles were reversed (current receiver was previous sender)
-            var previousTrades = await db.TradeLogs
+                        var previousTrades = await db.TradeLogs
                 .Where(t => t.Time >= cutoffDate && 
                            ((t.SenderId == session.Player2Id && t.ReceiverId == session.Player1Id) ||
                             (t.SenderId == session.Player1Id && t.ReceiverId == session.Player2Id)))
                 .OrderByDescending(t => t.Time)
-                .Take(20) // Limit to prevent performance issues
+                .Take(20)
                 .ToListAsync();
 
             if (!previousTrades.Any())
@@ -645,11 +601,9 @@ public class FraudDetectionService : INService
                 };
             }
 
-            // Check if any Pokemon being traded match Pokemon from previous trades
-            var currentPokemonIds = new List<ulong>();
+                        var currentPokemonIds = new List<ulong>();
             
-            // Get Pokemon IDs from current trade session by filtering TradeEntries
-            var player1Pokemon = session.TradeEntries
+                        var player1Pokemon = session.TradeEntries
                 .Where(e => e.OfferedBy == session.Player1Id && e.ItemType == TradeItemType.Pokemon && e.PokemonId.HasValue)
                 .Select(e => e.PokemonId!.Value);
             currentPokemonIds.AddRange(player1Pokemon);
@@ -661,7 +615,6 @@ public class FraudDetectionService : INService
 
             if (!currentPokemonIds.Any())
             {
-                // If no Pokemon in current trade, might be credits-only return
                 var recentTradesWithCredits = previousTrades
                     .Where(t => (t.SenderCredits ?? 0) > 0 || (t.ReceiverCredits ?? 0) > 0)
                     .ToList();
@@ -675,21 +628,17 @@ public class FraudDetectionService : INService
                         IsReturnTrade = true,
                         Reason = $"Credits-only return trade detected (last trade {daysSince} days ago)",
                         DaysSinceOriginalTrade = daysSince,
-                        ConfidenceLevel = 0.7 // Medium confidence for credits-only
+                        ConfidenceLevel = 0.7
                     };
                 }
             }
 
-            // For Pokemon trades, check if current Pokemon were involved in previous trades
             var matchingTradeCount = 0;
             var mostRecentMatchingTrade = DateTime.MinValue;
 
             foreach (var trade in previousTrades)
             {
-                // This is simplified - in a real implementation, you'd parse the trade data
-                // to extract Pokemon IDs from the trade log
                 
-                // For now, we'll use a heuristic based on trade direction and timing
                 var wasRoleReversed = (trade.SenderId == session.Player2Id && trade.ReceiverId == session.Player1Id);
                 if (wasRoleReversed && trade.Time.HasValue)
                 {
@@ -702,28 +651,24 @@ public class FraudDetectionService : INService
             var daysSinceLastTrade = mostRecentMatchingTrade == DateTime.MinValue ? 0 : 
                 (DateTime.UtcNow - mostRecentMatchingTrade).Days;
 
-            // Determine if this looks like a return trade
             var isReturnTrade = false;
             var confidence = 0.0;
             var reason = "";
 
             if (matchingTradeCount > 0 && daysSinceLastTrade <= 7)
             {
-                // Recent trade with role reversal - high confidence return
                 isReturnTrade = true;
                 confidence = 0.9;
                 reason = $"Recent role-reversed trade detected ({daysSinceLastTrade} days ago)";
             }
             else if (matchingTradeCount > 0 && daysSinceLastTrade <= 30)
             {
-                // Older trade with role reversal - medium confidence return
                 isReturnTrade = true;
                 confidence = 0.6;
                 reason = $"Role-reversed trade detected ({daysSinceLastTrade} days ago)";
             }
             else if (previousTrades.Count >= 3)
             {
-                // Multiple recent trades between users - possible legitimate return
                 isReturnTrade = true;
                 confidence = 0.5;
                 reason = $"Frequent trading relationship detected ({previousTrades.Count} recent trades)";
@@ -840,19 +785,15 @@ public class FraudDetectionService : INService
 
             var riskFactors = new List<double>();
 
-            // Detection 1: Pool Account Detection - CRITICAL for alt account detection
             var poolRisk = await DetectPoolAccountsAsync(db, user1Id, user2Id, lookbackTime);
-            riskFactors.Add(poolRisk * 1.5); // Weight heavily - this is the most important
+            riskFactors.Add(poolRisk * 1.5);
 
-            // Detection 2: Trading Frequency Correlation
             var frequencyRisk = await DetectTradingFrequencyCorrelationAsync(db, user1Id, user2Id, lookbackTime);
             riskFactors.Add(frequencyRisk);
 
-            // Detection 3: Value Funneling Detection
             var valueRisk = await DetectValueFunnelingAsync(db, user1Id, user2Id, lookbackTime);
-            riskFactors.Add(valueRisk * 1.3); // High weight for value funneling
+            riskFactors.Add(valueRisk * 1.3);
 
-            // Detection 4: Behavioral Coordination
             var coordinationRisk = await DetectBehavioralCoordinationAsync(db, user1Id, user2Id, lookbackTime);
             riskFactors.Add(coordinationRisk);
 
@@ -876,7 +817,6 @@ public class FraudDetectionService : INService
     {
         var poolIndicators = new List<double>();
 
-        // Indicator 1: One-sided value flow (main account → alt account pattern)
         var trades = await db.TradeLogs
             .Where(t => ((t.SenderId == user1Id && t.ReceiverId == user2Id) ||
                         (t.SenderId == user2Id && t.ReceiverId == user1Id)) &&
@@ -884,7 +824,7 @@ public class FraudDetectionService : INService
             .Select(t => new
             {
                 FromUser1 = t.SenderId == user1Id,
-                SenderValue = (t.SenderCredits ?? 0) + (long)(t.SenderRedeems * 1000), // Estimate token value
+                SenderValue = (t.SenderCredits ?? 0) + (long)(t.SenderRedeems * 1000),
                 ReceiverValue = (t.ReceiverCredits ?? 0) + (long)(t.ReceiverRedeems * 1000)
             })
             .ToListAsync();
@@ -898,24 +838,21 @@ public class FraudDetectionService : INService
             if (totalValue > 0)
             {
                 var imbalance = Math.Abs(user1ToUser2Value - user2ToUser1Value) / (double)totalValue;
-                poolIndicators.Add(imbalance); // High imbalance = likely alt account funding
+                poolIndicators.Add(imbalance);
             }
         }
 
-        // Indicator 2: Account creation timing correlation
         var user1Creation = ExtractAccountCreationTime(user1Id);
         var user2Creation = ExtractAccountCreationTime(user2Id);
         var creationTimeDiff = Math.Abs((user1Creation - user2Creation).TotalDays);
-        var creationCorrelation = creationTimeDiff < 7 ? 0.8 : // Created within 1 week = high risk
-                                 creationTimeDiff < 30 ? 0.4 : // Within 1 month = medium risk
-                                 0.0; // Older = lower risk
+        var creationCorrelation = creationTimeDiff < 7 ? 0.8 :
+                                 creationTimeDiff < 30 ? 0.4 :
+                                 0.0;
         poolIndicators.Add(creationCorrelation);
 
-        // Indicator 3: Mutual exclusive trading (accounts never active simultaneously)
         var mutualExclusivity = await DetectMutualExclusiveTradingAsync(db, user1Id, user2Id, since);
         poolIndicators.Add(mutualExclusivity);
 
-        // Indicator 4: Resource hoarding pattern (one account accumulates, other provides)
         var hoardingPattern = await DetectResourceHoardingPatternAsync(db, user1Id, user2Id, since);
         poolIndicators.Add(hoardingPattern);
 
@@ -927,7 +864,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private DateTime ExtractAccountCreationTime(ulong userId)
     {
-        const long discordEpoch = 1420070400000L; // Discord epoch in milliseconds
+        const long discordEpoch = 1420070400000L;
         var timestamp = (userId >> 22) + discordEpoch;
         return DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp).DateTime;
     }
@@ -937,8 +874,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectMutualExclusiveTradingAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get trading times for both users
-        var user1Times = await db.TradeLogs
+                var user1Times = await db.TradeLogs
             .Where(t => (t.SenderId == user1Id || t.ReceiverId == user1Id) && t.Time >= since)
             .Select(t => t.Time ?? DateTime.MinValue)
             .ToListAsync();
@@ -950,8 +886,7 @@ public class FraudDetectionService : INService
 
         if (user1Times.Count < 3 || user2Times.Count < 3) return 0.0;
 
-        // Check for overlapping activity windows (30-minute windows)
-        var overlaps = 0;
+                var overlaps = 0;
         var totalWindows = 0;
 
         foreach (var time1 in user1Times)
@@ -963,7 +898,7 @@ public class FraudDetectionService : INService
         }
 
         var mutualExclusivity = totalWindows > 0 ? 1.0 - ((double)overlaps / totalWindows) : 0.0;
-        return mutualExclusivity; // High value = accounts never active together = suspicious
+        return mutualExclusivity;
     }
 
     /// <summary>
@@ -971,8 +906,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectResourceHoardingPatternAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get net resource flow between accounts
-        var resourceFlows = await db.TradeLogs
+                var resourceFlows = await db.TradeLogs
             .Where(t => ((t.SenderId == user1Id && t.ReceiverId == user2Id) ||
                         (t.SenderId == user2Id && t.ReceiverId == user1Id)) &&
                        t.Time >= since)
@@ -985,15 +919,13 @@ public class FraudDetectionService : INService
 
         if (resourceFlows.Count == 0) return 0.0;
 
-        // Calculate net flow direction and consistency
-        var netFlowToUser2 = resourceFlows.Sum(f => f.ToUser2 ? f.NetValue : -f.NetValue);
+                var netFlowToUser2 = resourceFlows.Sum(f => f.ToUser2 ? f.NetValue : -f.NetValue);
         var totalAbsoluteFlow = resourceFlows.Sum(f => Math.Abs(f.NetValue));
 
         if (totalAbsoluteFlow == 0) return 0.0;
 
         var flowDirectionality = Math.Abs(netFlowToUser2) / (double)totalAbsoluteFlow;
         
-        // High directionality = one account consistently receives resources = hoarding pattern
         return Math.Min(flowDirectionality * 1.5, 1.0);
     }
 
@@ -1002,15 +934,13 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectTradingFrequencyCorrelationAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get trading frequencies for both users by day
-        var user1Frequency = await GetDailyTradingFrequencyAsync(db, user1Id, since);
+                var user1Frequency = await GetDailyTradingFrequencyAsync(db, user1Id, since);
         var user2Frequency = await GetDailyTradingFrequencyAsync(db, user2Id, since);
 
-        if (user1Frequency.Count < 7 || user2Frequency.Count < 7) return 0.0; // Need at least a week
+        if (user1Frequency.Count < 7 || user2Frequency.Count < 7) return 0.0;
 
-        // Calculate correlation between trading patterns
-        var correlation = CalculateFrequencyCorrelation(user1Frequency, user2Frequency);
-        return Math.Max(0.0, correlation); // Only positive correlations are suspicious
+                var correlation = CalculateFrequencyCorrelation(user1Frequency, user2Frequency);
+        return Math.Max(0.0, correlation);
     }
 
     /// <summary>
@@ -1051,7 +981,6 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectValueFunnelingAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Look for systematic one-way value transfers
         var allTrades = await db.TradeLogs
             .Where(t => ((t.SenderId == user1Id && t.ReceiverId == user2Id) ||
                         (t.SenderId == user2Id && t.ReceiverId == user1Id)) &&
@@ -1067,8 +996,7 @@ public class FraudDetectionService : INService
 
         if (allTrades.Count < 3) return 0.0;
 
-        // Calculate value flow over time
-        var runningBalance = 0.0;
+                var runningBalance = 0.0;
         var balanceChanges = new List<double>();
 
         foreach (var trade in allTrades)
@@ -1081,7 +1009,6 @@ public class FraudDetectionService : INService
             balanceChanges.Add(Math.Abs(runningBalance));
         }
 
-        // Increasing balance = systematic funneling
         var trend = CalculateTrend(balanceChanges);
         return Math.Min(trend, 1.0);
     }
@@ -1100,7 +1027,7 @@ public class FraudDetectionService : INService
         var sumX2 = Enumerable.Range(0, n).Sum(i => i * i);
 
         var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-        return Math.Max(0.0, slope / values.Average()); // Normalize by average value
+        return Math.Max(0.0, slope / values.Average());
     }
 
     /// <summary>
@@ -1110,15 +1037,12 @@ public class FraudDetectionService : INService
     {
         var coordinationFactors = new List<double>();
 
-        // Factor 1: Similar trading time patterns (hour of day)
         var timeCorrelation = await DetectTimingCorrelationAsync(db, user1Id, user2Id, since);
         coordinationFactors.Add(timeCorrelation);
 
-        // Factor 2: Synchronized activity spikes
         var activitySync = await DetectActivitySynchronizationAsync(db, user1Id, user2Id, since);
         coordinationFactors.Add(activitySync);
 
-        // Factor 3: Sequential trading patterns (one trades, then the other)
         var sequentialPattern = await DetectSequentialTradingAsync(db, user1Id, user2Id, since);
         coordinationFactors.Add(sequentialPattern);
 
@@ -1130,21 +1054,18 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectTimingCorrelationAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get trading hours for both users
-        var user1Hours = await GetTradingHoursAsync(db, user1Id, since);
+                var user1Hours = await GetTradingHoursAsync(db, user1Id, since);
         var user2Hours = await GetTradingHoursAsync(db, user2Id, since);
 
         if (user1Hours.Count < 5 || user2Hours.Count < 5) return 0.0;
 
-        // Create hour frequency distributions (0-23)
         var hourFreq1 = new int[24];
         var hourFreq2 = new int[24];
 
         foreach (var hour in user1Hours) hourFreq1[hour]++;
         foreach (var hour in user2Hours) hourFreq2[hour]++;
 
-        // Calculate correlation between hour patterns
-        return CalculateFrequencyCorrelation(hourFreq1.ToList(), hourFreq2.ToList());
+                return CalculateFrequencyCorrelation(hourFreq1.ToList(), hourFreq2.ToList());
     }
 
     /// <summary>
@@ -1165,8 +1086,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectActivitySynchronizationAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get daily activity counts
-        var user1Activity = await GetDailyTradingFrequencyAsync(db, user1Id, since);
+                var user1Activity = await GetDailyTradingFrequencyAsync(db, user1Id, since);
         var user2Activity = await GetDailyTradingFrequencyAsync(db, user2Id, since);
 
         return Math.Abs(CalculateFrequencyCorrelation(user1Activity, user2Activity));
@@ -1177,8 +1097,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectSequentialTradingAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Get all trading times for both users
-        var allTrades = await db.TradeLogs
+                var allTrades = await db.TradeLogs
             .Where(t => (t.SenderId == user1Id || t.ReceiverId == user1Id ||
                         t.SenderId == user2Id || t.ReceiverId == user2Id) && 
                        t.Time >= since)
@@ -1191,7 +1110,6 @@ public class FraudDetectionService : INService
 
         if (allTrades.Count < 10) return 0.0;
 
-        // Look for alternating patterns
         var sequences = 0;
         var alternations = 0;
 
@@ -1206,7 +1124,6 @@ public class FraudDetectionService : INService
 
         var alternationRatio = (double)alternations / sequences;
         
-        // High alternation = suspicious sequential trading
         return alternationRatio > 0.7 ? Math.Min((alternationRatio - 0.5) * 2.0, 1.0) : 0.0;
     }
     /// <summary>
@@ -1218,10 +1135,9 @@ public class FraudDetectionService : INService
         try
         {
             await using var db = await _dbProvider.GetConnectionAsync();
-            var lookbackTime = DateTime.UtcNow.AddDays(-14); // Analyze last 2 weeks
+            var lookbackTime = DateTime.UtcNow.AddDays(-14);
             var riskFactors = new List<double>();
 
-            // Analyze both users
             foreach (var userId in new[] { session.Player1Id, session.Player2Id })
             {
                 var userRisk = await AnalyzeUserBehavioralRiskAsync(db, userId, lookbackTime);
@@ -1249,7 +1165,6 @@ public class FraudDetectionService : INService
     {
         var behaviorFactors = new List<double>();
 
-        // Factor 1: Trading frequency analysis (bot detection)
         var tradingTimes = await db.TradeLogs
             .Where(t => (t.SenderId == userId || t.ReceiverId == userId) && t.Time >= since)
             .Select(t => t.Time ?? DateTime.MinValue)
@@ -1258,7 +1173,6 @@ public class FraudDetectionService : INService
 
         if (tradingTimes.Count >= 3)
         {
-            // Sub-factor 1a: Extremely regular intervals (bot indicator)
             var intervals = new List<double>();
             for (int i = 1; i < tradingTimes.Count; i++)
             {
@@ -1267,15 +1181,14 @@ public class FraudDetectionService : INService
 
             var avgInterval = intervals.Average();
             var intervalVariance = intervals.Sum(x => Math.Pow(x - avgInterval, 2)) / intervals.Count;
-            var regularityRisk = intervalVariance < 1.0 ? 0.8 : // Very regular = bot-like
-                                intervalVariance < 5.0 ? 0.4 : // Somewhat regular = suspicious
-                                0.0; // Irregular = normal
+            var regularityRisk = intervalVariance < 1.0 ? 0.8 :
+                                intervalVariance < 5.0 ? 0.4 :
+                                0.0;
 
             behaviorFactors.Add(regularityRisk);
 
-            // Sub-factor 1b: Burst trading (automation indicator)
             var burstCount = 0;
-            var rapidTradeThreshold = 60; // 1 minute
+            var rapidTradeThreshold = 60;
 
             for (int i = 1; i < tradingTimes.Count; i++)
             {
@@ -1288,21 +1201,17 @@ public class FraudDetectionService : INService
             var burstRisk = Math.Min((double)burstCount / tradingTimes.Count, 1.0);
             behaviorFactors.Add(burstRisk);
 
-            // Sub-factor 1c: Night trading patterns (suspicious timing)
-            var nightTrades = tradingTimes.Count(t => t.Hour >= 2 && t.Hour <= 6); // 2 AM - 6 AM
+            var nightTrades = tradingTimes.Count(t => t.Hour >= 2 && t.Hour <= 6);
             var nightTradingRisk = (double)nightTrades / tradingTimes.Count;
-            behaviorFactors.Add(nightTradingRisk * 0.7); // Moderate weight for night trading
+            behaviorFactors.Add(nightTradingRisk * 0.7);
         }
 
-        // Factor 2: Trade value patterns (exploitation detection)
         var valuePatterns = await AnalyzeTradeValuePatternsAsync(db, userId, since);
         behaviorFactors.Add(valuePatterns);
 
-        // Factor 3: Partner diversity (multi-account detection)
         var partnerDiversity = await AnalyzePartnerDiversityAsync(db, userId, since);
         behaviorFactors.Add(partnerDiversity);
 
-        // Factor 4: Trade completion patterns (automation detection)
         var completionPatterns = await AnalyzeTradeCompletionPatternsAsync(db, userId, since);
         behaviorFactors.Add(completionPatterns);
 
@@ -1327,24 +1236,21 @@ public class FraudDetectionService : INService
 
         var riskFactors = new List<double>();
 
-        // Pattern 1: Always receiving high value (exploitation victim pattern)
         var receivingTrades = trades.Count(t => !t.IsGiving && t.SenderValue > t.ReceiverValue * 5);
         var victimRisk = Math.Min((double)receivingTrades / trades.Count, 1.0);
-        riskFactors.Add(victimRisk * 0.3); // Lower weight - victim is less risky
+        riskFactors.Add(victimRisk * 0.3);
 
-        // Pattern 2: Always giving away high value (exploitation/RMT pattern)
         var givingTrades = trades.Count(t => t.IsGiving && t.SenderValue > t.ReceiverValue * 5);
         var exploiterRisk = Math.Min((double)givingTrades / trades.Count, 1.0);
-        riskFactors.Add(exploiterRisk * 1.2); // Higher weight - exploiter is very risky
+        riskFactors.Add(exploiterRisk * 1.2);
 
-        // Pattern 3: Consistent one-directional value flow (farming pattern)
         var netValueFlow = trades.Sum(t => t.IsGiving ? -(t.SenderValue - t.ReceiverValue) : (t.SenderValue - t.ReceiverValue));
         var totalValueFlow = trades.Sum(t => Math.Abs(t.SenderValue - t.ReceiverValue));
         
         if (totalValueFlow > 0)
         {
             var flowDirectionality = Math.Abs(netValueFlow) / totalValueFlow;
-            riskFactors.Add(flowDirectionality * 0.8); // High directionality = farming pattern
+            riskFactors.Add(flowDirectionality * 0.8);
         }
 
         return riskFactors.Average();
@@ -1367,13 +1273,12 @@ public class FraudDetectionService : INService
 
         if (totalTrades == 0) return 0.0;
 
-        // Low partner diversity = suspicious (trading with same accounts repeatedly)
         var diversityRatio = (double)partners / totalTrades;
         
-        return diversityRatio < 0.2 ? 0.9 :    // Very low diversity = very suspicious
-               diversityRatio < 0.4 ? 0.6 :    // Low diversity = suspicious
-               diversityRatio < 0.6 ? 0.3 :    // Medium diversity = somewhat suspicious
-               0.0;                            // High diversity = normal
+        return diversityRatio < 0.2 ? 0.9 :
+               diversityRatio < 0.4 ? 0.6 :
+               diversityRatio < 0.6 ? 0.3 :
+               0.0;
     }
 
     /// <summary>
@@ -1381,11 +1286,6 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> AnalyzeTradeCompletionPatternsAsync(DittoDataConnection db, ulong userId, DateTime since)
     {
-        // This is a simplified analysis since we don't have detailed trade session timing data
-        // In a more complete implementation, we'd analyze:
-        // - Time from trade initiation to completion
-        // - Consistency in confirmation timing
-        // - Response time patterns
 
         var tradeTimes = await db.TradeLogs
             .Where(t => (t.SenderId == userId || t.ReceiverId == userId) && t.Time >= since)
@@ -1395,21 +1295,19 @@ public class FraudDetectionService : INService
 
         if (tradeTimes.Count < 5) return 0.0;
 
-        // Analyze trade timing patterns for automation indicators
         var hourDistribution = new int[24];
         foreach (var time in tradeTimes)
         {
             hourDistribution[time.Hour]++;
         }
 
-        // Very concentrated activity in specific hours = automation
         var maxHourActivity = hourDistribution.Max();
         var concentrationRisk = (double)maxHourActivity / tradeTimes.Count;
 
-        return concentrationRisk > 0.7 ? 0.8 :    // Very concentrated = likely bot
-               concentrationRisk > 0.5 ? 0.5 :    // Concentrated = suspicious
-               concentrationRisk > 0.3 ? 0.2 :    // Somewhat concentrated = minor risk
-               0.0;                               // Well distributed = normal
+        return concentrationRisk > 0.7 ? 0.8 :
+               concentrationRisk > 0.5 ? 0.5 :
+               concentrationRisk > 0.3 ? 0.2 :
+               0.0;
     }
 
     /// <summary>
@@ -1428,13 +1326,11 @@ public class FraudDetectionService : INService
 
             var riskFactors = new List<double>();
 
-            // Individual account age risks
             riskFactors.Add(CalculateIndividualAgeRisk(user1Age));
             riskFactors.Add(CalculateIndividualAgeRisk(user2Age));
 
-            // Combined age risk (both accounts new = very suspicious)
             var combinedAgeRisk = CalculateCombinedAgeRisk(user1Age, user2Age);
-            riskFactors.Add(combinedAgeRisk * 1.3); // Higher weight for combined risk
+            riskFactors.Add(combinedAgeRisk * 1.3);
 
             var avgRisk = riskFactors.Average();
             
@@ -1455,7 +1351,7 @@ public class FraudDetectionService : INService
     /// </summary>
     private static TimeSpan CalculateAccountAge(ulong userId)
     {
-        const long discordEpoch = 1420070400000L; // Discord epoch in milliseconds
+        const long discordEpoch = 1420070400000L;
         var timestamp = (userId >> 22) + discordEpoch;
         var creationTime = DateTimeOffset.FromUnixTimeMilliseconds((long)timestamp).DateTime;
         return DateTime.UtcNow - creationTime;
@@ -1470,14 +1366,14 @@ public class FraudDetectionService : INService
 
         return ageDays switch
         {
-            < 1 => 1.0,        // Brand new account = maximum risk
-            < 3 => 0.9,        // Very new = very high risk
-            < 7 => 0.8,        // New account threshold = high risk
-            < 14 => 0.6,       // 2 weeks = moderate-high risk
-            < 30 => 0.4,       // 1 month = moderate risk
-            < 90 => 0.2,       // 3 months = low-moderate risk
-            < 180 => 0.1,      // 6 months = low risk
-            _ => 0.0           // Older accounts = minimal risk
+            < 1 => 1.0,
+            < 3 => 0.9,
+            < 7 => 0.8,
+            < 14 => 0.6,
+            < 30 => 0.4,
+            < 90 => 0.2,
+            < 180 => 0.1,
+            _ => 0.0
         };
     }
 
@@ -1489,33 +1385,36 @@ public class FraudDetectionService : INService
         var age1Days = user1Age.TotalDays;
         var age2Days = user2Age.TotalDays;
 
-        // Both accounts very new = extremely suspicious (alt account creation)
         if (age1Days < NewAccountThreshold && age2Days < NewAccountThreshold)
         {
             var ageDifference = Math.Abs(age1Days - age2Days);
             
-            // Created very close together = maximum suspicion
-            return ageDifference < 1 ? 1.0 :      // Same day = maximum risk
-                   ageDifference < 3 ? 0.9 :      // Within 3 days = very high risk
-                   ageDifference < 7 ? 0.8 :      // Within a week = high risk
-                   0.6;                           // Both new but different times = moderate-high risk
+            return ageDifference < 1 ? 1.0 :
+                   ageDifference < 3 ? 0.9 :
+                   ageDifference < 7 ? 0.8 :
+                   0.6;
         }
 
-        // One very new, one established = moderate risk (could be legitimate help)
         if ((age1Days < NewAccountThreshold && age2Days > 90) || 
             (age2Days < NewAccountThreshold && age1Days > 90))
         {
-            return 0.3; // Moderate risk - could be legitimate mentoring
+            return 0.3;
         }
 
-        // Both moderately new = some risk
         if (age1Days < SuspiciousAccountThreshold && age2Days < SuspiciousAccountThreshold)
         {
-            return 0.4; // Both suspicious age = moderate risk
+            return 0.4;
         }
 
-        return 0.0; // At least one established account = minimal combined risk
+        return 0.0;
     }
+    /// <summary>
+    ///     Persists fraud-flag side effects derived from a completed risk analysis. Currently a no-op placeholder
+    ///     reserved for downstream tagging once the schema for per-user fraud flags is finalized.
+    /// </summary>
+    /// <param name="analysis">The risk analysis whose flags should be persisted.</param>
+    /// <param name="session">The trade session that produced the analysis.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task SetFraudFlagsAsync(TradeRiskAnalysis analysis, TradeSession session) { }
     /// <summary>
     /// Detects chain trading patterns for a user within a specified time window.
@@ -1534,8 +1433,7 @@ public class FraudDetectionService : INService
             await using var db = await _dbProvider.GetConnectionAsync();
             var cutoffTime = DateTime.UtcNow - timeSpan;
 
-            // Get recent trades involving this user
-            var userTrades = await db.TradeLogs
+                        var userTrades = await db.TradeLogs
                 .Where(t => (t.SenderId == userId || t.ReceiverId == userId) && 
                            t.Time >= cutoffTime)
                 .Select(t => new TradeEdge
@@ -1547,20 +1445,18 @@ public class FraudDetectionService : INService
                 })
                 .ToListAsync();
 
-            if (userTrades.Count < 3) // Need at least 3 trades for a chain
+            if (userTrades.Count < 3)
             {
                 analysis.RiskScore = 0.0;
                 return analysis;
             }
 
-            // Build trading network and detect chains
-            var chains = FindTradingChains(userTrades, userId);
+                        var chains = FindTradingChains(userTrades, userId);
             analysis.DetectedChains = chains;
             analysis.MaxChainDepth = chains.Count > 0 ? chains.Max(c => c.Length) : 0;
             analysis.TotalValueFlowed = chains.Sum(c => c.TotalValue);
 
-            // Calculate risk score based on chain patterns
-            analysis.RiskScore = CalculateChainRiskScore(chains, userTrades.Count);
+                        analysis.RiskScore = CalculateChainRiskScore(chains, userTrades.Count);
         }
         catch (Exception ex)
         {
@@ -1582,7 +1478,7 @@ public class FraudDetectionService : INService
         foreach (var startTrade in trades.Where(t => !visited.Contains(t)))
         {
             var chain = BuildChainFromTrade(startTrade, trades, visited, ChainDepthLimit);
-            if (chain.Length >= 3) // Only consider chains of 3+ trades
+            if (chain.Length >= 3)
             {
                 chains.Add(chain);
             }
@@ -1616,10 +1512,9 @@ public class FraudDetectionService : INService
             currentUser = nextTrade.To;
             currentValue += nextTrade.Value;
 
-            // Check if chain loops back to start (circular trading)
-            if (currentUser == startTrade.From && depth >= 2)
+                        if (currentUser == startTrade.From && depth >= 2)
             {
-                chain.ValueConcentration = 1.0m; // Full circle = maximum concentration
+                chain.ValueConcentration = 1.0m;
                 break;
             }
         }
@@ -1629,8 +1524,7 @@ public class FraudDetectionService : INService
         
         if (chain.ValueConcentration == 0)
         {
-            // Calculate value concentration (how much value stays within the chain)
-            var uniqueUsers = chain.Path.SelectMany(t => new[] { t.From, t.To }).Distinct().Count();
+                        var uniqueUsers = chain.Path.SelectMany(t => new[] { t.From, t.To }).Distinct().Count();
             chain.ValueConcentration = uniqueUsers > 1 ? (decimal)(chain.Length) / uniqueUsers : 1.0m;
         }
 
@@ -1646,25 +1540,20 @@ public class FraudDetectionService : INService
 
         var riskFactors = new List<double>();
 
-        // Factor 1: Number of chains relative to total trades
         var chainDensity = (double)chains.Count / totalTrades;
-        riskFactors.Add(Math.Min(chainDensity * 2.0, 1.0)); // Cap at 1.0
+        riskFactors.Add(Math.Min(chainDensity * 2.0, 1.0));
 
-        // Factor 2: Maximum chain length
         var maxChainLength = chains.Max(c => c.Length);
-        var lengthRisk = Math.Min((maxChainLength - 2.0) / 8.0, 1.0); // 3 trades = low risk, 10+ = max risk
+        var lengthRisk = Math.Min((maxChainLength - 2.0) / 8.0, 1.0);
         riskFactors.Add(lengthRisk);
 
-        // Factor 3: Value concentration in chains
         var avgConcentration = chains.Average(c => (double)c.ValueConcentration);
         riskFactors.Add(avgConcentration);
 
-        // Factor 4: Circular trading patterns
         var circularChains = chains.Count(c => c.ValueConcentration >= 0.9m);
         var circularRisk = Math.Min((double)circularChains / chains.Count, 1.0);
-        riskFactors.Add(circularRisk * 1.5); // Boost circular pattern detection
+        riskFactors.Add(circularRisk * 1.5);
 
-        // Weighted average of risk factors
         return riskFactors.Average();
     }
 
@@ -1683,10 +1572,9 @@ public class FraudDetectionService : INService
         try
         {
             await using var db = await _dbProvider.GetConnectionAsync();
-            var lookbackTime = DateTime.UtcNow.AddMinutes(-60); // Look back 1 hour
+            var lookbackTime = DateTime.UtcNow.AddMinutes(-60);
 
-            // Get all trades by this user in the last hour, ordered by time
-            var recentTrades = await db.TradeLogs
+                        var recentTrades = await db.TradeLogs
                 .Where(t => (t.SenderId == userId || t.ReceiverId == userId) && t.Time >= lookbackTime)
                 .OrderBy(t => t.Time)
                 .Select(t => new { 
@@ -1701,13 +1589,11 @@ public class FraudDetectionService : INService
                 return analysis;
             }
 
-            // Detect bursts: groups of trades within the burst window
             var bursts = new List<TradeBurst>();
             var currentBurst = new List<(DateTime Time, ulong PartnerId)>();
 
             foreach (var trade in recentTrades)
             {
-                // Start new burst or continue current one
                 if (currentBurst.Count == 0 || 
                     (trade.Time - currentBurst.Last().Time).TotalSeconds <= BurstTradeWindow)
                 {
@@ -1715,20 +1601,17 @@ public class FraudDetectionService : INService
                 }
                 else
                 {
-                    // Process completed burst
-                    if (currentBurst.Count >= BurstTradeCount)
+                                        if (currentBurst.Count >= BurstTradeCount)
                     {
                         bursts.Add(CreateTradeBurst(currentBurst));
                     }
                     
-                    // Start new burst
                     currentBurst.Clear();
                     currentBurst.Add((trade.Time, trade.PartnerId));
                 }
             }
 
-            // Process final burst
-            if (currentBurst.Count >= BurstTradeCount)
+                        if (currentBurst.Count >= BurstTradeCount)
             {
                 bursts.Add(CreateTradeBurst(currentBurst));
             }
@@ -1737,8 +1620,7 @@ public class FraudDetectionService : INService
             analysis.TotalBurstsDetected = bursts.Count;
             analysis.MaxBurstSize = bursts.Count > 0 ? bursts.Max(b => b.TradeCount) : 0;
             
-            // Calculate risk score
-            analysis.RiskScore = CalculateBurstRiskScore(bursts, recentTrades.Count);
+                        analysis.RiskScore = CalculateBurstRiskScore(bursts, recentTrades.Count);
         }
         catch (Exception ex)
         {
@@ -1782,26 +1664,21 @@ public class FraudDetectionService : INService
 
         var riskFactors = new List<double>();
 
-        // Factor 1: Number of bursts detected
-        var burstDensity = Math.Min((double)bursts.Count / 3.0, 1.0); // 3+ bursts = max risk
+        var burstDensity = Math.Min((double)bursts.Count / 3.0, 1.0);
         riskFactors.Add(burstDensity);
 
-        // Factor 2: Maximum burst size
         var maxBurstSize = bursts.Max(b => b.TradeCount);
-        var sizeRisk = Math.Min((maxBurstSize - BurstTradeCount) / 10.0, 1.0); // 5 trades = min, 15+ = max
+        var sizeRisk = Math.Min((maxBurstSize - BurstTradeCount) / 10.0, 1.0);
         riskFactors.Add(sizeRisk);
 
-        // Factor 3: Average time intervals (very short = suspicious)
         var avgInterval = bursts.Average(b => b.AverageInterval);
-        var intervalRisk = avgInterval < 30 ? 1.0 : Math.Max(0.0, (120 - avgInterval) / 90.0); // <30s = max risk
+        var intervalRisk = avgInterval < 30 ? 1.0 : Math.Max(0.0, (120 - avgInterval) / 90.0);
         riskFactors.Add(intervalRisk);
 
-        // Factor 4: Unique partners ratio (few partners = suspicious)
         var avgPartnerRatio = bursts.Average(b => (double)b.UniquePartners / b.TradeCount);
         var partnerRisk = avgPartnerRatio < 0.3 ? 1.0 : Math.Max(0.0, (0.7 - avgPartnerRatio) / 0.4);
         riskFactors.Add(partnerRisk);
 
-        // Weighted average with emphasis on intervals and partners
         var weights = new[] { 0.2, 0.2, 0.3, 0.3 };
         return riskFactors.Zip(weights, (factor, weight) => factor * weight).Sum();
     }
@@ -1816,50 +1693,42 @@ public class FraudDetectionService : INService
         try
         {
             await using var db = await _dbProvider.GetConnectionAsync();
-            var lookbackTime = DateTime.UtcNow.AddDays(-30); // Analyze last 30 days
+            var lookbackTime = DateTime.UtcNow.AddDays(-30);
 
-            // Get all trading partners for both users
-            var user1Partners = await GetTradingPartnersAsync(db, session.Player1Id, lookbackTime);
+                        var user1Partners = await GetTradingPartnersAsync(db, session.Player1Id, lookbackTime);
             var user2Partners = await GetTradingPartnersAsync(db, session.Player2Id, lookbackTime);
 
-            // Find shared trading partners
-            var sharedPartners = user1Partners.Keys.Intersect(user2Partners.Keys).ToList();
+                        var sharedPartners = user1Partners.Keys.Intersect(user2Partners.Keys).ToList();
             
             analysis.UsersInSameNetwork = sharedPartners.Count >= NetworkSizeThreshold;
-            analysis.NetworkSize = sharedPartners.Count + 2; // +2 for the two traders themselves
+            analysis.NetworkSize = sharedPartners.Count + 2;
 
             if (analysis.UsersInSameNetwork)
             {
-                // Calculate network risk based on trading patterns
-                var connectionStrengths = new List<double>();
+                                var connectionStrengths = new List<double>();
                 
                 foreach (var partnerId in sharedPartners)
                 {
                     var user1Trades = user1Partners[partnerId];
                     var user2Trades = user2Partners[partnerId];
                     
-                    // Calculate connection strength based on trade frequency and timing
-                    var strengthU1 = CalculateConnectionStrength(user1Trades);
+                                        var strengthU1 = CalculateConnectionStrength(user1Trades);
                     var strengthU2 = CalculateConnectionStrength(user2Trades);
                     var averageStrength = (strengthU1 + strengthU2) / 2.0;
                     
                     connectionStrengths.Add(averageStrength);
                 }
 
-                // Network risk factors
                 var riskFactors = new List<double>();
 
-                // Factor 1: Network size (larger networks are more suspicious)
                 var sizeRisk = Math.Min((double)(analysis.NetworkSize - NetworkSizeThreshold) / 7.0, 1.0);
                 riskFactors.Add(sizeRisk);
 
-                // Factor 2: Average connection strength
                 var avgStrength = connectionStrengths.Count > 0 ? connectionStrengths.Average() : 0.0;
                 riskFactors.Add(avgStrength);
 
-                // Factor 3: Network density (how interconnected the network is)
                 var maxPossibleConnections = analysis.NetworkSize * (analysis.NetworkSize - 1) / 2;
-                var actualConnections = sharedPartners.Count + 1; // +1 for current trade
+                var actualConnections = sharedPartners.Count + 1;
                 var density = (double)actualConnections / maxPossibleConnections;
                 riskFactors.Add(Math.Min(density * 2.0, 1.0));
 
@@ -1917,11 +1786,9 @@ public class FraudDetectionService : INService
 
         var factors = new List<double>();
 
-        // Factor 1: Trade frequency
-        var tradeFrequency = Math.Min((double)tradeTimes.Count / 10.0, 1.0); // 10+ trades = max
+        var tradeFrequency = Math.Min((double)tradeTimes.Count / 10.0, 1.0);
         factors.Add(tradeFrequency);
 
-        // Factor 2: Consistency (regular trading intervals)
         if (tradeTimes.Count > 1)
         {
             var intervals = new List<double>();
@@ -1934,14 +1801,13 @@ public class FraudDetectionService : INService
 
             var avgInterval = intervals.Average();
             var intervalVariance = intervals.Sum(i => Math.Pow(i - avgInterval, 2)) / intervals.Count;
-            var consistency = Math.Max(0.0, 1.0 - (intervalVariance / (24 * 24))); // Normalize to 24h variance
+            var consistency = Math.Max(0.0, 1.0 - (intervalVariance / (24 * 24)));
             
             factors.Add(consistency);
         }
 
-        // Factor 3: Recent activity boost
         var recentTrades = tradeTimes.Count(t => t >= DateTime.UtcNow.AddDays(-7));
-        var recentActivityBoost = Math.Min((double)recentTrades / 3.0, 0.5); // Up to 50% boost
+        var recentActivityBoost = Math.Min((double)recentTrades / 3.0, 0.5);
         
         return factors.Average() + recentActivityBoost;
     }
@@ -1956,10 +1822,9 @@ public class FraudDetectionService : INService
         try
         {
             await using var db = await _dbProvider.GetConnectionAsync();
-            var lookbackTime = DateTime.UtcNow.AddDays(-7); // Analyze last week
+            var lookbackTime = DateTime.UtcNow.AddDays(-7);
 
-            // Get Pokemon being traded for market analysis from both users
-            var player1Pokemon = session.GetPokemonBy(session.Player1Id).Where(p => p.PokemonId.HasValue).Select(p => p.PokemonId!.Value);
+                        var player1Pokemon = session.GetPokemonBy(session.Player1Id).Where(p => p.PokemonId.HasValue).Select(p => p.PokemonId!.Value);
             var player2Pokemon = session.GetPokemonBy(session.Player2Id).Where(p => p.PokemonId.HasValue).Select(p => p.PokemonId!.Value);
             var tradedPokemonIds = player1Pokemon.Concat(player2Pokemon).ToList();
             
@@ -1969,8 +1834,7 @@ public class FraudDetectionService : INService
                 return analysis;
             }
 
-            // Get recent market activities for these Pokemon (simplified approach for now)
-            var marketActivities = await db.Market
+                        var marketActivities = await db.Market
                 .Where(m => tradedPokemonIds.Contains(m.PokemonId) && m.ListedAt >= lookbackTime)
                 .Join(db.UserPokemon, m => m.PokemonId, p => p.Id, (m, p) => new MarketActivityData
                 {
@@ -1984,22 +1848,18 @@ public class FraudDetectionService : INService
 
             var riskFactors = new List<double>();
 
-            // Detection 1: Wash Trading - Same users repeatedly buying/selling same Pokemon types
             var washTradingRisk = await DetectWashTradingAsync(db, session.Player1Id, session.Player2Id, lookbackTime);
             riskFactors.Add(washTradingRisk);
             analysis.WashTradingDetected = washTradingRisk > 0.6;
 
-            // Detection 2: Price Fixing - Coordinated pricing among connected users
             var priceFixingRisk = DetectPriceFixingPatterns(marketActivities);
             riskFactors.Add(priceFixingRisk);
             analysis.PriceFixingDetected = priceFixingRisk > 0.7;
 
-            // Detection 3: Pump & Dump - Rapid price increases followed by sells
             var pumpDumpRisk = DetectPumpAndDumpPatterns(marketActivities);
             riskFactors.Add(pumpDumpRisk);
             analysis.PumpAndDumpDetected = pumpDumpRisk > 0.8;
 
-            // Detection 4: Circular Trading Partners - Users trading in circles
             var circularRisk = await DetectCircularTradingAsync(db, session.Player1Id, session.Player2Id, lookbackTime);
             riskFactors.Add(circularRisk);
             analysis.CircularTradingPartners = circularRisk > 0.5 ? 1 : 0;
@@ -2020,15 +1880,13 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectWashTradingAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Count direct trades between these two users
         var directTrades = await db.TradeLogs
             .Where(t => ((t.SenderId == user1Id && t.ReceiverId == user2Id) ||
                         (t.SenderId == user2Id && t.ReceiverId == user1Id)) &&
                        t.Time >= since)
             .CountAsync();
 
-        // Get their total individual trade counts
-        var user1TotalTrades = await db.TradeLogs
+                var user1TotalTrades = await db.TradeLogs
             .Where(t => (t.SenderId == user1Id || t.ReceiverId == user1Id) && t.Time >= since)
             .CountAsync();
 
@@ -2038,11 +1896,9 @@ public class FraudDetectionService : INService
 
         if (user1TotalTrades == 0 || user2TotalTrades == 0) return 0.0;
 
-        // Calculate wash trading ratio
-        var avgTotalTrades = (user1TotalTrades + user2TotalTrades) / 2.0;
+                var avgTotalTrades = (user1TotalTrades + user2TotalTrades) / 2.0;
         var washRatio = directTrades / avgTotalTrades;
 
-        // High ratio = suspicious wash trading
         return Math.Min(washRatio * 2.0, 1.0);
     }
 
@@ -2055,7 +1911,6 @@ public class FraudDetectionService : INService
 
         var riskFactors = new List<double>();
 
-        // Group by Pokemon name to analyze price patterns
         var pokemonGroups = marketActivities.GroupBy(m => m.PokemonName);
 
         foreach (var group in pokemonGroups)
@@ -2063,12 +1918,10 @@ public class FraudDetectionService : INService
             var prices = group.Select(g => g.Price).ToList();
             if (prices.Count < 3) continue;
 
-            // Factor 1: Price uniformity (identical prices = suspicious)
             var uniquePrices = prices.Distinct().Count();
             var uniformityRisk = 1.0 - ((double)uniquePrices / prices.Count);
             riskFactors.Add(uniformityRisk);
 
-            // Factor 2: Seller coordination (same sellers repeatedly listing)
             var sellers = group.Select(g => g.UserId).ToList();
             var uniqueSellers = sellers.Distinct().Count();
             var sellerConcentration = 1.0 - ((double)uniqueSellers / sellers.Count);
@@ -2095,7 +1948,6 @@ public class FraudDetectionService : INService
 
             var prices = chronological.Select(c => c.Price).ToList();
             
-            // Look for rapid price increases followed by decreases
             var priceChanges = new List<double>();
             for (int i = 1; i < prices.Count; i++)
             {
@@ -2103,11 +1955,10 @@ public class FraudDetectionService : INService
                 priceChanges.Add(change);
             }
 
-            // Detect pump pattern: rapid increases followed by rapid decreases
             var maxIncrease = priceChanges.Take(priceChanges.Count / 2).Max();
             var maxDecrease = Math.Abs(priceChanges.Skip(priceChanges.Count / 2).Min());
 
-            if (maxIncrease > 0.5 && maxDecrease > 0.3) // 50% pump, 30% dump
+            if (maxIncrease > 0.5 && maxDecrease > 0.3)
             {
                 var pumpDumpRisk = Math.Min((maxIncrease + maxDecrease) / 2.0, 1.0);
                 riskFactors.Add(pumpDumpRisk);
@@ -2122,22 +1973,38 @@ public class FraudDetectionService : INService
     /// </summary>
     private async Task<double> DetectCircularTradingAsync(DittoDataConnection db, ulong user1Id, ulong user2Id, DateTime since)
     {
-        // Find common trading partners who trade with both users
-        var user1Partners = await GetTradingPartnersAsync(db, user1Id, since);
+                var user1Partners = await GetTradingPartnersAsync(db, user1Id, since);
         var user2Partners = await GetTradingPartnersAsync(db, user2Id, since);
 
         var commonPartners = user1Partners.Keys.Intersect(user2Partners.Keys).ToList();
         
         if (commonPartners.Count < 2) return 0.0;
 
-        // Calculate circular risk based on common partners and trading frequency
-        var circularityScore = Math.Min((double)commonPartners.Count / 5.0, 1.0); // 5+ common partners = max risk
+                var circularityScore = Math.Min((double)commonPartners.Count / 5.0, 1.0);
         
         return circularityScore;
     }
+    /// <summary>
+    ///     Produces human-readable insight strings summarizing notable risk signals from a comprehensive analysis.
+    ///     Stub implementation returning an empty list; reserved for future enrichment.
+    /// </summary>
+    /// <param name="analysis">The completed fraud analysis to derive insights from.</param>
+    /// <returns>An ordered list of insight strings (currently empty).</returns>
     private static List<string> GenerateActionableInsights(ComprehensiveFraudAnalysis analysis) => [];
+
+    /// <summary>
+    ///     Determines the recommended manual reviewer action for a fraud analysis. Stub returning a default value;
+    ///     reserved for future tuning once the review queue is wired up.
+    /// </summary>
+    /// <param name="analysis">The completed fraud analysis.</param>
+    /// <returns>The recommended action a human reviewer should take.</returns>
     private static RecommendedAction DetermineRecommendedAction(ComprehensiveFraudAnalysis analysis) => new();
-    
+
+    /// <summary>
+    ///     Maps a comprehensive risk score to the automated action the trade pipeline should take.
+    /// </summary>
+    /// <param name="riskScore">Aggregate risk score in the range [0, 1].</param>
+    /// <returns>The automated action corresponding to the score's threshold band.</returns>
     private static AutomatedAction DetermineAutomatedAction(double riskScore)
     {
         return riskScore switch
@@ -2151,6 +2018,14 @@ public class FraudDetectionService : INService
         };
     }
 
+    /// <summary>
+    ///     Executes the chosen automated action for a flagged trade — blocking, applying temp restrictions,
+    ///     flagging for review, or logging only — and returns the result the caller should surface.
+    /// </summary>
+    /// <param name="session">The trade session being acted on.</param>
+    /// <param name="analysis">The comprehensive fraud analysis that prompted the action.</param>
+    /// <param name="action">The action selected by <see cref="DetermineAutomatedAction"/>.</param>
+    /// <returns>A <see cref="FraudDetectionResult"/> describing whether the trade may proceed and why.</returns>
     private async Task<FraudDetectionResult> ExecuteAutomatedActionAsync(
         TradeSession session, ComprehensiveFraudAnalysis analysis, AutomatedAction action)
     {
@@ -2191,7 +2066,6 @@ public class FraudDetectionService : INService
         
         Log.Warning("🔨 Applying immediate bans to users {User1} and {User2}: {Reason}", user1Id, user2Id, reason);
 
-        // Ban both users
         foreach (var userId in new[] { user1Id, user2Id })
         {
             await db.Users
@@ -2217,23 +2091,19 @@ public class FraudDetectionService : INService
         {
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            // Classify the primary fraud type from comprehensive analysis
             var primaryFraudType = ClassifyPrimaryFraudType(analysis);
             
-            // Generate triggered rules and insights
             var triggeredRules = GenerateTriggeredRules(analysis);
             var detectionDetails = GenerateDetectionDetails(analysis);
 
-            // Create fraud detection record
             var detection = new TradeFraudDetection
             {
-                TradeId = null, // We don't have trade log ID at this point
+                TradeId = null,
                 DetectionTimestamp = analysis.AnalysisTimestamp,
                 PrimaryUserId = session.Player1Id,
                 SecondaryUserId = session.Player2Id,
-                AdditionalUserIds = null, // JSON array if needed for network fraud
+                AdditionalUserIds = null,
                 
-                // Fraud classification
                 FraudType = primaryFraudType,
                 ConfidenceLevel = CalculateConfidenceLevel(analysis),
                 RiskScore = analysis.BasicRiskAnalysis?.OverallRiskScore ?? 0.0,
@@ -2241,13 +2111,11 @@ public class FraudDetectionService : INService
                 TriggeredRules = System.Text.Json.JsonSerializer.Serialize(triggeredRules),
                 DetectionDetails = System.Text.Json.JsonSerializer.Serialize(detectionDetails),
                 
-                // Automated actions
                 AutomatedAction = action,
                 TradeBlocked = !result.IsAllowed,
-                UsersNotified = false, // Set based on your notification logic
+                UsersNotified = false,
                 AdminAlerted = result.RequiresAdminReview,
                 
-                // Investigation status
                 InvestigationStatus = result.RequiresAdminReview ? InvestigationStatus.Pending : InvestigationStatus.Dismissed,
                 AssignedAdminId = null,
                 InvestigationStarted = null,
@@ -2256,12 +2124,10 @@ public class FraudDetectionService : INService
                 AdminNotes = null,
                 AdminActions = null,
                 
-                // False positive tracking
                 FalsePositive = false,
                 FalsePositiveReason = null,
                 RequiresRuleAdjustment = false,
                 
-                // fraud detection flags - THIS IS KEY FOR DETAILED STATS
                 ChainTradingDetected = (analysis.ChainTradingAnalysis?.RiskScore ?? 0) > 0.5,
                 BurstTradingDetected = (analysis.BurstTradingAnalysis?.RiskScore ?? 0) > 0.5,
                 NetworkFraudDetected = (analysis.NetworkAnalysis?.NetworkRiskScore ?? 0) > 0.5,
@@ -2270,7 +2136,6 @@ public class FraudDetectionService : INService
                 ActionableInsights = System.Text.Json.JsonSerializer.Serialize(analysis.ActionableInsights)
             };
 
-            // Insert the detection record
             await db.InsertAsync(detection);
 
             Log.Information("📊 Fraud detection logged to database: Trade={TradeId}, Type={FraudType}, Risk={Risk:P2}, Blocked={Blocked}",
@@ -2291,56 +2156,47 @@ public class FraudDetectionService : INService
         var basicAnalysis = analysis.BasicRiskAnalysis;
         if (basicAnalysis == null) return FraudType.UnusualBehavior;
 
-        // Priority order for fraud type classification:
         
-        // 1. Alt Account Trading (highest priority - most damaging)
         if (basicAnalysis.FlaggedAltAccount || 
             (analysis.BasicRiskAnalysis?.RelationshipRiskScore ?? 0) > 0.7)
         {
             return FraudType.AltAccountTrading;
         }
 
-        // 2. Real Money Trading (high priority - involves real money)
         if (basicAnalysis.FlaggedRmt || 
             (analysis.BasicRiskAnalysis?.ValueImbalanceScore ?? 0) > 0.8)
         {
             return FraudType.RealMoneyTrading;
         }
 
-        // 3. Bot Abuse (automation detection)
         if (basicAnalysis.FlaggedBotActivity || 
             (analysis.BurstTradingAnalysis?.RiskScore ?? 0) > 0.7)
         {
             return FraudType.BotAbuse;
         }
 
-        // 4. Newbie Exploitation (protecting new users)
         if (basicAnalysis.FlaggedNewbieExploitation ||
             (analysis.BasicRiskAnalysis?.AccountAgeRiskScore ?? 0) > 0.6)
         {
             return FraudType.NewbieExploitation;
         }
 
-        // 5. Market Manipulation (affects market integrity)
         if ((analysis.MarketManipulation?.RiskScore ?? 0) > 0.6)
         {
             return FraudType.MarketManipulation;
         }
 
-        // 6. Network Coordination (organized fraud)
         if ((analysis.NetworkAnalysis?.NetworkRiskScore ?? 0) > 0.6 ||
             (analysis.ChainTradingAnalysis?.RiskScore ?? 0) > 0.6)
         {
             return FraudType.NetworkCoordination;
         }
 
-        // 7. Unusual Behavior (fallback for other suspicious activity)
         if (basicAnalysis.FlaggedUnusualBehavior || basicAnalysis.OverallRiskScore > 0.4)
         {
             return FraudType.UnusualBehavior;
         }
 
-        // Default fallback
         return FraudType.UnusualBehavior;
     }
 
@@ -2351,7 +2207,6 @@ public class FraudDetectionService : INService
     {
         var confidenceFactors = new List<double>();
 
-        // Factor 1: How many fraud types detected
         var detectedTypes = 0;
         if ((analysis.ChainTradingAnalysis?.RiskScore ?? 0) > 0.5) detectedTypes++;
         if ((analysis.BurstTradingAnalysis?.RiskScore ?? 0) > 0.5) detectedTypes++;
@@ -2359,10 +2214,9 @@ public class FraudDetectionService : INService
         if ((analysis.MarketManipulation?.RiskScore ?? 0) > 0.5) detectedTypes++;
         if ((analysis.PokemonLaundering?.LaunderingDetected ?? false)) detectedTypes++;
 
-        var typeConfidence = Math.Min((double)detectedTypes / 2.0, 1.0); // 2+ types = high confidence
+        var typeConfidence = Math.Min((double)detectedTypes / 2.0, 1.0);
         confidenceFactors.Add(typeConfidence);
 
-        // Factor 2: Basic analysis flags
         var basicAnalysis = analysis.BasicRiskAnalysis;
         if (basicAnalysis != null)
         {
@@ -2377,7 +2231,6 @@ public class FraudDetectionService : INService
             confidenceFactors.Add(flagConfidence);
         }
 
-        // Factor 3: Overall risk score
         var riskConfidence = Math.Min(analysis.ComprehensiveRiskScore * 1.2, 1.0);
         confidenceFactors.Add(riskConfidence);
 

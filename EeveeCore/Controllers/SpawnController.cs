@@ -47,8 +47,8 @@ public class SpawnController : ControllerBase
                 Description = "Pokemon spawn in Discord channels when users are active",
                 Mechanics = new
                 {
-                    BaseSpawnChance = 0.03, // 3% base chance per message
-                    BaseCooldown = 20, // 20 seconds between spawns in a guild
+                    BaseSpawnChance = 0.03,
+                    BaseCooldown = 20,
                     Factors = new[]
                     {
                         "User activity in channels",
@@ -73,7 +73,7 @@ public class SpawnController : ControllerBase
                 }
             };
 
-            await Task.CompletedTask; // Make it actually async
+            await Task.CompletedTask;
             return Ok(new { success = true, spawnInfo });
         }
         catch (Exception ex)
@@ -97,7 +97,6 @@ public class SpawnController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Get user's catch statistics
             var totalCaught = await (from ownership in db.UserPokemonOwnerships
                                    join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                                    where ownership.UserId == userId
@@ -113,7 +112,6 @@ public class SpawnController : ControllerBase
                                      where ownership.UserId == userId && pokemon.Radiant == true
                                      select pokemon).CountAsync();
 
-            // Get user's chain and hunt info
             var user = await db.Users
                 .Where(u => u.UserId == userId)
                 .Select(u => new { u.Chain, u.Hunt })
@@ -151,12 +149,10 @@ public class SpawnController : ControllerBase
     {
         try
         {
-            // Get current events from MongoDB
             var currentEvents = await _mongoService.CurrentRadiants
                 .Find(_ => true)
                 .ToListAsync();
 
-            // This would also check for other types of events
             var events = new
             {
                 RadiantEvents = currentEvents,
@@ -184,7 +180,6 @@ public class SpawnController : ControllerBase
         {
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Get recent spawns from ActiveSpawns table if it tracks this
             var recentSpawns = await db.ActiveSpawns
                 .OrderByDescending(s => s.CreatedAt)
                 .Take(10)
@@ -215,7 +210,6 @@ public class SpawnController : ControllerBase
     {
         try
         {
-            // This would ideally come from configuration or the spawn service
             var spawnRates = new
             {
                 BaseRates = new
@@ -242,7 +236,7 @@ public class SpawnController : ControllerBase
                 Note = "Actual rates may vary based on current events and user factors"
             };
 
-            await Task.CompletedTask; // Make it actually async
+            await Task.CompletedTask;
             return Ok(new { success = true, spawnRates });
         }
         catch (Exception ex)
@@ -262,6 +256,4 @@ public class SpawnController : ControllerBase
         return ulong.TryParse(userIdClaim, out var userId) ? userId : 0;
     }
 
-    // Note: Spawn catching must be done through Discord
-    // This controller provides informational data about spawns for dashboard display
 }

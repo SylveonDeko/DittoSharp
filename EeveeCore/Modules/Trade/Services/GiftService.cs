@@ -51,7 +51,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You need to give at least 1 credit!");
         }
 
-        // Validate participants
         var validationResult = await ValidateGiftParticipantsAsync(giverId, receiverId);
         if (!validationResult.Success)
         {
@@ -79,7 +78,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You don't have that many credits!");
         }
 
-        // Transfer credits
         await db.Users.Where(u => u.UserId == giverId)
             .Set(u => u.MewCoins, giverCredits - (ulong)amount)
             .UpdateAsync();
@@ -88,10 +86,8 @@ public class GiftService : INService
             .Set(u => u.MewCoins, (receiver.MewCoins ?? 0) + (ulong)amount)
             .UpdateAsync();
 
-        // Log the transaction
         await LogGiftTransactionAsync(giverId, receiverId, amount.ToString(), "gift_credits");
 
-        // Send log message
         await SendLogMessageAsync($"💰 **Credits Gift**\n" +
                                   $"**From**: <@{giverId}> (`{giverId}`)\n" +
                                   $"**To**: <@{receiverId}> (`{receiverId}`)\n" +
@@ -121,7 +117,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You need to give at least 1 redeem!");
         }
 
-        // Validate participants
         var validationResult = await ValidateGiftParticipantsAsync(giverId, receiverId);
         if (!validationResult.Success)
         {
@@ -149,7 +144,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You don't have that many redeems!");
         }
 
-        // Transfer redeems
         await db.Users.Where(u => u.UserId == giverId)
             .Set(u => u.Redeems, giverRedeems - (ulong)amount)
             .UpdateAsync();
@@ -158,10 +152,8 @@ public class GiftService : INService
             .Set(u => u.Redeems, (receiver.Redeems ?? 0) + (ulong)amount)
             .UpdateAsync();
 
-        // Log the transaction
         await LogGiftTransactionAsync(giverId, receiverId, amount.ToString(), "gift_redeems");
 
-        // Send log message
         await SendLogMessageAsync($"🎫 **Redeems Gift**\n" +
                                   $"**From**: <@{giverId}> (`{giverId}`)\n" +
                                   $"**To**: <@{receiverId}> (`{receiverId}`)\n" +
@@ -191,7 +183,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You cannot give away that Pokemon");
         }
 
-        // Validate participants
         var validationResult = await ValidateGiftParticipantsAsync(giverId, receiverId);
         if (!validationResult.Success)
         {
@@ -199,8 +190,7 @@ public class GiftService : INService
         }
 
         await using var db = await _dbProvider.GetConnectionAsync();
-        
-        // Get Pokemon
+
         var ownership = await db.UserPokemonOwnerships
             .FirstOrDefaultAsync(o => o.UserId == giverId && o.Position == (ulong)pokemonPosition);
 
@@ -217,7 +207,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("Pokemon not found.");
         }
 
-        // Validate Pokemon
         if (pokemon.PokemonName == "Egg")
         {
             return GiftResult.FailedGift("You cannot give Eggs!");
@@ -238,28 +227,23 @@ public class GiftService : INService
             return GiftResult.FailedGift("That Pokemon is currently listed on the market!");
         }
 
-        // Find next position for receiver
         var maxPosition = await db.UserPokemonOwnerships
             .Where(o => o.UserId == receiverId)
             .MaxAsync(o => (ulong?)o.Position) ?? 0;
 
         var newPosition = maxPosition + 1;
 
-        // Transfer ownership
         await db.UserPokemonOwnerships.Where(o => o.UserId == giverId && o.PokemonId == ownership.PokemonId)
             .Set(o => o.UserId, receiverId)
             .Set(o => o.Position, newPosition)
             .UpdateAsync();
 
-        // Reset Pokemon state
         await db.UserPokemon.Where(p => p.Id == pokemon.Id)
             .Set(p => p.MarketEnlist, false)
             .UpdateAsync();
 
-        // Log the transaction
         await LogGiftTransactionAsync(giverId, receiverId, pokemon.Id.ToString(), "gift_pokemon");
 
-        // Send log message
         await SendLogMessageAsync($"🎁 **Pokemon Gift**\n" +
                                   $"**From**: <@{giverId}> (`{giverId}`)\n" +
                                   $"**To**: <@{receiverId}> (`{receiverId}`)\n" +
@@ -290,7 +274,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("You need to gift at least 1 token!");
         }
 
-        // Validate participants
         var validationResult = await ValidateGiftParticipantsAsync(giverId, receiverId);
         if (!validationResult.Success)
         {
@@ -312,7 +295,6 @@ public class GiftService : INService
             return GiftResult.FailedGift("The recipient has not started! They need to start with `/start` first!");
         }
 
-        // Get token data
         var giverTokens = GetUserTokensFromJson(giver.Tokens);
         var receiverTokens = GetUserTokensFromJson(receiver.Tokens);
 
@@ -322,11 +304,9 @@ public class GiftService : INService
             return GiftResult.FailedGift($"You don't have enough {tokenTypeName} tokens!");
         }
 
-        // Transfer tokens
         giverTokens[tokenTypeName] = giverAmount - amount;
         receiverTokens[tokenTypeName] = receiverTokens.GetValueOrDefault(tokenTypeName, 0) + amount;
 
-        // Update database
         await db.Users.Where(u => u.UserId == giverId)
             .Set(u => u.Tokens, JsonSerializer.Serialize(giverTokens))
             .UpdateAsync();
@@ -335,10 +315,8 @@ public class GiftService : INService
             .Set(u => u.Tokens, JsonSerializer.Serialize(receiverTokens))
             .UpdateAsync();
 
-        // Log the transaction
         await LogGiftTransactionAsync(giverId, receiverId, amount.ToString(), "gift_tokens");
 
-        // Send log message
         await SendLogMessageAsync($"{tokenType.GetEmoji()} **{tokenTypeName} Tokens Gift**\n" +
                                   $"**From**: <@{giverId}> (`{giverId}`)\n" +
                                   $"**To**: <@{receiverId}> (`{receiverId}`)\n" +
@@ -351,11 +329,16 @@ public class GiftService : INService
 
     #region Private Helper Methods
 
+    /// <summary>
+    ///     Verifies neither participant has an active trade lock before a gift is allowed to proceed.
+    /// </summary>
+    /// <param name="giverId">The Discord ID of the gift sender.</param>
+    /// <param name="receiverId">The Discord ID of the gift recipient.</param>
+    /// <returns>A successful <see cref="TradeResult"/> if both users are clear; a failure result if either is trade-locked.</returns>
     private async Task<TradeResult> ValidateGiftParticipantsAsync(ulong giverId, ulong receiverId)
     {
         await using var db = await _dbProvider.GetConnectionAsync();
-        
-        // Check if users are trade locked
+
         var users = await db.Users
             .Where(u => u.UserId == giverId || u.UserId == receiverId)
             .ToListAsync();
@@ -369,6 +352,12 @@ public class GiftService : INService
         return TradeResult.FromSuccess("Users validated for gifting.");
     }
 
+    /// <summary>
+    ///     Deserializes the JSON-encoded type-token map stored on a user. Falls back to a fully zeroed
+    ///     default dictionary when the input is null, empty, or fails to parse.
+    /// </summary>
+    /// <param name="tokensJson">The raw JSON value from the user record.</param>
+    /// <returns>A dictionary keyed by Pokemon type name with non-null integer counts.</returns>
     private static Dictionary<string, int> GetUserTokensFromJson(string? tokensJson)
     {
         if (string.IsNullOrEmpty(tokensJson))
@@ -387,6 +376,10 @@ public class GiftService : INService
         }
     }
 
+    /// <summary>
+    ///     Builds the canonical zero-initialized type-token dictionary keyed by every Pokemon type.
+    /// </summary>
+    /// <returns>A dictionary with one entry per Pokemon type, each set to 0.</returns>
     private static Dictionary<string, int> CreateDefaultTokensDictionary()
     {
         return new Dictionary<string, int>
@@ -398,6 +391,15 @@ public class GiftService : INService
         };
     }
 
+    /// <summary>
+    ///     Inserts a <see cref="TradeLog"/> row recording a gift transaction. Failures are swallowed so
+    ///     logging issues never break the gift flow.
+    /// </summary>
+    /// <param name="senderId">The gift sender's Discord ID.</param>
+    /// <param name="receiverId">The gift recipient's Discord ID.</param>
+    /// <param name="amount">A human-readable description of what was gifted (used in the audit channel message).</param>
+    /// <param name="command">The slash-command name that initiated the gift.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task LogGiftTransactionAsync(ulong senderId, ulong receiverId, string amount, string command)
     {
         try
@@ -417,10 +419,14 @@ public class GiftService : INService
         }
         catch
         {
-            // Logging errors are not critical
         }
     }
 
+    /// <summary>
+    ///     Posts an audit-trail message to the configured gift log channel. Errors are intentionally swallowed.
+    /// </summary>
+    /// <param name="message">The message body to post.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task SendLogMessageAsync(string message)
     {
         try
@@ -433,7 +439,6 @@ public class GiftService : INService
         }
         catch
         {
-            // Logging errors are not critical
         }
     }
 

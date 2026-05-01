@@ -23,20 +23,16 @@ public class TradeLockAttribute : PreconditionAttribute
     {
         var tradeLockService = services.GetRequiredService<ITradeLockService>();
 
-        // Check if user is currently trade locked
         if (await tradeLockService.IsUserTradeLockedAsync(context.User.Id))
         {
-            // Check if there's actually an active trade session for this user
             var tradeService = services.GetService<TradeService>();
             if (tradeService != null)
             {
                 var hasActiveSession = await HasActiveTradeSessionAsync(tradeService, context.User.Id);
                 if (!hasActiveSession)
                 {
-                    // Broken state: user is trade-locked but has no active session
-                    // Clean up the orphaned lock
                     await tradeService.ClearOrphanedTradeLocksAsync(context.User.Id);
-                    return PreconditionResult.FromSuccess(); // Allow the command to proceed
+                    return PreconditionResult.FromSuccess();
                 }
             }
             
@@ -56,13 +52,10 @@ public class TradeLockAttribute : PreconditionAttribute
     {
         try
         {
-            // This is a bit of a hack since we don't have a direct method to check user sessions
-            // We'll need to add a method to TradeService to check for active sessions by user
             return await tradeService.HasActiveTradeSessionAsync(userId);
         }
         catch
         {
-            // If we can't check, assume there might be a session to be safe
             return true;
         }
     }

@@ -10,8 +10,6 @@ public partial class Move
     {
         var msg = "";
 
-        // Stage changes
-        // +1
         if (Effect is 11 or 209 or 213 or 278 or 313 or 323 or 328 or 392 or 414 or 427 or 468 or 472 or 487)
             msg += attacker.AppendAttack(1, attacker, this);
 
@@ -62,7 +60,6 @@ public partial class Move
             case 167:
                 msg += defender.AppendSpAtk(1, attacker, this);
                 break;
-            // +2
             case 51 or 309:
                 msg += attacker.AppendAttack(2, attacker, this);
                 break;
@@ -99,7 +96,6 @@ public partial class Move
 
                 break;
             }
-            // -1
             case 19 or 206 or 344 or 347 or 357 or 365 or 388 or 412:
                 msg += defender.AppendAttack(-1, attacker, this);
                 break;
@@ -139,7 +135,6 @@ public partial class Move
             }
             case 475:
             {
-                // This one has two different chance percents, one has to be hardcoded
                 if (Random.Shared.Next(1, 101) <= 50) msg += defender.AppendDefense(-1, attacker, this);
 
                 break;
@@ -190,7 +185,6 @@ public partial class Move
             case 219 or 335:
                 msg += attacker.AppendSpeed(-1, attacker, this);
                 break;
-            // -2
             case 59 or 169:
                 msg += defender.AppendAttack(-2, attacker, this);
                 break;
@@ -222,7 +216,6 @@ public partial class Move
             case 479:
                 msg += attacker.AppendSpeed(-2, attacker, this);
                 break;
-            // Other
             case 26:
                 attacker.AttackStage = 0;
                 attacker.DefenseStage = 0;

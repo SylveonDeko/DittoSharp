@@ -1,4 +1,3 @@
-// Controllers/AdminController.cs - FINAL CORRECTED VERSION
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LinqToDB;
@@ -56,7 +55,6 @@ public class AdminController : ControllerBase
             var activeUsers = userStats?.Active ?? 0;
             var bannedUsers = userStats?.Banned ?? 0;
 
-            // Use database-level aggregation for Pokemon statistics
             var pokemonStats = await db.UserPokemon
                 .GroupBy(p => 1)
                 .Select(g => new {
@@ -72,7 +70,6 @@ public class AdminController : ControllerBase
             var radiantPokemon = pokemonStats?.Radiant ?? 0;
             var championPokemon = pokemonStats?.Champion ?? 0;
 
-            // Use database-level aggregation for trade statistics
             var tradeStats = await db.TradeLogs
                 .GroupBy(t => 1)
                 .Select(g => new {
@@ -84,7 +81,6 @@ public class AdminController : ControllerBase
             var totalTrades = tradeStats?.Total ?? 0;
             var recentTrades = tradeStats?.Recent ?? 0;
 
-            // Count eggs using the ownership table and Pokemon table
             var totalEggs = await db.UserPokemonOwnerships
                 .Join(db.UserPokemon,
                     o => o.PokemonId,
@@ -92,7 +88,6 @@ public class AdminController : ControllerBase
                     (o, p) => new { Ownership = o, Pokemon = p })
                 .CountAsync(j => j.Pokemon.PokemonName == "Egg");
 
-            // Use window functions for efficient top Pokemon calculation
             var topPokemon = await db.UserPokemon
                 .GroupBy(p => p.PokemonName)
                 .Select(g => new { 
@@ -106,7 +101,6 @@ public class AdminController : ControllerBase
                 .Take(10)
                 .ToListAsync();
 
-            // User distribution by region
             var regionStats = await db.Users
                 .Where(u => !string.IsNullOrEmpty(u.Region))
                 .GroupBy(u => u.Region)
@@ -114,14 +108,12 @@ public class AdminController : ControllerBase
                 .OrderByDescending(x => x.Count)
                 .ToListAsync();
 
-            // Staff distribution
             var staffStats = await db.Users
                 .Where(u => !string.IsNullOrEmpty(u.Staff) && u.Staff != "User")
                 .GroupBy(u => u.Staff)
                 .Select(g => new { Role = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            // Market activity
             var marketListings = await db.Market.CountAsync(m => m.BuyerId == null);
 
             var stats = new
@@ -194,7 +186,6 @@ public class AdminController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Build optimized query with proper joins for Pokemon count
             var baseQuery = from u in db.Users
                            join poCount in (
                                from o in db.UserPokemonOwnerships
@@ -204,7 +195,6 @@ public class AdminController : ControllerBase
                            from pc in pokemonCounts.DefaultIfEmpty()
                            select new { User = u, PokemonCount = pc != null ? pc.Count : 0 };
 
-            // Apply filters efficiently using LinqToDB
             if (!string.IsNullOrEmpty(search))
             {
                 if (ulong.TryParse(search, out var userId))
@@ -232,7 +222,6 @@ public class AdminController : ControllerBase
                 baseQuery = baseQuery.Where(q => q.User.Region == region);
             }
 
-            // Execute with optimized projection
             var users = await baseQuery
                 .Take(limit)
                 .Select(q => new
@@ -285,7 +274,6 @@ public class AdminController : ControllerBase
                 return NotFound(new { error = "User not found" });
             }
 
-            // Use database-level aggregation for user Pokemon statistics
             var userPokemonStats = await (from o in db.UserPokemonOwnerships
                                         join p in db.UserPokemon on o.PokemonId equals p.Id
                                         where o.UserId == userId
@@ -319,7 +307,6 @@ public class AdminController : ControllerBase
                 })
                 .ToListAsync();
 
-            // Get market activity
             var marketListings = await db.Market
                 .Where(m => m.OwnerId == userId && m.BuyerId == null)
                 .CountAsync();
@@ -467,7 +454,6 @@ public class AdminController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Use bulk update for better performance - check existence and update in single query
             var updatedRows = await db.Users
                 .Where(u => u.UserId == userId)
                 .Set(u => u.BotBanned, request.Banned)
@@ -557,7 +543,6 @@ public class AdminController : ControllerBase
             await using var db = await _dbProvider.GetConnectionAsync();
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
 
-            // Get suspicious trade analytics
             var suspiciousAnalytics = await db.SuspiciousTradeAnalytics
                 .Where(a => a.AnalysisTimestamp > cutoffDate && a.OverallRiskScore >= minRiskScore)
                 .OrderByDescending(a => a.OverallRiskScore)
@@ -580,7 +565,6 @@ public class AdminController : ControllerBase
                 })
                 .ToListAsync();
 
-            // Get fraud detection cases
             var fraudCases = await db.TradeFraudDetections
                 .Where(f => f.DetectionTimestamp > cutoffDate)
                 .OrderByDescending(f => f.DetectionTimestamp)
@@ -599,10 +583,9 @@ public class AdminController : ControllerBase
                 })
                 .ToListAsync();
 
-            // Risk score distribution
             var riskDistribution = await db.SuspiciousTradeAnalytics
                 .Where(a => a.AnalysisTimestamp > cutoffDate)
-                .GroupBy(a => (int)(a.OverallRiskScore * 10) / 10.0) // Group by 0.1 intervals
+                .GroupBy(a => (int)(a.OverallRiskScore * 10) / 10.0)
                 .Select(g => new { RiskScore = g.Key, Count = g.Count() })
                 .OrderBy(x => x.RiskScore)
                 .ToListAsync();
@@ -651,7 +634,6 @@ public class AdminController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            // Recent trades
             var recentTrades = await db.TradeLogs
                 .Where(t => t.Time > cutoffTime)
                 .OrderByDescending(t => t.Time)
@@ -668,7 +650,6 @@ public class AdminController : ControllerBase
                 })
                 .ToListAsync();
 
-            // Recent spawns (if available)
             var recentSpawns = await db.ActiveSpawns
                 .Where(s => s.CreatedAt > cutoffTime)
                 .OrderByDescending(s => s.CreatedAt)
@@ -687,7 +668,6 @@ public class AdminController : ControllerBase
             allActivity.AddRange(recentTrades);
             allActivity.AddRange(recentSpawns);
 
-            // Sort all activity by timestamp
             var sortedActivity = allActivity
                 .OrderByDescending(a => GetTimestamp(a))
                 .Take(limit)

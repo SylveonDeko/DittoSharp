@@ -235,32 +235,32 @@ public static class MissionConstants
     /// <summary>
     ///     Color for XP progress displays.
     /// </summary>
-    public const uint XpProgressColor = 0x3BB374; // Green
+    public const uint XpProgressColor = 0x3BB374;
 
     /// <summary>
     ///     Color for mission completion embeds.
     /// </summary>
-    public const uint MissionCompleteColor = 0xFFB6C1; // Light pink
+    public const uint MissionCompleteColor = 0xFFB6C1;
 
     /// <summary>
     ///     Color for store embeds.
     /// </summary>
-    public const uint StoreColor = 0x10; // Gold
+    public const uint StoreColor = 0x10;
 
     /// <summary>
     ///     Color for lottery success (high amount).
     /// </summary>
-    public const uint LotteryHighColor = 0xFFD700; // Gold
+    public const uint LotteryHighColor = 0xFFD700;
 
     /// <summary>
     ///     Color for lottery success (medium amount).
     /// </summary>
-    public const uint LotteryMediumColor = 0x00FF00; // Green
+    public const uint LotteryMediumColor = 0x00FF00;
 
     /// <summary>
     ///     Color for lottery success (low amount).
     /// </summary>
-    public const uint LotteryLowColor = 0xFF4500; // Orange red
+    public const uint LotteryLowColor = 0xFF4500;
 
     #endregion
 

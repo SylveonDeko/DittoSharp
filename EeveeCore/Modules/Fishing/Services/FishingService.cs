@@ -74,11 +74,9 @@ public class FishingService : INService, IReadyExecutor
         if (arg is not SocketUserMessage message || message.Author.IsBot)
             return;
 
-        // Check if the message mentions the bot
         if (message.MentionedUsers.All(u => u.Id != _client.CurrentUser.Id))
             return;
 
-        // Remove mentions from content before processing
         var content = message.Content;
         foreach (var mention in message.MentionedUsers)
         {
@@ -86,22 +84,17 @@ public class FishingService : INService, IReadyExecutor
         }
         content = content.Trim().ToLower().Replace(" ", "-");
         
-        // Check if this user has an active fishing attempt
         var fishingData = await GetUserActiveFishingData(message.Author.Id);
         if (fishingData == null) return;
 
-        // Check if the fishing is in this channel
         if (fishingData.ChannelId != message.Channel.Id) return;
 
-        // Check if the message matches the Pokemon name
         var catchOptions = GetCatchOptions(fishingData.PokemonName);
         if (!catchOptions.Contains(content)) return;
 
-        // Try to mark as caught - this is atomic using Redis
         if (!await TryMarkFishingAsCaught(fishingData.MessageId, message.Author.Id))
-            return; // Already caught
+            return;
 
-        // Process the successful catch
         var result = await HandleSuccessfulCatch(
             message.Author.Id,
             fishingData.GuildId,
@@ -113,7 +106,6 @@ public class FishingService : INService, IReadyExecutor
             fishingData.NewLevel,
             fishingData.RemainingEnergy);
 
-        // Fire mission event for successful fishing
         if (result.Success)
         {
             await using var db = await _dbProvider.GetConnectionAsync();
@@ -124,7 +116,6 @@ public class FishingService : INService, IReadyExecutor
             }
         }
 
-        // Add success reaction
         try
         {
             await message.AddReactionAsync(new Emoji("✅"));
@@ -134,13 +125,11 @@ public class FishingService : INService, IReadyExecutor
             /* Ignore reaction errors */
         }
 
-        // Update the fishing message
         if (message.Channel is ITextChannel textChannel)
         {
             await UpdateFishingMessage(fishingData.MessageId, textChannel, result, fishingData);
         }
 
-        // Clean up the fishing data and timer
         await RemoveUserActiveFishingData(message.Author.Id);
         if (_fishingTimers.TryRemove(message.Author.Id, out var timer))
         {
@@ -170,7 +159,6 @@ public class FishingService : INService, IReadyExecutor
     {
         var key = $"fishing:caught:{messageId}";
 
-        // Set key only if it doesn't exist, with 15 minute expiry
         var result = await _cache.Redis.GetDatabase().StringSetAsync(
             key,
             userId.ToString(),
@@ -189,7 +177,6 @@ public class FishingService : INService, IReadyExecutor
     {
         try
         {
-            // Check if this user is already fishing anywhere
             var existingFishing = await GetUserActiveFishingData(interaction.User.Id);
             if (existingFishing != null)
             {
@@ -210,31 +197,25 @@ public class FishingService : INService, IReadyExecutor
                 return new FishingResult(false, "You are not holding a Fishing Rod!\nBuy one in the shop with `/shop rods` first.", null);
             }
 
-            // Check energy
             if ((user.Energy ?? 0) <= 0)
             {
                 return new FishingResult(false, "You don't have any energy left!\nYou can get more energy now by voting!\nTry using `/ditto vote`!", null);
             }
 
-            // Check rod requirements
             if (!CanUseRod(user.FishingLevel ?? 1, rod))
             {
                 return new FishingResult(false, $"You are not high enough level to use the {rod} you have equipped.\nEquip a different rod and try again.", null);
             }
 
-            // Consume energy
             user.Energy = (user.Energy ?? 0) - FishingConstants.EnergyPerFish;
 
-            // Get fishing results
             var inventory = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}") ?? new Dictionary<string, int>();
             var (item, pokemon, isShiny) = await DetermineFishingResults(user.FishingLevel ?? 1, inventory);
 
-            // Calculate experience gain
             var expGain = await CalculateExpGain(rod, user.FishingLevel ?? 1);
             var leveledUp = false;
             var newLevel = user.FishingLevel ?? 1;
 
-            // Check for level up
             if ((user.FishingLevelCap ?? 0) < ((user.FishingExp ?? 0) + expGain) && (user.FishingLevel ?? 1) < FishingConstants.MaxLevel)
             {
                 newLevel = (user.FishingLevel ?? 1) + 1;
@@ -253,11 +234,9 @@ public class FishingService : INService, IReadyExecutor
                 .Set(u => u.FishingExp, user.FishingExp)
                 .UpdateAsync();
 
-            // Create the fishing embed with scattered Pokemon name
             var scatteredName = ScatterName(pokemon);
             var rodName = rod.Replace("-", " ").ToTitleCase();
 
-            // Calculate rod time bonus
             var (minBonus, maxBonus) = GetRodTimeBonus(rod);
             var rodBonus = _random.Next(minBonus, maxBonus + 1);
             var baseTime = _random.Next(FishingConstants.BaseTimeMin, FishingConstants.BaseTimeMax + 1);
@@ -270,7 +249,6 @@ public class FishingService : INService, IReadyExecutor
                 .WithImageUrl("attachment://fishing.gif")
                 .Build();
 
-            // Create success result with fishing data
             var result = new FishingResult(true, null, embed)
             {
                 Pokemon = pokemon,
@@ -315,7 +293,6 @@ public class FishingService : INService, IReadyExecutor
     {
         await using var context = await _dbProvider.GetConnectionAsync();
         
-        // Add item to inventory
         var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         if (user == null)
         {
@@ -335,7 +312,6 @@ public class FishingService : INService, IReadyExecutor
             user.Items = JsonSerializer.Serialize(items);
         }
 
-        // Create the Pokemon
         var inventory2 = JsonSerializer.Deserialize<Dictionary<string, int>>(user.Inventory ?? "{}");
         var ivMulti = inventory2?.GetValueOrDefault("iv-multiplier", 0) ?? 0;
         var boosted = _random.Next(500) < ivMulti;
@@ -350,7 +326,6 @@ public class FishingService : INService, IReadyExecutor
         var ivPercent = Math.Round((pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv +
                                    pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv) / 186.0 * 100, 2);
 
-        // Update achievements
         await context.GetTable<Achievement>()
             .Where(a => a.UserId == userId)
             .Set(a => a.FishingSuccess, a => a.FishingSuccess + 1)
@@ -482,17 +457,14 @@ public class FishingService : INService, IReadyExecutor
     /// </summary>
     public async Task<(string item, string pokemon, bool isShiny)> DetermineFishingResults(ulong level, Dictionary<string, int> inventory)
     {
-        // Get shop items by tier
         var cheapItems = await GetItemsByTier("cheap");
         var midItems = await GetItemsByTier("mid");
         var expensiveItems = await GetItemsByTier("expensive");
         var superItems = await GetItemsByTier("super");
 
-        // Calculate chance with level bonus (cap at level 100)
         var levelBonus = Math.Min(Math.Max(level, 0), 300) * 20;
         var chance = _random.NextDouble() * (10000 - levelBonus) + levelBonus;
 
-        // Determine rarity and get appropriate items/pokemon
         string item;
         string[] pokemonPool;
 
@@ -524,7 +496,6 @@ public class FishingService : INService, IReadyExecutor
 
         var pokemon = pokemonPool[_random.Next(pokemonPool.Length)];
 
-        // Check for chest drops
         var chestChance = level > 150 ? FishingConstants.CommonChestChanceOver150 : FishingConstants.CommonChestChanceUnder150;
         var rareChestChance = level > 150 ? FishingConstants.RareChestChanceOver150 : FishingConstants.RareChestChanceUnder150;
 
@@ -537,7 +508,6 @@ public class FishingService : INService, IReadyExecutor
             item = "rare-chest";
         }
 
-        // Ultra rare item chance
         var ultraRareChance = FishingConstants.UltraRareBaseChance;
         var expBonus = Math.Min(level * 1000, FishingConstants.UltraRareExpBonus);
         ultraRareChance -= expBonus;
@@ -547,7 +517,6 @@ public class FishingService : INService, IReadyExecutor
             item = FishingConstants.UltraRareItems[_random.Next(FishingConstants.UltraRareItems.Length)];
         }
 
-        // Determine if shiny
         var shinyThreshold = FishingConstants.ShinyThreshold;
         var shinyMultiplier = inventory.GetValueOrDefault("shiny-multiplier", 0);
         shinyThreshold = (int)Math.Round(shinyThreshold - shinyThreshold * (shinyMultiplier / 100.0));
@@ -584,7 +553,6 @@ public class FishingService : INService, IReadyExecutor
         {
             Log.Warning(ex, "Failed to get items by tier {Tier}, using fallback list", tier);
             
-            // Return a fallback list of common items for this tier
             return tier switch
             {
                 "cheap" => ["nugget", "pearl", "big-pearl"],
@@ -676,7 +644,6 @@ public class FishingService : INService, IReadyExecutor
     {
         var key = $"fishing:active:{userId}";
         var json = JsonSerializer.Serialize(data);
-        // Set expiration to 10 minutes as a fallback cleanup
         await _cache.Redis.GetDatabase().StringSetAsync(key, json, TimeSpan.FromMinutes(10));
     }
 
@@ -702,7 +669,6 @@ public class FishingService : INService, IReadyExecutor
 
         await SetUserActiveFishingData(result.CasterId, fishingData);
         
-        // Start timeout timer
         _ = HandleFishingTimeoutAsync(result.CasterId, messageId, result.TimeLimit);
     }
 
@@ -722,22 +688,18 @@ public class FishingService : INService, IReadyExecutor
     {
         try
         {
-            // Create and start timer
             var timer = new System.Timers.Timer(timeLimit * 1000);
             timer.Elapsed += async (sender, e) =>
             {
                 timer.Dispose();
                 _fishingTimers.TryRemove(userId, out _);
 
-                // Check if fishing is still active (not already caught)
                 var fishingData = await GetUserActiveFishingData(userId);
                 if (fishingData == null || fishingData.MessageId != messageId)
-                    return; // Already caught or cleaned up
+                    return;
 
-                // Clean up the fishing data
                 await RemoveUserActiveFishingData(userId);
 
-                // Update the message to show timeout
                 if (_client.GetChannel(fishingData.ChannelId) is ITextChannel channel)
                 {
                     if (await channel.GetMessageAsync(messageId) is IUserMessage message)
@@ -776,7 +738,6 @@ public class FishingService : INService, IReadyExecutor
             if (await channel.GetMessageAsync(messageId) is not IUserMessage message)
                 return;
 
-            // Create success embed
             var successEmbed = new EmbedBuilder()
                 .WithTitle("Here's what you got from fishing!")
                 .WithColor(0xFFB6C1)
@@ -798,7 +759,6 @@ public class FishingService : INService, IReadyExecutor
                 m.Components = new ComponentBuilder().Build();
             });
 
-            // Send additional response embed
             if (result.ResponseEmbed != null)
             {
                 await channel.SendMessageAsync(embed: result.ResponseEmbed);

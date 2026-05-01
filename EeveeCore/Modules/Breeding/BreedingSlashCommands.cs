@@ -39,16 +39,13 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     public async Task SetFemales(string femaleIds)
     {
         await DeferAsync();
-        // Determine the delimiter
         var delimiter = femaleIds.Contains(',') ? ',' : ' ';
 
-        // Split and clean the IDs
         var idStrings = femaleIds.Split(delimiter)
             .Select(id => id.Trim())
             .Where(id => !string.IsNullOrEmpty(id))
             .ToList();
 
-        // Parse all IDs first
         var parsedIds = new List<ulong>();
         var invalidIds = new List<string>();
 
@@ -62,10 +59,8 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             parsedIds.Add(id);
         }
 
-        // Batch validate all IDs at once - much faster!
         var validationResults = await Service.ValidateFemaleBatchAsync(ctx.User.Id, parsedIds);
 
-        // Separate valid and invalid based on batch results
         var validatedZeroBasedIds = new List<ulong>();
         var validatedOriginalIds = new List<ulong>();
 
@@ -73,8 +68,8 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         {
             if (validationResults.GetValueOrDefault(id, false))
             {
-                validatedZeroBasedIds.Add(id - 1); // For database storage
-                validatedOriginalIds.Add(id); // For display
+                validatedZeroBasedIds.Add(id - 1);
+                validatedOriginalIds.Add(id);
             }
             else
             {
@@ -82,21 +77,17 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             }
         }
 
-        // Update the user's females list with 0-based positions
         if (validatedZeroBasedIds.Any()) 
             await Service.UpdateUserFemalesAsync(ctx.User.Id, validatedZeroBasedIds);
 
-        // Build response message using original user input
         var responseMessage =
             $"Your female Pokémon list has been updated with valid IDs: {string.Join(", ", validatedOriginalIds)}";
 
         if (invalidIds.Any())
             responseMessage += $"\nInvalid or non-female IDs detected: {string.Join(", ", invalidIds)}.";
 
-        // Send as an embedded response
         await ctx.Interaction.SendConfirmFollowupAsync(responseMessage);
 
-        // Show breeding stats using original user input
         if (validatedOriginalIds.Any())
         {
             await ShowFemaleBreedingStats(validatedOriginalIds);
@@ -112,7 +103,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     {
         await DeferAsync();
         
-        // Get the user's current female list from the breeding service
         var user = await Service.GetUserFemalesAsync(ctx.User.Id);
         if (user == null || !user.Any())
         {
@@ -136,7 +126,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     {
         await DeferAsync();
 
-        // Parse the male ID
         if (!int.TryParse(maleId, out var parsedMaleId) || parsedMaleId < 1)
         {
             await ctx.Interaction.SendErrorFollowupAsync("Invalid male Pokémon ID provided.");
@@ -156,7 +145,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task BreedPokemon(ulong male, IDiscordInteraction interaction, bool auto = false)
     {
-        // Get the first female from the user's breeding list
         var femaleId = await Service.FetchFirstFemaleAsync(ctx.User.Id);
         if (femaleId == null)
         {
@@ -170,10 +158,8 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             return;
         }
 
-        // Attempt to breed
         var result = await Service.AttemptBreedAsync(ctx.User.Id, male, femaleId.Value);
 
-        // If there was an error, display it and return
         if (!result.Success)
         {
             var embed = new EmbedBuilder()
@@ -184,7 +170,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
             if (result.Chance > 0) embed.WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
-            // Create components based on whether this is an auto-retry
             var components = CreateFailureComponents((int)male, auto);
 
             await interaction.ModifyOriginalResponseAsync(m =>
@@ -193,12 +178,11 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 m.Components = components.Build();
             });
 
-            // Handle auto-retry if enabled
             if (auto && Service.GetAutoBreedState(ctx.User.Id) == (int?)male)
             {
                 var retryCount = Service.GetBreedRetries(ctx.User.Id, (int)male);
 
-                if (retryCount < 15) // Limit to 15 retries
+                if (retryCount < 15)
                 {
                     var newRetryCount = Service.IncrementBreedRetries(ctx.User.Id, (int)male);
 
@@ -212,34 +196,28 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
                     await interaction.ModifyOriginalResponseAsync(m => { m.Embed = retryEmbed.Build(); });
 
-                    // Check if we hit cooldown
                     if (result.ErrorMessage.Contains("Command on cooldown for"))
                     {
-                        // Extract cooldown time from error message
                         var cooldownSeconds = ExtractCooldownTime(result.ErrorMessage);
                         if (cooldownSeconds > 0)
                         {
-                            var cooldownMs = (cooldownSeconds + 1) * 1000; // Add 1 second buffer
+                            var cooldownMs = (cooldownSeconds + 1) * 1000;
                             retryEmbed.WithDescription(
                                 $"{result.ErrorMessage}\n\nWaiting for cooldown...\n`Auto-retry attempts:` **{newRetryCount}**\n`(max 15)`");
                             await interaction.ModifyOriginalResponseAsync(m => { m.Embed = retryEmbed.Build(); });
 
-                            // Wait for cooldown to expire
                             await Task.Delay(cooldownMs);
                         }
                         else
                         {
-                            // Default wait of 36 seconds if we can't extract time
                             await Task.Delay(36000);
                         }
                     }
                     else
                     {
-                        // Small delay for other errors
                         await Task.Delay(500);
                     }
 
-                    // Try again after waiting
                     await BreedPokemon(male, interaction, true);
                     return;
                 }
@@ -259,7 +237,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 });
                 await ctx.Channel.SendMessageAsync(ctx.User.Mention);
 
-                // Reset retry counter
                 Service.ResetBreedRetries(ctx.User.Id, (int)male);
                 return;
             }
@@ -267,13 +244,10 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             return;
         }
 
-        // Reset auto-breeding state
         Service.SetAutoBreedState(ctx.User.Id, null);
 
-        // Get parent names for the image
         var parentNames = await Service.GetParentNamesAsync(ctx.User.Id, male, femaleId.Value);
 
-        // Generate success image
         var imageData = await Service.CreateSuccessImageAsync(
             result,
             parentNames.FatherName,
@@ -282,7 +256,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
         var file = new FileAttachment(new MemoryStream(imageData), "image.png");
 
-        // Create success embed
         var successEmbed = new EmbedBuilder()
             .WithTitle("Success!")
             .WithDescription($"It will hatch after {result.Counter} *counted* messages!\n" +
@@ -291,7 +264,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             .WithImageUrl("attachment://image.png")
             .WithFooter($"Chance of success: {result.Chance * 100:F2}%");
 
-        // Set color based on result
         if (result.IsShadow)
             successEmbed.WithColor(new Color(0x4f0fff));
         else if (result.IsShiny)
@@ -299,8 +271,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         else
             successEmbed.WithColor(new Color(0x0fff13));
 
-        // Fire mission event for successful breeding
-        // Create a temporary Pokemon object from the breeding result
         var tempPokemon = new Database.Linq.Models.Pokemon.Pokemon
         {
             PokemonName = result!.Child!.Name,
@@ -316,7 +286,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         };
         _ = Task.Run(async () => await _missionService.FirePokemonBredEvent(ctx.Interaction, tempPokemon, result.IsShadow));
 
-        // Remove the first female from the list if not a Ditto
         if (result.Child.Name.ToLower() != "ditto") await Service.RemoveFirstFemaleAsync(ctx.User.Id);
 
         else
@@ -328,15 +297,19 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 m.Attachments = new[] { file };
             });
 
-        // Reset retry counter
         Service.ResetBreedRetries(ctx.User.Id, (int)male);
     }
 
+    /// <summary>
+    ///     Parses a remaining-cooldown duration (in seconds) from a service-layer error message of the form
+    ///     <c>"...cooldown for 42s..."</c>. Returns <c>0</c> when no match is found or parsing fails.
+    /// </summary>
+    /// <param name="errorMessage">The raw error message to parse.</param>
+    /// <returns>The number of seconds remaining on the cooldown, or 0 if it could not be extracted.</returns>
     private static int ExtractCooldownTime(string errorMessage)
     {
         try
         {
-            // Extract number from "Command on cooldown for Xs"
             var match = System.Text.RegularExpressions.Regex.Match(errorMessage, @"cooldown for (\d+)s");
             if (match is { Success: true, Groups.Count: > 1 })
             {
@@ -345,7 +318,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
         }
         catch
         {
-            // If parsing fails, return 0
         }
         return 0;
     }
@@ -385,7 +357,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             return;
         }
 
-        // Verify user
         if (Context.User.Id != ctx.User.Id && !AllowedUserIds.Contains(Context.User.Id))
         {
             await RespondAsync("You are not allowed to interact with this button.", ephemeral: true);
@@ -394,7 +365,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
         await DeferAsync();
 
-        // Rerun the breeding process
         await BreedPokemon((ulong)maleId, ctx.Interaction);
     }
 
@@ -412,7 +382,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
             return;
         }
 
-        // Verify user
         if (Context.User.Id != ctx.User.Id && !AllowedUserIds.Contains(Context.User.Id))
         {
             await RespondAsync("You are not allowed to interact with this button.", ephemeral: true);
@@ -421,7 +390,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
         await DeferAsync();
 
-        // Check if already auto-breeding
         var currentAutoBreed = Service.GetAutoBreedState(ctx.User.Id);
         if (currentAutoBreed != null)
         {
@@ -440,15 +408,12 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
         await FollowupAsync("I will attempt to breed these pokes until the breed is successful!", ephemeral: true);
 
-        // Set auto-breeding state
         Service.SetAutoBreedState(ctx.User.Id, maleId);
 
 
-        // Wait and attempt to breed
-        await Task.Delay(37000); // 37 seconds
+        await Task.Delay(37000);
 
         if (Service.GetAutoBreedState(ctx.User.Id) == maleId)
-            // Invoke the breed method with auto=true
             await BreedPokemon((ulong)maleId, ctx.Interaction, true);
     }
 
@@ -460,14 +425,12 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     [ComponentInteraction("cancel_auto_breed_*", true)]
     public async Task CancelAutoBreedHandler(string maleIdStr)
     {
-        // Verify user
         if (Context.User.Id != ctx.User.Id && !AllowedUserIds.Contains(Context.User.Id))
         {
             await RespondAsync("You are not allowed to interact with this button.", ephemeral: true);
             return;
         }
 
-        // Cancel auto-breeding
         Service.SetAutoBreedState(ctx.User.Id, null);
 
         await RespondAsync("I will no longer automatically attempt to breed these pokes.", ephemeral: true);
@@ -482,7 +445,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
     {
         try
         {
-            // Get all female Pokémon details in a single batch query - much faster!
             var femalePokemons = await Service.GetBreedingFemalesBatch(ctx.User.Id, femalePositions);
 
             if (!femalePokemons.Any())
@@ -491,7 +453,7 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 return;
             }
 
-            const int itemsPerPage = 3; // Fewer items for detailed breeding view
+            const int itemsPerPage = 3;
             var totalPages = (femalePokemons.Count - 1) / itemsPerPage + 1;
 
             var paginator = new ComponentPaginatorBuilder()
@@ -514,7 +476,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 var attachmentCounter = 0;
                 var containerComponents = new List<IMessageComponentBuilder>();
 
-                // Add title
                 containerComponents.Add(new TextDisplayBuilder()
                     .WithContent($"# Your Breeding Females\n**Breeding Statistics View**"));
 
@@ -527,12 +488,10 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                     var favorite = pokemon.Favorite ? "⭐ " : "";
                     var champion = pokemon.Champion ? "🏆 " : "";
 
-                    // Calculate IV percentage and total IVs for breeding
                     var ivTotal = pokemon.HpIv + pokemon.AttackIv + pokemon.DefenseIv + 
                                   pokemon.SpecialAttackIv + pokemon.SpecialDefenseIv + pokemon.SpeedIv;
                     var ivPercentage = ivTotal / 186.0 * 100;
 
-                    // Use the position from the tuple
                     var breedingText = $"**{emoji}{favorite}{champion}{pokemon.PokemonName.Capitalize()}** {gender}\n" +
                                       $"**Position** #{position} | **Level** {pokemon.Level}\n" +
                                       $"**IV Total** {ivTotal}/186 ({ivPercentage:F2}%) | **Nature** {pokemon.Nature}\n" +
@@ -544,7 +503,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                     if (!string.IsNullOrEmpty(pokemon.Nickname) && pokemon.Nickname != pokemon.PokemonName)
                         breedingText += $"\n**Nickname** {pokemon.Nickname}";
 
-                    // Add breeding status
                     var breedingFlags = new List<string>();
                     if (!pokemon.Breedable) breedingFlags.Add("Not Breedable");
                     if (pokemon.PokemonName.ToLower() == "ditto") breedingFlags.Add("Ditto (Universal Breeder)");
@@ -552,14 +510,12 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                     if (breedingFlags.Any())
                         breedingText += $"\n**Status** {string.Join(", ", breedingFlags)}";
 
-                    // Create section
                     var sectionBuilder = new SectionBuilder()
                         .WithComponents(new List<IMessageComponentBuilder>
                         {
                             new TextDisplayBuilder().WithContent(breedingText)
                         });
 
-                    // Add Pokemon image as thumbnail
                     var (_, imagePath) = await _pokemonService.GetPokemonFormInfo(
                         pokemon.PokemonName,
                         pokemon.Shiny == true,
@@ -583,14 +539,12 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
 
                     containerComponents.Add(sectionBuilder);
 
-                    // Add separator between Pokemon
                     if ((pokemon, position) != pageItems.Last())
                     {
                         containerComponents.Add(new SeparatorBuilder());
                     }
                 }
 
-                // Add navigation and footer
                 containerComponents.Add(new SeparatorBuilder());
                 
                 var navigationRow = new ActionRowBuilder()
@@ -603,7 +557,6 @@ public class BreedingModule(PokemonService pkServ, MissionService missionService
                 containerComponents.Add(new TextDisplayBuilder()
                     .WithContent($"Page {p.CurrentPageIndex + 1}/{p.PageCount} • {femalePokemons.Count} Breeding Females"));
 
-                // Create main container
                 var mainContainer = new ContainerBuilder()
                     .WithComponents(containerComponents)
                     .WithAccentColor(Color.Purple);

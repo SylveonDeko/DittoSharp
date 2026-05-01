@@ -1,4 +1,3 @@
-// AuthModels/JwtLoginRequest.cs
 
 using System.ComponentModel.DataAnnotations;
 

@@ -12,7 +12,6 @@ public partial class DuelPokemon
     /// </summary>
     public static async Task<DuelPokemon> Create(IInteractionContext ctx, Database.Linq.Models.Pokemon.Pokemon pokemon, IMongoService mongoService, IGameDataCache gameData)
     {
-        // Initialize local variables from pokemon object
         var pn = pokemon.PokemonName;
         var nick = pokemon.Nickname;
         var hpiv = Math.Min(31, pokemon.HpIv);
@@ -27,21 +26,16 @@ public partial class DuelPokemon
         var id = pokemon.Id;
         var gender = pokemon.Gender;
 
-        // Sanitize the nickname to remove Discord emotes and formatting
-        // Store the original nickname and create a sanitized version for battle display
         var sanitizedNick = string.IsNullOrWhiteSpace(nick)
-            ? PokemonNameSanitizer.SanitizeDisplayName(pn) // Use species name if no nickname
-            : PokemonNameSanitizer.SanitizeDisplayName(nick); // Sanitize the nickname
+            ? PokemonNameSanitizer.SanitizeDisplayName(pn)
+            : PokemonNameSanitizer.SanitizeDisplayName(nick);
 
-        // Validate IVs
         var totalIvs = hpiv + atkiv + defiv + spatkiv + spdefiv + speediv;
         var ivPercentage = Math.Round(totalIvs / 186.0 * 100, 2);
         if (ivPercentage > 100.0) throw new ArgumentException($"IVs must be 100.0% or less, but got {ivPercentage}%");
 
-        // Normalize form name - check if it's a battle form that shouldn't start this way
         pn = NormalizeFormName(pn, plevel);
 
-        // Prepare for potential mega evolution
         string? megaForm = null;
         if (pn != "Rayquaza")
             megaForm = hitem switch
@@ -53,7 +47,6 @@ public partial class DuelPokemon
             };
         else if (pokemon.Moves.Contains("dragon-ascent")) megaForm = pn + "-mega";
 
-        // Determine forms we need data for
         var extraForms = GetExtraForms(pn);
         if (megaForm != null)
             extraForms.Add(megaForm);
@@ -85,11 +78,9 @@ public partial class DuelPokemon
         var stats = statsData.Stats.ToList();
         var pokemonHp = stats[0];
 
-        // Process nature
         var decStatName = decStat!.Identifier.Capitalize().Replace("-", " ");
         var incStatName = incStat!.Identifier.Capitalize().Replace("-", " ");
 
-        // Initialize nature stat modifiers
         var natureStatDeltas = new Dictionary<string, double>
         {
             { "Attack", 1.0 },
@@ -120,30 +111,24 @@ public partial class DuelPokemon
             dislikedFlavor = flavorMap[decStatName];
         }
 
-        // Store base stats
         var baseStats = new Dictionary<string, List<int>>
         {
             { pn!, stats }
         };
 
-        // Get type IDs
         var typeIds = typeData.Types.Select(t => (ElementType)t).ToList();
 
-        // Process abilities
         var abIds = abilityRecords.Select(record => record.AbilityId).ToList();
         var abId = abIds.Intersect(abilityRecords.Select(x => x.AbilityId)).FirstOrDefault();
 
-        // Process evolution
         var canStillEvolve = evoCheck != null;
         if (pn == "Floette-eternal") canStillEvolve = false;
 
-        // Handle Shedinja special case
         if (pn == "Shedinja")
             pokemonHp = 1;
         else
             pokemonHp = (int)Math.Round((2 * pokemonHp + hpiv + pokemon.HpEv / 4.0) * plevel / 100 + plevel + 10);
 
-        // Process mega evolution data if applicable
         var megaAbilityId = 0;
         List<ElementType>? megaTypeIds = null;
 
@@ -157,17 +142,15 @@ public partial class DuelPokemon
             }
         }
 
-        // Process form stats
         if (extraForms.Count > 0) await LoadFormStats(extraForms, baseStats, mongoService);
 
-        // Process moves
         var objectMoves = await ProcessMoves(pokemon.Moves.ToList(), mongoService);
 
         return new DuelPokemon(
             pid,
             pn,
             pokemon.PokemonName,
-            sanitizedNick, // Use the sanitized nickname instead of the original
+            sanitizedNick,
             baseStats,
             pokemonHp,
             hpiv,
@@ -201,7 +184,14 @@ public partial class DuelPokemon
             dislikedFlavor);
     }
 
-    // Helper methods
+    /// <summary>
+    ///     Collapses transient battle-only Pokemon forms back to their base form identifier so the database
+    ///     lookups resolve correctly (e.g. <c>Mimikyu-busted</c> → <c>Mimikyu</c>, <c>Aegislash-blade</c> → <c>Aegislash</c>,
+    ///     mega/X/Y suffixes stripped). Also handles level-gated forms like Wishiwashi school form.
+    /// </summary>
+    /// <param name="pn">The raw Pokemon name (form-qualified).</param>
+    /// <param name="plevel">The Pokemon's level, used for forms that depend on level thresholds.</param>
+    /// <returns>The normalized base-form identifier.</returns>
     private static string? NormalizeFormName(string? pn, int plevel)
     {
         return pn switch
@@ -232,6 +222,12 @@ public partial class DuelPokemon
         };
     }
 
+    /// <summary>
+    ///     Returns the list of additional in-battle forms a base species can transform into during a duel
+    ///     (e.g. Cramorant's gulping/gorging forms, Arceus type plates, Silvally memory drives).
+    /// </summary>
+    /// <param name="pn">The base Pokemon name.</param>
+    /// <returns>The list of alternate form identifiers, or an empty list if the species has no extra forms.</returns>
     private static List<string> GetExtraForms(string? pn)
     {
         return pn switch
@@ -261,6 +257,10 @@ public partial class DuelPokemon
         };
     }
 
+    /// <summary>
+    ///     Lists every type-plate form Arceus can take in battle.
+    /// </summary>
+    /// <returns>The 17 typed Arceus form identifiers.</returns>
     private static List<string> GetArceusFormsList()
     {
         return
@@ -273,6 +273,10 @@ public partial class DuelPokemon
         ];
     }
 
+    /// <summary>
+    ///     Lists every memory-drive form Silvally can take in battle.
+    /// </summary>
+    /// <returns>The 17 typed Silvally form identifiers.</returns>
     private static List<string> GetSilvallyFormsList()
     {
         return
@@ -285,6 +289,14 @@ public partial class DuelPokemon
         ];
     }
 
+    /// <summary>
+    ///     Returns the underlying base species' Pokemon ID for a form-qualified name. Falls back to the
+    ///     supplied form's own ID when the base species cannot be resolved from the cache.
+    /// </summary>
+    /// <param name="pn">The form-qualified Pokemon name (e.g. <c>Arceus-fire</c>).</param>
+    /// <param name="formInfo">The form record containing the species ID.</param>
+    /// <param name="gameData">Cache used to map base-species identifiers to their canonical IDs.</param>
+    /// <returns>The base species' Pokemon ID.</returns>
     private static int GetBasePokemonId(string? pn, dynamic formInfo, IGameDataCache gameData)
     {
         if (!IsFormVariant(pn)) return formInfo.PokemonId;
@@ -294,6 +306,12 @@ public partial class DuelPokemon
             : (int)formInfo.PokemonId;
     }
 
+    /// <summary>
+    ///     Reports whether a Pokemon name is form-qualified. Identifiers containing a hyphen are treated as
+    ///     form variants (e.g. <c>Arceus-fire</c>); plain species names are not.
+    /// </summary>
+    /// <param name="pn">The Pokemon name to test.</param>
+    /// <returns><c>true</c> if the name encodes a form variant; otherwise <c>false</c>.</returns>
     private static bool IsFormVariant(string? pn)
     {
         return pn!.Contains('-');
@@ -327,6 +345,14 @@ public partial class DuelPokemon
         return (megaAbility.AbilityId, megaTypes.Types.Select(x => (ElementType)x).ToList());
     }
 
+    /// <summary>
+    ///     Fetches per-form base stat arrays in parallel and merges them into a shared dictionary keyed by
+    ///     form name. Forms whose stats fail to load are silently skipped.
+    /// </summary>
+    /// <param name="forms">The form identifiers to load.</param>
+    /// <param name="baseStats">The dictionary that receives one entry per successfully loaded form.</param>
+    /// <param name="mongoService">MongoDB service used to query form stats.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task LoadFormStats(List<string> forms, Dictionary<string, List<int>> baseStats,
         IMongoService mongoService)
     {
@@ -373,10 +399,8 @@ public partial class DuelPokemon
         var dbMove = await mongoService.Moves.Find(m => m.Identifier == moveIdentifier).FirstOrDefaultAsync() ??
                      await mongoService.Moves.Find(m => m.Identifier == "tackle").FirstOrDefaultAsync();
 
-        // Create game move from database move
         var gameMove = new Move.Move(dbMove);
 
-        // Apply type override if needed
         if (typeOverride.HasValue) gameMove.Type = typeOverride.Value;
 
         return gameMove;

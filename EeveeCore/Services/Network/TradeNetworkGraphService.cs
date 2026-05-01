@@ -13,7 +13,6 @@ public class TradeNetworkGraphService : INService
     private readonly IDataCache _cache;
     private readonly ILogger<TradeNetworkGraphService> _logger;
 
-    // Cache expiry times
     private const int NetworkCacheHours = 6;
     private const int NodeCacheHours = 1;
 
@@ -55,7 +54,6 @@ public class TradeNetworkGraphService : INService
 
         var network = await BuildTradeNetworkFromDatabaseAsync(timeWindowDays);
         
-        // Cache the network
         var serialized = System.Text.Json.JsonSerializer.Serialize(network);
         await database.StringSetAsync(cacheKey, serialized, TimeSpan.FromHours(NetworkCacheHours));
 
@@ -89,7 +87,6 @@ public class TradeNetworkGraphService : INService
 
         var network = await BuildUserNetworkFromDatabaseAsync(userId, hops, timeWindowDays);
         
-        // Cache the network
         var serialized = System.Text.Json.JsonSerializer.Serialize(network);
         await database.StringSetAsync(cacheKey, serialized, TimeSpan.FromHours(NodeCacheHours));
 
@@ -107,25 +104,21 @@ public class TradeNetworkGraphService : INService
         
         await using var db = await _dbProvider.GetConnectionAsync();
         
-        // Get all trade relationships within the time window
         var relationships = await db.UserTradeRelationships
             .Where(r => r.LastTradeTimestamp >= cutoffTime)
             .ToListAsync();
 
-        // Get all users involved in trades
         var userIds = relationships
             .SelectMany(r => new ulong[] { r.User1Id, r.User2Id })
             .Distinct()
             .ToList();
 
-        // Get user account ages
         var userAccountAges = new Dictionary<ulong, double>();
         foreach (var userId in userIds)
         {
             userAccountAges[userId] = CalculateAccountAgeFromUserId(userId, DateTime.UtcNow);
         }
 
-        // Build nodes
         var nodes = userIds.Select(userId => new TradeNetworkNode
         {
             UserId = userId,
@@ -139,7 +132,6 @@ public class TradeNetworkGraphService : INService
                 .Max(r => r.RelationshipRiskScore)
         }).ToDictionary(n => n.UserId);
 
-        // Build edges
         var edges = relationships.Select(r => new TradeNetworkEdge
         {
             FromUserId = r.User1Id,
@@ -179,7 +171,6 @@ public class TradeNetworkGraphService : INService
         var includedUsers = new HashSet<ulong> { centralUserId };
         var currentHopUsers = new HashSet<ulong> { centralUserId };
 
-        // Expand network by hops
         for (var hop = 0; hop < hops; hop++)
         {
             var nextHopUsers = new HashSet<ulong>();
@@ -205,13 +196,11 @@ public class TradeNetworkGraphService : INService
             if (!currentHopUsers.Any()) break;
         }
 
-        // Get relationships between included users
         var relationships = await db.UserTradeRelationships
             .Where(r => includedUsers.Contains(r.User1Id) && includedUsers.Contains(r.User2Id) &&
                        r.LastTradeTimestamp >= cutoffTime)
             .ToListAsync();
 
-        // Build the network using the same logic as the full network
         return await BuildNetworkFromRelationships(relationships, timeWindowDays);
     }
 
@@ -280,11 +269,9 @@ public class TradeNetworkGraphService : INService
     /// <returns>The account age in days.</returns>
     private static double CalculateAccountAgeFromUserId(ulong userId, DateTime currentTime)
     {
-        // Discord snowflake epoch (January 1, 2015 00:00:00 UTC)
         var discordEpoch = new DateTime(2015, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         
-        // Extract timestamp from Discord snowflake
-        var timestamp = (userId >> 22) + 1420070400000UL; // Discord epoch in milliseconds
+        var timestamp = (userId >> 22) + 1420070400000UL;
         var accountCreated = discordEpoch.AddMilliseconds(timestamp - 1420070400000UL);
         
         return (currentTime - accountCreated).TotalDays;
@@ -309,7 +296,6 @@ public class TradeNetworkGraphService : INService
     {
         var database = _cache.Redis.GetDatabase();
         
-        // Clear user network caches for different configurations
         var patterns = new[]
         {
             $"user_network:{userId}:*",

@@ -24,7 +24,6 @@ public class DynamicFilterBuilder
 
         try
         {
-            // Group criteria by logical operators (AND/OR)
             var criteriaGroups = GroupCriteriaByLogic(criteria);
             
             Expression<Func<T, bool>>? combinedPredicate = null;
@@ -42,7 +41,6 @@ public class DynamicFilterBuilder
                 }
                 else
                 {
-                    // Combine with the previous predicate using the logical operator
                     if (group.LogicalOperator == "OR")
                         combinedPredicate = CombinePredicates(combinedPredicate, groupPredicate, Expression.OrElse);
                     else
@@ -55,7 +53,7 @@ public class DynamicFilterBuilder
         catch (Exception ex)
         {
             Log.Error(ex, "Error applying filter criteria to query");
-            return query; // Return unfiltered query on error
+            return query;
         }
     }
 
@@ -72,7 +70,6 @@ public class DynamicFilterBuilder
         {
             currentGroup.Add(criterion);
 
-            // If this criterion has a logical connector, it determines how to combine with the next group
             if (criterion.LogicalConnector != null)
             {
                 groups.Add(new CriteriaGroup { Criteria = [..currentGroup], LogicalOperator = currentOperator });
@@ -81,7 +78,6 @@ public class DynamicFilterBuilder
             }
         }
 
-        // Add the final group
         if (currentGroup.Any())
         {
             groups.Add(new CriteriaGroup { Criteria = currentGroup, LogicalOperator = currentOperator });
@@ -157,7 +153,6 @@ public class DynamicFilterBuilder
 
             Expression current = parameter;
             
-            // Navigate through the property path (e.g., "Pokemon.Level" for joined queries)
             foreach (var propertyName in propertyPath.Split('.'))
             {
                 var property = current.Type.GetProperty(propertyName, 
@@ -209,10 +204,9 @@ public class DynamicFilterBuilder
             "moves" => "Pokemon.Moves",
             "skin" => "Pokemon.Skin",
             "market_enlist" => "Pokemon.MarketEnlist",
-            // Special calculated fields
-            "iv_total" => null, // Handled specially
-            "iv_percentage" => null, // Handled specially
-            "type" => null, // Handled specially (requires MongoDB lookup)
+            "iv_total" => null,
+            "iv_percentage" => null,
+            "type" => null,
             _ => null
         };
     }
@@ -224,7 +218,6 @@ public class DynamicFilterBuilder
     {
         try
         {
-            // Handle special cases first
             if (criterion.FieldName.ToLower() == "iv_total")
                 return BuildIvTotalComparison(property, criterion);
             
@@ -266,7 +259,6 @@ public class DynamicFilterBuilder
     {
         try
         {
-            // Build expression: HpIv + AttackIv + DefenseIv + SpecialAttackIv + SpecialDefenseIv + SpeedIv
             var pokemonParam = parameter.Type.Name == "Pokemon" ? parameter : 
                 Expression.Property(parameter, "Pokemon");
 
@@ -326,8 +318,7 @@ public class DynamicFilterBuilder
             if (ivTotalExpr == null)
                 return null;
 
-            // Convert to percentage: (ivTotal / 186.0) * 100
-            var totalIv = ((BinaryExpression)ivTotalExpr).Left; // Extract the IV total expression
+            var totalIv = ((BinaryExpression)ivTotalExpr).Left;
             var percentage = Expression.Multiply(
                 Expression.Divide(
                     Expression.Convert(totalIv, typeof(double)),
@@ -393,7 +384,6 @@ public class DynamicFilterBuilder
             return Expression.Call(property, containsMethod, Expression.Constant(criterion.ValueText));
         }
 
-        // Handle string arrays (tags, moves)
         if (property.Type == typeof(string[]) || Nullable.GetUnderlyingType(property.Type) == typeof(string[]))
         {
             var anyMethod = typeof(Enumerable).GetMethods()
@@ -422,7 +412,6 @@ public class DynamicFilterBuilder
         if (!values.Any())
             return null;
 
-        // Convert values to the appropriate type
         var convertedValues = Array.CreateInstance(property.Type, values.Length);
         for (var i = 0; i < values.Length; i++)
         {
@@ -432,7 +421,7 @@ public class DynamicFilterBuilder
             }
             catch
             {
-                return null; // Invalid conversion
+                return null;
             }
         }
 
@@ -531,6 +520,11 @@ public class DynamicFilterBuilder
     /// </summary>
     private class ParameterReplacer(ParameterExpression oldParam, ParameterExpression newParam) : ExpressionVisitor
     {
+        /// <summary>
+        ///     Substitutes the old parameter expression with the new one when traversing an expression tree.
+        /// </summary>
+        /// <param name="node">The parameter node being visited.</param>
+        /// <returns>The replacement parameter when <paramref name="node"/> matches the old parameter; otherwise the result of the base visitor.</returns>
         protected override Expression VisitParameter(ParameterExpression node)
         {
             return node == oldParam ? newParam : base.VisitParameter(node);

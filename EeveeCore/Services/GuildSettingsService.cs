@@ -142,6 +142,12 @@ public class GuildSettingsService : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    ///     Builds a default <see cref="Guild"/> document for a previously unconfigured guild and inserts it
+    ///     into MongoDB. Defaults mirror the fresh-server experience (default prefix, spawns enabled, speed 10).
+    /// </summary>
+    /// <param name="guildId">The Discord guild ID.</param>
+    /// <returns>The newly inserted guild config.</returns>
     private async Task<Guild> CreateGuildConfigAsync(ulong guildId)
     {
         var config = new Guild
@@ -203,6 +209,12 @@ public class GuildSettingsService : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    ///     Long-running consumer for the config-update channel. Reads pending guild updates in batches of up
+    ///     to 100 and forwards each batch to <see cref="SaveConfigBatchAsync"/>, coalescing many small writes
+    ///     into a single bulk write to reduce MongoDB load.
+    /// </summary>
+    /// <returns>A task that completes only when the channel is closed.</returns>
     private async Task ProcessConfigUpdatesAsync()
     {
         var batch = new List<(ulong GuildId, Guild Config)>();
@@ -219,6 +231,12 @@ public class GuildSettingsService : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    ///     Persists a batch of guild config updates as a single MongoDB bulk write of upserts, projecting only
+    ///     the configurable fields onto each document.
+    /// </summary>
+    /// <param name="updates">The batch of (guild ID, config) pairs to persist.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task SaveConfigBatchAsync(
         IEnumerable<(ulong GuildId, Guild Config)> updates)
     {

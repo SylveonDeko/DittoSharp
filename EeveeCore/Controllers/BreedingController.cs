@@ -40,12 +40,10 @@ public class BreedingController : ControllerBase
             var userId = GetCurrentUserId();
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
-            // Get user's breeding queue from service
             var firstFemale = await _breedingService.FetchFirstFemaleAsync(userId);
             
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Get all females in breeding queue - this would need to be expanded based on how the service stores the queue
             var breedingQueue = new List<object>();
             
             if (firstFemale.HasValue)
@@ -91,13 +89,11 @@ public class BreedingController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Get total eggs user has had
             var totalEggs = await (from ownership in db.UserPokemonOwnerships
                                  join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                                  where ownership.UserId == userId && pokemon.PokemonName == "Egg"
                                  select pokemon).CountAsync();
 
-            // Get current eggs
             var currentEggs = await (from ownership in db.UserPokemonOwnerships
                                    join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                                    where ownership.UserId == userId && pokemon.PokemonName == "Egg"
@@ -114,8 +110,6 @@ public class BreedingController : ControllerBase
             {
                 TotalEggsProduced = totalEggs,
                 CurrentEggs = currentEggs,
-                // Note: Actual breeding attempts aren't logged, so we can't show detailed history
-                // This would require adding breeding event logging to the breeding service
             };
 
             return Ok(new { success = true, history });
@@ -138,8 +132,6 @@ public class BreedingController : ControllerBase
         {
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // This would need to be implemented properly based on Pokemon egg group data
-            // For now, return basic information that breeding is a Discord-only feature
             
             var info = new
             {
@@ -182,7 +174,6 @@ public class BreedingController : ControllerBase
 
             await using var db = await _dbProvider.GetConnectionAsync();
             
-            // Get breeding-related statistics
             var totalEggs = await (from ownership in db.UserPokemonOwnerships
                                  join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                                  where ownership.UserId == userId && pokemon.PokemonName == "Egg"
@@ -191,7 +182,6 @@ public class BreedingController : ControllerBase
             var stats = new
             {
                 TotalEggs = totalEggs,
-                // Add more breeding-related stats as needed
             };
 
             return Ok(new { success = true, stats });
@@ -213,6 +203,4 @@ public class BreedingController : ControllerBase
         return ulong.TryParse(userIdClaim, out var userId) ? userId : 0;
     }
 
-    // Note: Breeding operations should be performed through Discord commands
-    // This controller provides read-only information about breeding for dashboard display
 }

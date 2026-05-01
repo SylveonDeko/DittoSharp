@@ -1,6 +1,5 @@
 using Discord.Interactions;
 
-// ReSharper disable NotNullOrRequiredMemberIsNotInitialized
 
 namespace EeveeCore.Common.ModuleBases;
 
@@ -14,7 +13,6 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
     /// </summary>
     public CommandHandler? CmdHandler { get; set; }
 
-    // ReSharper disable once InconsistentNaming
     /// <summary>
     ///     Gets the interaction context.
     /// </summary>
@@ -220,7 +218,6 @@ public abstract class EeveeCoreSlashCommandModule : InteractionModuleBase
             }
             catch
             {
-                //Exclude
             }
         }
     }

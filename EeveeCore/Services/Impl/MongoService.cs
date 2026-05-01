@@ -18,7 +18,6 @@ public class MongoService(IMongoClient client) : IMongoService
     /// </summary>
     private readonly IMongoDatabase _database = client.GetDatabase("pokemon");
 
-    // Pokemon Data
     /// <inheritdoc />
     public IMongoCollection<Ability> Abilities => _database.GetCollection<Ability>("abilities");
 
@@ -56,7 +55,6 @@ public class MongoService(IMongoClient client) : IMongoService
     public IMongoCollection<TypeEffectiveness> TypeEffectiveness =>
         _database.GetCollection<TypeEffectiveness>("type_effectiveness");
 
-    // Game Data
     /// <inheritdoc />
     public IMongoCollection<Booster> Boosters => _database.GetCollection<Booster>("boosters");
 
@@ -107,7 +105,6 @@ public class MongoService(IMongoClient client) : IMongoService
     /// <inheritdoc />
     public IMongoCollection<UserProgress> UserProgress => _database.GetCollection<UserProgress>("user_progress");
 
-    // Discord Data
     /// <inheritdoc />
     public IMongoCollection<Guild> Guilds => _database.GetCollection<Guild>("guilds");
 

@@ -35,7 +35,7 @@ public class GamesSlashCommands(SlotMachineService slotMachineService, MissionSe
                                "You have 200 seconds to find them all!\n\n" +
                                "Click **Start Game** to begin your search!")
                 .WithColor(Color.Blue)
-                .WithThumbnailUrl("https://images.mewdeko.tech/skins/normal/25-0-.png") // Pikachu thumbnail
+                .WithThumbnailUrl("https://images.mewdeko.tech/skins/normal/25-0-.png")
                 .Build();
 
             var components = new ComponentBuilder()
@@ -67,13 +67,10 @@ public class GamesSlashCommands(SlotMachineService slotMachineService, MissionSe
         {
             await DeferAsync();
 
-            // Perform the spin
             var result = slotMachineService.Spin();
 
-            // Fire mission event for slot machine play
             await missionService.TriggerGameSlotsPlayedAsync(ctx.Interaction, result.IsWin);
 
-            // Create embed with result
             var embedBuilder = new EmbedBuilder()
                 .WithTitle("🎰 Pokemon Slot Machine 🎰")
                 .WithDescription(result.ResultMessage)
@@ -120,7 +117,6 @@ public class GamesSlashCommands(SlotMachineService slotMachineService, MissionSe
                 .WithDescription("**Win Combinations and Payouts:**")
                 .WithColor(Color.Purple);
 
-            // Add payout information
             embed.AddField("💰 **Jackpot Wins**",
                 "🔥 Triple Seven: 1000x (Jackpot!)\n" +
                 "⭐ Triple Star: 500x\n" +
@@ -136,7 +132,6 @@ public class GamesSlashCommands(SlotMachineService slotMachineService, MissionSe
                 "🍀 Lucky Seven: 10x (Any seven)\n" +
                 "🎲 Triple Match: 5x (Any three)", true);
 
-            // Add some probabilities
             var probabilityText = string.Join("\n", 
                 probabilities.Take(5).Select(p => $"{p.Key}: {p.Value:F3}%"));
             

@@ -34,15 +34,12 @@ public class BackgroundTaskService : BackgroundService, INService
     /// <returns>A task that represents the asynchronous operation.</returns>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); // Wait for bot to be ready
+        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         
-        // Start energy regeneration every 24 minutes
         _energyTimer = new Timer(RegenerateEnergy, null, TimeSpan.Zero, TimeSpan.FromMinutes(24));
         
-        // Check missions every 10 minutes
         _missionTimer = new Timer(CheckMissions, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
         
-        // Check honey expiration every 10 minutes
         _honeyTimer = new Timer(CheckHoneyExpiration, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
         
         _logger.LogInformation("Background tasks started");
@@ -57,6 +54,11 @@ public class BackgroundTaskService : BackgroundService, INService
         }
     }
 
+    /// <summary>
+    ///     Timer callback that bumps every user's energy up by one (capped at 10) for users who are below the
+    ///     cap. Errors are caught and logged so a transient DB issue cannot crash the timer.
+    /// </summary>
+    /// <param name="state">Timer state object (unused).</param>
     private async void RegenerateEnergy(object? state)
     {
         try
@@ -81,6 +83,13 @@ public class BackgroundTaskService : BackgroundService, INService
         }
     }
 
+    /// <summary>
+    ///     Timer callback that rotates the active mission set every 24 hours: deactivates the current actives,
+    ///     picks two random previously-inactive missions to promote, stamps the rotation time, and clears all
+    ///     <c>UserProgress</c> rows so users start the new period from zero. No-ops when fewer than two
+    ///     candidates are available, or when the current rotation is younger than 24 hours.
+    /// </summary>
+    /// <param name="state">Timer state object (unused).</param>
     private async void CheckMissions(object? state)
     {
         try
@@ -91,7 +100,6 @@ public class BackgroundTaskService : BackgroundService, INService
             var missions = mongoService.Missions;
             var userProgress = mongoService.UserProgress;
             
-            // Check if missions collection exists and has data
             var totalMissions = await missions.CountDocumentsAsync(Builders<Mission>.Filter.Empty);
             if (totalMissions == 0)
             {
@@ -99,7 +107,6 @@ public class BackgroundTaskService : BackgroundService, INService
                 return;
             }
             
-            // Find the most recent active mission
             var activeMissions = await missions
                 .Find(Builders<Mission>.Filter.Eq(m => m.Active, true))
                 .ToListAsync();
@@ -110,23 +117,20 @@ public class BackgroundTaskService : BackgroundService, INService
             
             var currentTime = DateTime.UtcNow;
             
-            // Check if 24 hours have passed
             if (mostRecentMission != null)
             {
                 var startedTime = mostRecentMission.StartedEpoch ?? mostRecentMission.Started ?? DateTime.MinValue;
                 if (startedTime > DateTime.MinValue && currentTime - startedTime < TimeSpan.FromHours(24))
                 {
-                    return; // Not 24 hours yet
+                    return;
                 }
             }
             
-            // Deactivate old missions
             await missions.UpdateManyAsync(
                 Builders<Mission>.Filter.Eq(m => m.Active, true),
                 Builders<Mission>.Update.Set(m => m.Active, false)
             );
             
-            // Get potential missions
             var potentialMissions = await missions
                 .Find(Builders<Mission>.Filter.Eq(m => m.Active, false))
                 .ToListAsync();
@@ -136,7 +140,6 @@ public class BackgroundTaskService : BackgroundService, INService
                 var random = Random.Shared;
                 var chosenMissions = potentialMissions.OrderBy(x => random.Next()).Take(2);
                 
-                // Activate chosen missions
                 foreach (var mission in chosenMissions)
                 {
                     await missions.UpdateOneAsync(
@@ -147,7 +150,6 @@ public class BackgroundTaskService : BackgroundService, INService
                     );
                 }
                 
-                // Reset user progress
                 await userProgress.DeleteManyAsync(Builders<UserProgress>.Filter.Empty);
                 
                 _logger.LogInformation("Rotated missions and reset user progress. Selected {Count} new missions", chosenMissions.Count());
@@ -167,6 +169,11 @@ public class BackgroundTaskService : BackgroundService, INService
         }
     }
 
+    /// <summary>
+    ///     Timer callback that prunes <c>Honey</c> rows whose unix-epoch expiry is in the past, logging the
+    ///     number deleted. Errors are caught and logged.
+    /// </summary>
+    /// <param name="state">Timer state object (unused).</param>
     private async void CheckHoneyExpiration(object? state)
     {
         try
@@ -177,19 +184,16 @@ public class BackgroundTaskService : BackgroundService, INService
             
             var currentTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             
-            // Get expired honey IDs for notification before deletion
             var expiredHoneys = await db.Honey
                 .Where(h => h.Expires < currentTime)
                 .ToListAsync();
             
             if (!expiredHoneys.Any()) return;
             
-            // Remove expired honey
             var deletedCount = await db.Honey
                 .Where(h => h.Expires < currentTime)
                 .DeleteAsync();
             
-            // Try to notify users (fire and forget)
             _ = Task.Run(async () =>
             {
                 var discordService = scope.ServiceProvider.GetService<DiscordShardedClient>();

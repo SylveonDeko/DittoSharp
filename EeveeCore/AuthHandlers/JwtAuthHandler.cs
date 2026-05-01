@@ -1,4 +1,3 @@
-// AuthHandlers/JwtAuthHandler.cs
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
@@ -73,7 +72,6 @@ public class JwtAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
                 return AuthenticateResult.Fail("Invalid token: missing user ID");
             }
 
-            // Verify user still exists and is not banned
             await using var db = await _dbConnectionProvider.GetConnectionAsync();
             var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == ulong.Parse(userId));
             if (user == null || user.BotBanned == true)
@@ -81,7 +79,6 @@ public class JwtAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
                 return AuthenticateResult.Fail("User not found or banned");
             }
 
-            // Add additional claims
             var claims = new List<Claim>(principal.Claims)
             {
                 new("Staff", user.Staff),

@@ -19,7 +19,6 @@ public class ComprehensiveFraudAnalysis
     /// </summary>
     public DateTime AnalysisTimestamp { get; set; }
     
-    // Individual analyses
     /// <summary>
     /// Gets or sets the basic risk analysis results.
     /// </summary>
@@ -50,7 +49,6 @@ public class ComprehensiveFraudAnalysis
     /// </summary>
     public TradePokemonLaunderingAnalysis? PokemonLaundering { get; set; }
     
-    // Comprehensive results
     /// <summary>
     /// Gets or sets the comprehensive risk score combining all analyses.
     /// </summary>

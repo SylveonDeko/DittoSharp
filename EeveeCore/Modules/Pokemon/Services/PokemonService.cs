@@ -267,8 +267,7 @@ public class PokemonService(
         if (pokeNumber <= 0)
             return (false, "Invalid pokemon number.");
 
-        // Find the Pokemon in the join table using position
-        var position = pokeNumber - 1;
+                var position = pokeNumber - 1;
         var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.Position == position)
             .FirstOrDefaultAsync();
@@ -328,8 +327,7 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Find the ownership record with the highest position (newest Pokemon)
-        var newestOwnership = await db.UserPokemonOwnerships
+                var newestOwnership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId)
             .OrderByDescending(o => o.Position)
             .FirstOrDefaultAsync();
@@ -337,8 +335,7 @@ public class PokemonService(
         if (newestOwnership == null)
             return null;
 
-        // Get the Pokemon using the ID from the ownership record
-        return await db.UserPokemon
+                return await db.UserPokemon
             .FirstOrDefaultAsync(p => p.Id == newestOwnership.PokemonId);
     }
 
@@ -363,19 +360,16 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Convert from 1-based user interface numbering to 0-based database position
-        var position = number - 1;
+                var position = number - 1;
 
-        // Find the Pokemon ID in the ownership table using position
-        var ownership = await db.UserPokemonOwnerships
+                var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.Position == position)
             .FirstOrDefaultAsync();
 
         if (ownership == null)
             return null;
 
-        // Get the actual Pokemon from the Pokemon table
-        return (await db.UserPokemon
+                return (await db.UserPokemon
             .FirstOrDefaultAsync(p => p.Id == ownership.PokemonId))!;
     }
 
@@ -390,8 +384,7 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Begin transaction to ensure consistency
-        await using var transaction = await db.BeginTransactionAsync();
+                await using var transaction = await db.BeginTransactionAsync();
 
         try
         {
@@ -404,40 +397,33 @@ public class PokemonService(
             if (pokemon.Favorite)
                 throw new Exception("Cannot remove favorited Pokemon");
 
-            // Find the ownership record
-            var ownership = await db.UserPokemonOwnerships
+                        var ownership = await db.UserPokemonOwnerships
                 .FirstOrDefaultAsync(o => o.UserId == userId && o.PokemonId == pokemonId);
 
             if (ownership == null)
                 throw new Exception("Pokemon not found in user's collection");
 
-            // Store the position for reordering
             var position = ownership.Position;
 
-            // Remove the ownership record
-            await db.UserPokemonOwnerships
+                        await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId && o.PokemonId == pokemonId)
                 .DeleteAsync();
 
-            // Update all higher positions to maintain order
-            await db.UserPokemonOwnerships
+                        await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId && o.Position > position)
                 .Set(o => o.Position, o => o.Position - 1)
                 .UpdateAsync();
 
-            // Check if this was the selected Pokemon and update if needed
             await db.Users
                 .Where(u => u.UserId == userId && u.Selected == pokemonId)
                 .Set(u => u.Selected, (ulong?)0)
                 .UpdateAsync();
 
             if (releasePokemon)
-                // Actually delete the Pokemon for release
                 await db.UserPokemon
                     .Where(p => p.Id == pokemonId)
                     .DeleteAsync();
             else
-                // For sacrifice, just unlink it
                 await db.UserPokemon
                     .Where(p => p.Id == pokemonId)
                     .Set(p => p.Owner, (ulong)0)
@@ -473,7 +459,6 @@ public class PokemonService(
         var key = $"soul_gauge:{userId}";
         await redis.Redis.GetDatabase().StringIncrementAsync(key, increment);
 
-        // Cap at 1000
         var current = await redis.Redis.GetDatabase().StringGetAsync(key);
         if (current.HasValue && (double)current > 1000)
             await redis.Redis.GetDatabase().StringSetAsync(key, 1000);
@@ -577,12 +562,10 @@ public class PokemonService(
         if (radiant && isPlaceholder != null)
             return (identifier, Path.Combine("data", "images", "placeholder.png"));
 
-        // Build local file path
-        var pathSegments = new List<string> { "data", "images" };
+                var pathSegments = new List<string> { "data", "images" };
 
         if (radiant) pathSegments.Add("radiant");
         if (shiny) pathSegments.Add("shiny");
-        // WHY. WHY IS THERE A LITERAL NULL ENTRY.
         if (!string.IsNullOrEmpty(skin) && skin != "NULL") pathSegments.Add(skin.TrimEnd('/'));
 
         var fileName = $"{pokemonId}-{formId}-.{fileType}";
@@ -603,8 +586,7 @@ public class PokemonService(
     {
         var natureModifier = GetNatureModifier(pokemon.Nature);
 
-        // Calculate HP differently from other stats
-        var maxHp = CalculateHpStat(baseStats.Hp, pokemon.Level, pokemon.HpIv, pokemon.HpEv);
+                var maxHp = CalculateHpStat(baseStats.Hp, pokemon.Level, pokemon.HpIv, pokemon.HpEv);
 
         return Task.FromResult(new CalculatedStats
         {
@@ -638,11 +620,9 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Check for special admin case
         var actualUserId = userId == 1081889316848017539 ? 946611594488602694UL : userId;
 
-        // Get all Pokemon IDs owned by the user from the ownership table
-        var ownedPokemonIds = await db.UserPokemonOwnerships
+                var ownedPokemonIds = await db.UserPokemonOwnerships
             .Where(o => o.UserId == actualUserId)
             .Select(o => o.PokemonId)
             .ToListAsync();
@@ -650,8 +630,7 @@ public class PokemonService(
         if (ownedPokemonIds.Count == 0)
             return new List<DeadPokemon>();
 
-        // Get all dead Pokemon that match the user's owned Pokemon IDs
-        return await db.DeadPokemon
+                return await db.DeadPokemon
             .Where(d => ownedPokemonIds.Contains(d.Id))
             .ToListAsync();
     }
@@ -668,20 +647,17 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Get all invalid references for this user
-        var invalidReferences = await db.InvalidPokemonReferences
+                var invalidReferences = await db.InvalidPokemonReferences
             .Where(r => r.UserId == userId)
             .ToListAsync();
 
         if (invalidReferences.Count == 0)
             return (new List<InvalidPokemonReference>(), new List<InvalidPokemonReference>());
 
-        // Get all dead Pokemon IDs
-        var deadPokemonIds = await db.DeadPokemon
+                var deadPokemonIds = await db.DeadPokemon
             .Select(d => d.Id)
             .ToListAsync();
 
-        // Check which invalid references match dead Pokemon IDs
         var potentialDeadPokemon = invalidReferences
             .Where(r => deadPokemonIds.Contains(r.PokemonId))
             .ToList();
@@ -711,14 +687,12 @@ public class PokemonService(
             if (potentialDeadPokemon.Count == 0)
                 return 0;
 
-            // Find the highest position for this user
-            var highestPosition = await db.UserPokemonOwnerships
+                        var highestPosition = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.Position)
                 .Select(o => o.Position)
                 .FirstOrDefaultAsync();
 
-            // Create ownership entries for the dead Pokemon
             var ownerships = new List<UserPokemonOwnership>();
 
             foreach (var reference in potentialDeadPokemon)
@@ -735,8 +709,7 @@ public class PokemonService(
 
             await db.BulkCopyAsync(ownerships);
 
-            // Remove the recovered references from invalid references
-            var referenceIds = potentialDeadPokemon.Select(r => r.PokemonId).ToList();
+                        var referenceIds = potentialDeadPokemon.Select(r => r.PokemonId).ToList();
             await db.InvalidPokemonReferences
                 .Where(r => r.UserId == userId && referenceIds.Contains(r.PokemonId))
                 .DeleteAsync();
@@ -767,18 +740,14 @@ public class PokemonService(
 
         try
         {
-            // Get all IDs for batch deletion
-            var ids = deadPokemon.Select(d => d.Id).ToList();
+                        var ids = deadPokemon.Select(d => d.Id).ToList();
 
-            // Delete from dead Pokemon table
             await db.DeadPokemon
                 .Where(d => ids.Contains(d.Id))
                 .DeleteAsync();
 
-            // Convert to live Pokemon
-            var livePokemon = deadPokemon.Select(MapDeadToLive).ToList();
+                        var livePokemon = deadPokemon.Select(MapDeadToLive).ToList();
 
-            // Use bulk copy for better performance with large datasets
             await db.BulkCopyAsync(livePokemon);
             await transaction.CommitAsync();
         }
@@ -854,7 +823,6 @@ public class PokemonService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
 
-        // Directly query the position from the join table
         var ownership = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId && o.PokemonId == pokemonId)
             .FirstOrDefaultAsync();
@@ -862,7 +830,6 @@ public class PokemonService(
         if (ownership == null)
             return 0;
 
-        // Return 1-based index for user interface
         return ownership.Position + 1;
     }
 
@@ -884,8 +851,7 @@ public class PokemonService(
         {
             await using var db = await dbProvider.GetConnectionAsync();
 
-            // Get user data for selected Pokemon - using LinqToDB, not EF Core, EF Core is slow sometimes.
-            var userData = await db.Users
+                        var userData = await db.Users
                 .Where(u => u.UserId == userId)
                 .Select(u => new { Selected = u.Selected })
                 .FirstOrDefaultAsync();
@@ -899,12 +865,10 @@ public class PokemonService(
                     return (new List<PokemonListEntry>(), null, new HashSet<ulong>(), null);
             }
 
-            // Get party data from Parties table instead of Users table
-            var currentParty = await db.Parties
+                        var currentParty = await db.Parties
                 .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
 
-            // Create lookup sets for efficient checking
             var partyLookup = currentParty != null
                 ? new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
                          currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
@@ -913,13 +877,11 @@ public class PokemonService(
                     .ToHashSet()
                 : new HashSet<ulong>();
 
-            // Get Pokemon from the ownership table using JOIN instead of separate queries
-            var query = from ownership in db.GetTable<UserPokemonOwnership>()
+                        var query = from ownership in db.GetTable<UserPokemonOwnership>()
                         join pokemon in db.GetTable<Database.Linq.Models.Pokemon.Pokemon>() on ownership.PokemonId equals pokemon.Id
                         where ownership.UserId == userId
                         select new { Pokemon = pokemon, ownership.Position };
 
-            // For market filter, we need a different query that gets Pokemon from market listings
             if (filter == "market")
             {
                 query = from market in db.GetTable<Database.Linq.Models.Game.Market>()
@@ -928,13 +890,12 @@ public class PokemonService(
                         select new
                         {
                             Pokemon = pokemon, Position = market.Id
-                        }; // Use market ID as position for market listings
+                        };
             }
 
             var totalCount = await query.CountAsync();
 
-            // Apply filter
-            query = filter switch
+                        query = filter switch
             {
                 "shiny" => query.Where(p => p.Pokemon.Shiny == true),
                 "radiant" => query.Where(p => p.Pokemon.Radiant == true),
@@ -955,8 +916,7 @@ public class PokemonService(
                 _ => query
             };
 
-            // Apply search filter at database level where possible (case-insensitive)
-            if (!string.IsNullOrEmpty(search))
+                        if (!string.IsNullOrEmpty(search))
             {
                 var searchLower = search.ToLower();
                 query = query.Where(p => 
@@ -964,8 +924,7 @@ public class PokemonService(
                     (p.Pokemon.Nickname != null && p.Pokemon.Nickname.ToLower().Contains(searchLower)));
             }
 
-            // Calculate all stats in a single query using conditional aggregation
-            var statsData = await query
+                        var statsData = await query
                 .Select(p => new
                 {
                     Total = 1,
@@ -998,8 +957,7 @@ public class PokemonService(
                 { "Genderless", statsData.Sum(s => s.Genderless) }
             };
 
-            // Apply sorting
-            query = sortOrder switch
+                        query = sortOrder switch
             {
                 SortOrder.Iv => query.OrderByDescending(p =>
                     p.Pokemon.HpIv + p.Pokemon.AttackIv + p.Pokemon.DefenseIv +
@@ -1010,10 +968,9 @@ public class PokemonService(
                 SortOrder.Favorite => query.OrderByDescending(p => p.Pokemon.Favorite),
                 SortOrder.Party => query.OrderByDescending(p => partyLookup.Contains(p.Pokemon.Id)),
                 SortOrder.Champion => query.OrderByDescending(p => p.Pokemon.Champion),
-                _ => query.OrderBy(p => p.Position) // Default sort by position (index in collection)
+                _ => query.OrderBy(p => p.Position)
             };
 
-            // Create the projection to get all needed fields
             var projectedQuery = query.Select(p => new
             {
                 p.Pokemon.Id,
@@ -1036,14 +993,12 @@ public class PokemonService(
                 p.Pokemon.Tradable,
                 p.Pokemon.Breedable,
                 p.Pokemon.Nature,
-                Position = p.Position + 1 // Convert to 1-based indexing for display
+                Position = p.Position + 1
             });
 
-            // Execute the query and get the results
             var pokemonData = await projectedQuery.ToListAsync();
 
-            // Apply additional search filters for array fields that couldn't be done at DB level
-            if (!string.IsNullOrEmpty(search))
+                        if (!string.IsNullOrEmpty(search))
             {
                 pokemonData = pokemonData.Where(p =>
                     p.PokemonName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -1055,12 +1010,10 @@ public class PokemonService(
                 ).ToList();
             }
 
-            // If we need to sort by type, batch fetch types from MongoDB
             if (sortOrder == SortOrder.Type)
             {
                 var uniqueNames = pokemonData.Select(p => p.PokemonName).Distinct().ToList();
                 
-                // Batch fetch types from MongoDB
                 var pokemonTypes = await mongo.PFile
                     .Find(p => uniqueNames.Contains(p.Identifier))
                     .Project(p => new { p.Identifier, p.Types })
@@ -1106,8 +1059,7 @@ public class PokemonService(
                 return (sortedList, stats, partyLookup, userData?.Selected);
             }
 
-            // Convert to PokemonListEntry objects
-            var result = pokemonData.Select(p => new PokemonListEntry(
+                        var result = pokemonData.Select(p => new PokemonListEntry(
                 p.Id,
                 p.PokemonName,
                 p.Position,
@@ -1267,7 +1219,7 @@ public class PokemonService(
             "sassy" => ("SpecialDefense", "Speed"),
             "careful" => ("SpecialDefense", "SpecialAttack"),
             "quirky" => ("None", "None"),
-            _ => ("None", "None") // Default for unknown natures
+            _ => ("None", "None")
         };
     }
 
@@ -1278,21 +1230,17 @@ public class PokemonService(
     /// <returns>The calculated friendship value.</returns>
     public int CalculateFriendship(Database.Linq.Models.Pokemon.Pokemon pokemon)
     {
-        // Base friendship starts at 70
         var friendship = 70;
 
-        // Add friendship based on level
-        friendship += pokemon.Level / 2;
+                friendship += pokemon.Level / 2;
 
-        // Add friendship for high IVs (above 25)
-        if (pokemon.HpIv > 25) friendship += 5;
+                if (pokemon.HpIv > 25) friendship += 5;
         if (pokemon.AttackIv > 25) friendship += 5;
         if (pokemon.DefenseIv > 25) friendship += 5;
         if (pokemon.SpecialAttackIv > 25) friendship += 5;
         if (pokemon.SpecialDefenseIv > 25) friendship += 5;
         if (pokemon.SpeedIv > 25) friendship += 5;
 
-        // Cap at 255
         return Math.Min(friendship, 255);
     }
 
@@ -1347,20 +1295,16 @@ public class PokemonService(
         var originalName = pokemon.PokemonName;
         var pokemonName = pokemon.PokemonName.ToLower();
 
-        // Everstones block evolutions
         if (pokemon.HeldItem?.ToLower() is "everstone" or "eviolite")
             return (false, null, false);
 
-        // Eggs cannot evolve
         if (pokemonName == "egg")
             return (false, null, false);
 
-        // Don't evolve forms
         if (IsFormed(pokemonName) || pokemonName.EndsWith("-staff") || pokemonName.EndsWith("-custom"))
             return (false, null, false);
 
-        // Get necessary info
-        var pokemonInfo = await mongo.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
+                var pokemonInfo = await mongo.Forms.Find(f => f.Identifier == pokemonName).FirstOrDefaultAsync();
         if (pokemonInfo == null)
         {
             Log.Error("A poke exists that is not in the mongo forms table - {Name}", pokemonName);
@@ -1374,14 +1318,12 @@ public class PokemonService(
             return (false, null, false);
         }
 
-        // Get evolution line
-        var evoline = await mongo.PFile
+                var evoline = await mongo.PFile
             .Find(f => f.EvolutionChainId == rawPfile.EvolutionChainId)
             .ToListAsync();
 
         evoline.Sort((a, b) => b.IsBaby.GetValueOrDefault().CompareTo(a.IsBaby.GetValueOrDefault()));
 
-        // Filter potential evos
         var potentialEvos = new List<Dictionary<string, object>>();
         foreach (var evo in evoline)
         {
@@ -1401,7 +1343,6 @@ public class PokemonService(
         if (!potentialEvos.Any())
             return (false, null, false);
 
-        // Prep items
         int? activeItemId = null;
         if (activeItem != null)
         {
@@ -1418,12 +1359,10 @@ public class PokemonService(
             heldItemId = item?.ItemId;
         }
 
-        // Get owner's region
-        var owner = await db.Users.FirstOrDefaultAsync(u => u.UserId == pokemon.Owner);
+                var owner = await db.Users.FirstOrDefaultAsync(u => u.UserId == pokemon.Owner);
         if (owner?.Region == null)
             return (false, null, false);
 
-        // Filter valid evos
         var validEvos = new List<Dictionary<string, object>>();
         foreach (var evoReq in potentialEvos)
             if (await CheckEvoReqs(pokemon, heldItemId, activeItemId, owner.Region, evoReq, overrideLvl100))
@@ -1439,8 +1378,7 @@ public class PokemonService(
 
         var evoName = evoTwo.Identifier.Capitalize();
 
-        // Update the Pokemon
-        await db.UserPokemon.Where(p => p.Id == pokemonId)
+                await db.UserPokemon.Where(p => p.Id == pokemonId)
             .Set(p => p.PokemonName, evoName)
             .UpdateAsync();
 
@@ -1485,15 +1423,13 @@ public class PokemonService(
         string? gender = null,
         int level = 1)
     {
-        // Get form info from MongoDB
-        var formInfo = await mongo.Forms
+                var formInfo = await mongo.Forms
             .Find(f => f.Identifier.Equals(pokemonName!.ToLower()))
             .FirstOrDefaultAsync();
 
         if (formInfo == null) return null;
 
-        // Get pokemon info
-        var pokemonInfo = await mongo.PFile
+                var pokemonInfo = await mongo.PFile
             .Find(p => p.PokemonId == formInfo.PokemonId)
             .FirstOrDefaultAsync();
 
@@ -1507,17 +1443,14 @@ public class PokemonService(
 
         if (pokemonInfo == null) return null;
 
-        // Get ability ids
-        var abilityDocs = await mongo.PokeAbilities
+                var abilityDocs = await mongo.PokeAbilities
             .Find(a => a.PokemonId == formInfo.PokemonId)
             .ToListAsync();
         var abilityIds = abilityDocs.Select(doc => doc.AbilityId).ToList();
 
-        // Determine base stats
         var minIv = boosted ? 12 : 1;
         var maxIv = boosted || _random.Next(2) == 0 ? 31 : 29;
 
-        // Generate IVs
         var hpIv = _random.Next(minIv, maxIv + 1);
         var atkIv = _random.Next(minIv, maxIv + 1);
         var defIv = _random.Next(minIv, maxIv + 1);
@@ -1525,13 +1458,11 @@ public class PokemonService(
         var spdIv = _random.Next(minIv, maxIv + 1);
         var speIv = _random.Next(minIv, maxIv + 1);
 
-        // Random nature
         var nature = await mongo.Natures
             .Find(_ => true)
             .ToListAsync();
         var selectedNature = nature[_random.Next(nature.Count)].Identifier;
 
-        // Determine gender if not provided
         if (string.IsNullOrEmpty(gender))
         {
             if (pokemonName!.ToLower().Contains("nidoran-"))
@@ -1556,20 +1487,17 @@ public class PokemonService(
                 }
         }
 
-        // Check for shadow override if no skin is specified
         if (string.IsNullOrEmpty(skin) && !radiant && !shiny)
         {
             var makeShadow = await ShadowHuntCheck(userId, pokemonName);
             if (makeShadow)
             {
                 skin = "shadow";
-                // Log shadow creation
                 if (client.GetChannel(1005737655025291334) is IMessageChannel channel)
                     await channel.SendMessageAsync($"`{userId} - {pokemonName}`");
             }
         }
 
-        // Create the Pokemon
         var newPokemon = new Database.Linq.Models.Pokemon.Pokemon
         {
             PokemonName = pokemonName.Capitalize(),
@@ -1614,28 +1542,24 @@ public class PokemonService(
 
         try
         {
-            // Add the Pokemon and get its ID
-            newPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(newPokemon);
+                        newPokemon.Id = (ulong)await db.InsertWithInt64IdentityAsync(newPokemon);
 
-            // Find the highest current position for this user
-            var highestPosition = await db.UserPokemonOwnerships
+                        var highestPosition = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .OrderByDescending(o => o.Position)
                 .Select(o => o.Position)
                 .FirstOrDefaultAsync();
 
-            // Create a new ownership record with the next position
             var ownership = new UserPokemonOwnership
             {
                 UserId = userId,
                 PokemonId = newPokemon.Id,
-                Position = highestPosition + 1 // Use the next available position
+                Position = highestPosition + 1
             };
 
             await db.InsertAsync(ownership);
 
-            // Update achievements
-            if (shiny)
+                        if (shiny)
                 await db.Achievements
                     .Where(a => a.UserId == userId)
                     .Set(a => a.ShinyCaught, a => a.ShinyCaught + 1)
@@ -1736,25 +1660,20 @@ public class PokemonService(
     {
         var reqFlags = EvoReqs.FromRaw(evoReq);
 
-        // They used an active item but this evo doesn't use an active item, don't use it.
         if (activeItemId.HasValue && !reqFlags.UsedActiveItem())
             return false;
 
-        // If a pokemon is level 100, ONLY evolve via an override or active item.
         if (pokemon.Level >= 100 && !(overrideLvl100 || activeItemId.HasValue))
             return false;
 
-        // Check trigger item
         if (evoReq.GetValueOrDefault("trigger_item_id") is int triggerItemId)
             if (triggerItemId != activeItemId)
                 return false;
 
-        // Check held item
         if (evoReq.GetValueOrDefault("held_item_id") is int requiredHeldItemId)
             if (requiredHeldItemId != heldItemId)
                 return false;
 
-        // Check gender
         if (evoReq.GetValueOrDefault("gender_id") is int genderId)
             switch (genderId)
             {
@@ -1763,12 +1682,10 @@ public class PokemonService(
                     return false;
             }
 
-        // Check minimum level
         if (evoReq.GetValueOrDefault("minimum_level") is int minLevel)
             if (pokemon.Level < minLevel)
                 return false;
 
-        // Check known move
         if (evoReq.GetValueOrDefault("known_move_id") is int moveId)
         {
             var move = await mongo.Moves.Find(m => m.MoveId == moveId).FirstOrDefaultAsync();
@@ -1776,16 +1693,12 @@ public class PokemonService(
                 return false;
         }
 
-        // Check happiness
         if (evoReq.GetValueOrDefault("minimum_happiness") is int minHappiness)
             if (pokemon.Happiness < minHappiness)
                 return false;
 
-        // Check relative physical stats
         if (evoReq.GetValueOrDefault("relative_physical_stats") is int relativeStats)
         {
-            // WARNING: Currently only used by Tyrogue which has identical base stats for atk and def
-            // If used on other Pokemon, base stats need to be considered
             var attack = pokemon.AttackIv + pokemon.AttackEv;
             var defense = pokemon.DefenseIv + pokemon.DefenseEv;
 
@@ -1798,12 +1711,10 @@ public class PokemonService(
             }
         }
 
-        // Check region
         if (evoReq.GetValueOrDefault("region") is string requiredRegion)
         {
             if (requiredRegion != region)
                 return false;
-            // Temp blocker since previously radiants could never evolve to regional forms
             if (pokemon.Radiant.GetValueOrDefault())
                 return false;
         }
@@ -1821,29 +1732,24 @@ public class PokemonService(
     {
         try
         {
-            // Get the Pokemon form
-            var form = await mongo.Forms
+                        var form = await mongo.Forms
                 .Find(f => f.Identifier.Equals(pokemonName.ToLower(), StringComparison.OrdinalIgnoreCase))
                 .FirstOrDefaultAsync();
 
             if (form == null)
                 return "Unknown";
 
-            // Get abilities for this Pokemon
-            var abilities = await mongo.PokeAbilities
+                        var abilities = await mongo.PokeAbilities
                 .Find(a => a.PokemonId == form.PokemonId)
                 .ToListAsync();
 
-            // Find the ability ID based on the index
-            // Index 0 = primary ability, 1 = secondary ability, 2 = hidden ability
             int? abilityId = null;
             if (abilities.Count > abilityIndex && abilityIndex >= 0) abilityId = abilities[abilityIndex].AbilityId;
 
             if (!abilityId.HasValue)
                 return "Unknown";
 
-            // Get the ability name
-            var ability = await mongo.Abilities
+                        var ability = await mongo.Abilities
                 .Find(a => a.AbilityId == abilityId.Value)
                 .FirstOrDefaultAsync();
 
@@ -1873,7 +1779,6 @@ public class PokemonService(
             if (user == null)
                 return $"Unknown Trainer ({userId})";
 
-            // Return trainer nickname if set, otherwise just return "Trainer" with ID
             return !string.IsNullOrEmpty(user.TrainerNickname)
                 ? user.TrainerNickname
                 : $"Trainer #{userId}";

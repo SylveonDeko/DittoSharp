@@ -222,7 +222,7 @@ public class GameDataCache(IMongoService mongo) : INService, IReadyExecutor, IGa
         IsLoaded = true;
         sw.Stop();
         Log.Information(
-            "Static game data loaded in {ElapsedMs}ms — moves={Moves} abilities={Abilities} forms={Forms} pfile={PFile} items={Items} types={Types} eff={Eff}",
+            "Static game data loaded in {ElapsedMs}ms - moves={Moves} abilities={Abilities} forms={Forms} pfile={PFile} items={Items} types={Types} eff={Eff}",
             sw.ElapsedMilliseconds, MovesById.Count, AbilitiesById.Count, FormsById.Count, PFileById.Count,
             ItemsById.Count, TypesById.Count, TypeEffectiveness.Count);
     }

@@ -81,7 +81,6 @@ public class Weather(Battle battle) : ExpiringEffect(0)
         {
             if (poke == null)
                 continue;
-            // Forecast
             if (poke.Ability() != Ability.FORECAST || !poke!.Name!.StartsWith("Castform") ||
                 poke.Name == "Castform") continue;
             if (poke.Form("Castform")) poke.TypeIds = [ElementType.NORMAL];
@@ -225,7 +224,6 @@ public class Weather(Battle battle) : ExpiringEffect(0)
                 throw new ArgumentException("unexpected weather");
         }
 
-        // Forecast
         var t = element!.ToString()!.ToLower();
         foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
         {
@@ -372,7 +370,6 @@ public class Terrain(Battle battle) : ExpiringItem
         base.Set(item, turns);
         var msg = $"{attacker.Name} creates a{(item == "electric" ? "n" : "")} {item} terrain!\n";
 
-        // Mimicry
         ElementType? element = null;
         switch (item)
         {
@@ -436,7 +433,6 @@ public class Terrain(Battle battle) : ExpiringItem
     public new void End()
     {
         base.End();
-        // Mimicry
         foreach (var poke in new[] { battle.Trainer1.CurrentPokemon, battle.Trainer2.CurrentPokemon })
         {
             if (poke == null)
@@ -541,7 +537,6 @@ public class NonVolatileEffect(DuelPokemon.DuelPokemon pokemon)
 
         switch (Current)
         {
-            // The poke still has a status effect, apply damage
             case "burn":
             {
                 var damage = Math.Max(1, pokemon.StartingHp / 16);
@@ -958,18 +953,14 @@ public class HeldItem
     {
         var nonRemovableItems = new[]
         {
-            // Plates
             "draco-plate", "dread-plate", "earth-plate", "fist-plate", "flame-plate", "icicle-plate",
             "insect-plate", "iron-plate", "meadow-plate", "mind-plate", "pixie-plate", "sky-plate",
             "splash-plate", "spooky-plate", "stone-plate", "toxic-plate", "zap-plate",
-            // Memories
             "dragon-memory", "dark-memory", "ground-memory", "fighting-memory", "fire-memory",
             "ice-memory", "bug-memory", "steel-memory", "grass-memory", "psychic-memory",
             "fairy-memory", "flying-memory", "water-memory", "ghost-memory", "rock-memory",
             "poison-memory", "electric-memory",
-            // Misc
             "primal-orb", "griseous-orb", "blue-orb", "red-orb", "rusty-sword", "rusty-shield",
-            // Mega Stones
             "mega-stone", "mega-stone-x", "mega-stone-y"
         };
 
@@ -1062,6 +1053,13 @@ public class HeldItem
         EverHadItem = EverHadItem || _item != null;
     }
 
+    /// <summary>
+    ///     Shared precondition for every berry-eating check: the holder must be alive, holding a berry, and not
+    ///     suppressed by the opponent's <see cref="Ability.UNNERVE"/>, <see cref="Ability.AS_ONE_SHADOW"/>, or
+    ///     <see cref="Ability.AS_ONE_ICE"/>.
+    /// </summary>
+    /// <param name="otherpoke">The opposing Pokemon, used to detect anti-berry abilities.</param>
+    /// <returns><c>true</c> if a berry consumption attempt should be considered; otherwise <c>false</c>.</returns>
     private bool _ShouldEatBerryUtil(DuelPokemon.DuelPokemon? otherpoke = null)
     {
         if (_owner.Hp == 0) return false;
@@ -1158,7 +1156,6 @@ public class HeldItem
         else
             msg += $"{consumer.Name} eats {_owner.Name}'s berry!\n";
 
-        // 2x or 1x
         var ripe = Convert.ToInt32(consumer.Ability(attacker, move) == Ability.RIPEN) + 1;
         string? flavor = null;
 
@@ -1309,8 +1306,6 @@ public class HeldItem
 
         consumer.LastBerry = _item;
         consumer.AteBerry = true;
-        // TODO: right now HeldItem does not support `recover`ing/setting from anything other than another HeldItem object.
-        //       this should probably be modified to be an `ExpiringItem` w/ that item for cases where `last_item` gets reset.
         if (consumer.Ability(attacker, move) == Ability.CUD_CHEW) consumer.CudChew.SetTurns(2);
         if (consumer == _owner)
             Use();

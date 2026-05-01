@@ -26,7 +26,7 @@ public partial class DuelPokemon
                 case { Effect: 373 } when defenderType == ElementType.FLYING &&
                                           !Grounded(battle, attacker,
                                               move):
-                    return 1; // Ignores secondary types if defender is flying type and not grounded
+                    return 1;
             }
 
             if (Roost && defenderType == ElementType.FLYING) continue;

@@ -1,4 +1,3 @@
-// ReSharper disable NotNullMemberIsNotInitialized
 
 namespace EeveeCore.Common;
 

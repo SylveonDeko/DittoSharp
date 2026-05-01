@@ -136,9 +136,7 @@ public partial class Move
     /// </summary>
     public bool TargetsOpponent()
     {
-        // Moves which don't follow normal targeting protocols, ignore them unless they are damaging.
         if (Target == MoveTarget.SPECIFIC_MOVE && DamageClass == DamageClass.STATUS) return false;
-        // Moves which do not target the opponent Pokemon.
         return !new[]
         {
             MoveTarget.SELECTED_POKEMON_ME_FIRST,

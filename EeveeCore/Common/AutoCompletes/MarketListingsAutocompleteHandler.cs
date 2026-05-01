@@ -10,7 +10,6 @@ namespace EeveeCore.Common.AutoCompletes;
 /// </summary>
 public class MarketListingsAutocompleteHandler : AutocompleteHandler
 {
-    // Cache for user market listings to reduce database queries (cache for 30 seconds)
     private static readonly ConcurrentDictionary<ulong, (DateTime Expiry, List<AutocompleteResult> Listings)> ListingsCache = new();
     private readonly LinqToDbConnectionProvider _dbProvider;
     private const int CacheTimeoutSeconds = 30;
@@ -47,14 +46,12 @@ public class MarketListingsAutocompleteHandler : AutocompleteHandler
 
         try
         {
-            // Check cache first
             if (ListingsCache.TryGetValue(userId, out var cached) && DateTime.UtcNow < cached.Expiry)
             {
                 var filteredResults = FilterListingsResults(cached.Listings, currentValue);
                 return AutocompletionResult.FromSuccess(filteredResults);
             }
 
-            // Get user's active market listings from database
             await using var db = await _dbProvider.GetConnectionAsync();
             
             var userListings = await (from market in db.Market
@@ -74,24 +71,20 @@ public class MarketListingsAutocompleteHandler : AutocompleteHandler
                                     })
                                     .ToListAsync();
 
-            // Create autocomplete results
             var listingResults = userListings.Select(listing => 
             {
                 var displayName = CreateDisplayName(listing.PokemonName!, listing.Nickname, listing.Id, listing.Level, listing.Price, listing.Shiny, listing.Radiant);
                 return new AutocompleteResult(displayName, listing.Id.ToString());
             }).ToList();
 
-            // Cache the results
             var expiry = DateTime.UtcNow.AddSeconds(CacheTimeoutSeconds);
             ListingsCache[userId] = (expiry, listingResults);
 
-            // Filter and return results
             var filtered = FilterListingsResults(listingResults, currentValue);
             return AutocompletionResult.FromSuccess(filtered);
         }
         catch (Exception ex)
         {
-            // Log the error and return empty result
             Log.Information($"Error in MarketListingsAutocompleteHandler: {ex.Message}");
             return AutocompletionResult.FromSuccess([]);
         }
@@ -134,13 +127,11 @@ public class MarketListingsAutocompleteHandler : AutocompleteHandler
             return allResults.Take(MaxResults).ToList();
         }
 
-        // Filter by Pokemon name, nickname, or listing ID
         var filtered = allResults.Where(result =>
             result.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
             result.Value.ToString()!.Contains(filter))
             .ToList();
 
-        // Prioritize exact matches at the start
         var exactMatches = filtered.Where(r => 
             r.Name.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
             .ToList();

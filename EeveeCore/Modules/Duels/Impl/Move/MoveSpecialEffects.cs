@@ -12,7 +12,6 @@ public partial class Move
 
         switch (Effect)
         {
-            // OldMove locking
             case 87 when defender.Ability(attacker, this) == Ability.AROMA_VEIL:
                 msg += $"{defender.Name}'s aroma veil protects its move from being disabled!\n";
                 break;
@@ -72,7 +71,6 @@ public partial class Move
                 defender.HealBlock.SetTurns(2);
                 msg += $"{defender.Name} is blocked from healing!\n";
                 break;
-            // Weather changing
             case 116:
                 msg += battle.Weather.Set("sandstorm", attacker);
                 break;
@@ -85,7 +83,6 @@ public partial class Move
             case 165:
                 msg += battle.Weather.Set("hail", attacker);
                 break;
-            // Terrain changing
             case 352:
                 msg += battle.Terrain.Set("grassy", attacker);
                 break;
@@ -100,7 +97,6 @@ public partial class Move
                 break;
         }
 
-        // Protection
         if (new[] { 112, 117, 279, 356, 362, 384, 454, 488, 499 }.Contains(Effect))
         {
             attacker.ProtectionUsed = true;
@@ -159,7 +155,6 @@ public partial class Move
                 break;
         }
 
-        // Sound-based move with throat spray
         if (IsSoundBased() && attacker.HeldItem == "throat-spray")
         {
             msg += attacker.AppendSpAtk(1, attacker, source: "its throat spray");
@@ -168,12 +163,10 @@ public partial class Move
 
         switch (Effect)
         {
-            // Tar Shot
             case 477 when !defender.TarShot:
                 defender.TarShot = true;
                 msg += $"{defender.Name} is covered in sticky tar!\n";
                 break;
-            // Tidy Up
             case 487:
                 defender.Owner.Spikes = 0;
                 defender.Owner.ToxicSpikes = 0;
@@ -187,7 +180,6 @@ public partial class Move
                 attacker.Substitute = 0;
                 msg += $"{attacker.Name} tidied up!\n";
                 break;
-            // Syrup Bomb
             case 503:
                 defender.SyrupBomb.SetTurns(4);
                 msg += $"{defender.Name} got covered in sticky candy syrup!\n";
@@ -205,14 +197,11 @@ public partial class Move
     {
         var msg = "";
 
-        // Swap outs
-        // A poke is force-swapped out before activating red-card
         if (Effect is 29 or 314)
         {
             var swaps = defender.Owner.ValidSwaps(attacker, battle, false);
             if (swaps.Count == 0)
             {
-                // Do nothing
             }
             else if (defender.Ability(attacker, this) == Ability.SUCTION_CUPS)
             {
@@ -233,17 +222,14 @@ public partial class Move
                 var idx = swaps[Random.Shared.Next(swaps.Count)];
                 defender.Owner.SwitchPoke(idx, true);
                 msg += defender.Owner.CurrentPokemon.SendOut(attacker, battle);
-                // Safety in case the poke dies on send out.
                 if (defender.Owner.CurrentPokemon != null) defender.Owner.CurrentPokemon.HasMoved = true;
             }
         }
-        // A red-card forces the attacker to swap to a random poke, even if they used a switch out move
         else if (defender.HeldItem == "red-card" && defender.Hp > 0 && DamageClass != DamageClass.STATUS)
         {
             var swaps = attacker.Owner.ValidSwaps(defender, battle, false);
             if (swaps.Count == 0)
             {
-                // Do nothing
             }
             else if (attacker.Ability(defender, this) == Ability.SUCTION_CUPS)
             {
@@ -268,7 +254,6 @@ public partial class Move
                 var idx = swaps[Random.Shared.Next(swaps.Count)];
                 attacker.Owner.SwitchPoke(idx, true);
                 msg += attacker.Owner.CurrentPokemon.SendOut(defender, battle);
-                // Safety in case the poke dies on send out.
                 if (attacker.Owner.CurrentPokemon != null) attacker.Owner.CurrentPokemon.HasMoved = true;
             }
         }
@@ -281,12 +266,10 @@ public partial class Move
                 if (Effect == 128) attacker.Owner.BatonPass = new BatonPass(attacker);
 
                 msg += attacker.Remove(battle);
-                // Force this pokemon to immediately return to be attacked
                 attacker.Owner.MidTurnRemove = true;
             }
         }
 
-        // Trapping
         if (new[] { 107, 374, 385, 449, 452 }.Contains(Effect) && !defender.Trapping)
         {
             defender.Trapping = true;
@@ -299,7 +282,6 @@ public partial class Move
             msg += $"{attacker.Name} can't escape!\n";
         }
 
-        // Attacker faints
         if (new[] { 169, 221, 271, 321 }.Contains(Effect)) msg += attacker.Faint(battle);
 
         return msg;
@@ -313,7 +295,6 @@ public partial class Move
     {
         var msg = "";
 
-        // Life orb
         if (
             attacker.HeldItem == "life-orb" &&
             defender.Owner.HasAlivePokemon() &&

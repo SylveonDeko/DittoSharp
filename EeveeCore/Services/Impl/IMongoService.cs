@@ -12,7 +12,6 @@ namespace EeveeCore.Services.Impl;
 /// </summary>
 public interface IMongoService
 {
-    // Pokemon Data
     /// <summary>
     ///     Collection of Pokemon abilities and their effects.
     /// </summary>
@@ -73,7 +72,6 @@ public interface IMongoService
     /// </summary>
     IMongoCollection<TypeEffectiveness> TypeEffectiveness { get; }
 
-    // Game Data
     /// <summary>
     ///     Collection of booster packs and their contents.
     /// </summary>
@@ -154,7 +152,6 @@ public interface IMongoService
     /// </summary>
     IMongoCollection<UserProgress> UserProgress { get; }
 
-    // Discord Data
     /// <summary>
     ///     Collection of Discord guild configurations.
     /// </summary>

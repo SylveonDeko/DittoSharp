@@ -29,7 +29,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse Pokemon positions (support multiple IDs separated by spaces or commas)
         var positionsInput = modal!.PokemonPosition!.Trim().Replace(" ", ",");
         var positions = new List<int>();
 
@@ -50,7 +49,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         var results = new List<string>();
         var errors = new List<string>();
 
-        // Add each Pokemon
         foreach (var position in positions)
         {
             if (position == 1)
@@ -70,7 +68,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
             }
         }
 
-        // Build response message
         var responseMessage = "";
         if (results.Any())
         {
@@ -89,7 +86,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await FollowupAsync(responseMessage, ephemeral: true);
 
-        // Update the trade interface if any Pokemon were added successfully
         if (results.Any())
         {
             var session = await Service.GetTradeSessionAsync(sessionGuid);
@@ -117,7 +113,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse Pokemon positions
         var positionsInput = modal!.PokemonPosition!.Replace(" ", ",");
         var positions = new List<ulong>();
 
@@ -138,7 +133,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         var results = new List<string>();
         var errors = new List<string>();
 
-        // Remove each Pokemon
         foreach (var position in positions)
         {
             var result = await Service.RemovePokemonFromTradeAsync(sessionGuid, ctx.User.Id, position);
@@ -152,7 +146,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
             }
         }
 
-        // Build response message
         var responseMessage = "";
         if (results.Any())
         {
@@ -171,7 +164,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await FollowupAsync(responseMessage, ephemeral: true);
 
-        // Update the trade interface if any Pokemon were removed successfully
         if (results.Any())
         {
             var session = await Service.GetTradeSessionAsync(sessionGuid);
@@ -199,7 +191,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse credits amount (support k and m suffixes)
         if (string.IsNullOrWhiteSpace(modal.CreditsAmount))
         {
             await FollowupAsync("Please enter a valid number of credits.", ephemeral: true);
@@ -230,7 +221,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added {credits:N0} credits to the trade.", ephemeral: true);
             
-            // Update the trade interface
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session != null)
             {
@@ -260,14 +250,12 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse token type
         if (!TokenTypeExtensions.TryParse(modal.TokenType!, out var tokenType))
         {
             await FollowupAsync($"Invalid token type: {modal.TokenType}. Please enter a valid type like Fire, Water, etc.", ephemeral: true);
             return;
         }
 
-        // Parse token count
         if (!int.TryParse(modal!.TokenCount!.Trim(), out var tokenCount) || tokenCount <= 0)
         {
             await FollowupAsync("Invalid token count, please enter a positive number.", ephemeral: true);
@@ -280,7 +268,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added {tokenCount} {tokenType.GetDisplayName()} tokens to the trade.", ephemeral: true);
             
-            // Update the trade interface
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session != null)
             {
@@ -310,14 +297,12 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse token type
         if (!TokenTypeExtensions.TryParse(modal.TokenType!, out var tokenType))
         {
             await FollowupAsync($"Invalid token type: {modal.TokenType}. Please enter a valid type like Fire, Water, etc.", ephemeral: true);
             return;
         }
 
-        // Parse token count
         if (!int.TryParse(modal!.TokenCount!.Trim(), out var tokenCount) || tokenCount <= 0)
         {
             await FollowupAsync("Invalid token count, please enter a positive number.", ephemeral: true);
@@ -331,7 +316,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Find and remove token entries
         var userTokens = session.GetTokensBy(ctx.User.Id);
         if (!userTokens.TryGetValue(tokenType, out var currentAmount) || currentAmount < tokenCount)
         {
@@ -339,7 +323,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
             return;
         }
 
-        // Remove token entries
         var entriesToRemove = session.GetEntriesBy(ctx.User.Id)
             .Where(e => e.ItemType == TradeItemType.Tokens && e.TokenType == tokenType)
             .ToList();
@@ -363,7 +346,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await FollowupAsync($"Removed {tokenCount} {tokenType.GetDisplayName()} tokens from the trade.", ephemeral: true);
 
-        // Update the trade interface
         var updatedSession = await Service.GetTradeSessionAsync(sessionGuid);
         if (updatedSession != null)
         {
@@ -395,7 +377,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
 
         await DeferAsync(ephemeral: true);
 
-        // Parse token count
         if (!int.TryParse(modal.TokenAmount?.Trim(), out var tokenCount) || tokenCount <= 0)
         {
             await FollowupAsync("Invalid token count, please enter a positive number.", ephemeral: true);
@@ -408,7 +389,6 @@ public class TradeModals : EeveeCoreSlashModuleBase<TradeService>
         {
             await FollowupAsync($"Added {tokenCount} {selectedTokenType.GetDisplayName()} tokens to the trade.", ephemeral: true);
             
-            // Update the trade interface
             var session = await Service.GetTradeSessionAsync(sessionGuid);
             if (session != null)
             {

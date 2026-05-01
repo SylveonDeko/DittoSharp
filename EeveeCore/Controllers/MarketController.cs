@@ -66,12 +66,11 @@ public class MarketController : ControllerBase
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            
-            // Build base query with all listing data
+
             var query = from market in db.Market
                        join pokemon in db.UserPokemon on market.PokemonId equals pokemon.Id
                        join ownership in db.UserPokemonOwnerships on pokemon.Id equals ownership.PokemonId
-                       where market.BuyerId == null // Only active listings
+                       where market.BuyerId == null
                        select new
                        {
                            ListingId = market.Id,
@@ -93,7 +92,6 @@ public class MarketController : ControllerBase
                            ownership.Position
                        };
 
-            // Apply filters
             if (!string.IsNullOrWhiteSpace(search))
             {
                 query = query.Where(l => l.PokemonName.Contains(search));
@@ -125,10 +123,8 @@ public class MarketController : ControllerBase
                     break;
             }
 
-            // Get total count for pagination
             var totalCount = await query.CountAsync();
 
-            // Apply sorting
             switch (sortBy.ToLower())
             {
                 case "name":
@@ -149,11 +145,9 @@ public class MarketController : ControllerBase
                     break;
             }
 
-            // Apply pagination
             var skip = (page - 1) * pageSize;
             var listings = await query.Skip(skip).Take(pageSize).ToListAsync();
 
-            // Process listings with fraud detection and price analytics
             var processedListings = new List<object>();
             foreach (var listing in listings)
             {
@@ -161,7 +155,6 @@ public class MarketController : ControllerBase
                 processedListings.Add(processedListing);
             }
 
-            // Apply risk-based filtering after processing
             if (filter.ToLower() == "safe")
             {
                 processedListings = processedListings
@@ -175,7 +168,6 @@ public class MarketController : ControllerBase
                     .ToList();
             }
 
-            // Apply risk-based sorting if requested
             if (sortBy.ToLower() == "risk")
             {
                 processedListings = processedListings
@@ -408,12 +400,11 @@ public class MarketController : ControllerBase
         try
         {
             await using var db = await _dbProvider.GetConnectionAsync();
-            
+
             var totalListings = await db.Market.CountAsync(m => m.BuyerId == null);
             var averagePrice = await db.Market.Where(m => m.BuyerId == null).AverageAsync(m => (double?)m.Price) ?? 0;
             var totalSold = await db.Market.CountAsync(m => m.BuyerId != null);
-            
-            // Top selling Pokemon
+
             var topSelling = await (from market in db.Market
                                   join pokemon in db.UserPokemon on market.PokemonId equals pokemon.Id
                                   where market.BuyerId != null
@@ -454,7 +445,6 @@ public class MarketController : ControllerBase
     {
         try
         {
-            // Extract values safely from dynamic object
             ulong listingId = listing.ListingId;
             ulong pokemonId = listing.PokemonId;
             string pokemonName = listing.PokemonName;
@@ -472,10 +462,8 @@ public class MarketController : ControllerBase
             int viewCount = listing.ViewCount;
             ulong position = listing.Position;
 
-            // Calculate estimated value using the value calculator
-            var estimatedValue = 1000; // Placeholder - would use _valueCalculator.CalculatePokemonValue()
-            
-            // Calculate price analytics
+            var estimatedValue = 1000;
+
             var priceRatio = estimatedValue > 0 ? (double)price / estimatedValue : 1.0;
             var priceAnalysis = priceRatio switch
             {
@@ -486,38 +474,32 @@ public class MarketController : ControllerBase
                 _ => "Fair market price"
             };
 
-            // Calculate basic risk factors
             var riskScore = 0.0;
             var riskFactors = new List<string>();
 
-            // Price risk
             if (priceRatio < 0.3 || priceRatio > 3.0)
             {
                 riskScore += 0.4;
                 riskFactors.Add($"Suspicious pricing ({priceAnalysis.ToLower()})");
             }
 
-            // Account age risk (would need user data)
             var seller = await db.Users.Where(u => u.UserId == ownerId).FirstOrDefaultAsync();
             if (seller != null)
             {
-                // New accounts are riskier
                 riskScore += 0.1;
                 riskFactors.Add("Account analysis pending");
             }
 
-            // Recent listing activity (rapid listing/delisting)
             var recentListings = await db.Market
                 .Where(m => m.OwnerId == ownerId && m.ListedAt >= DateTime.UtcNow.AddHours(-24))
                 .CountAsync();
-            
+
             if (recentListings > 10)
             {
                 riskScore += 0.3;
                 riskFactors.Add("High listing activity");
             }
 
-            // Market manipulation detection
             var duplicateListings = await db.Market
                 .Where(m => m.OwnerId == ownerId && 
                            m.PokemonId != pokemonId && 
@@ -560,17 +542,14 @@ public class MarketController : ControllerBase
                 ViewCount = viewCount,
                 Position = position,
                 
-                // Analytics
                 EstimatedValue = estimatedValue,
                 PriceRatio = Math.Round(priceRatio, 2),
                 PriceAnalysis = priceAnalysis,
                 
-                // Risk Assessment
                 RiskScore = Math.Round(riskScore, 2),
                 RiskLevel = riskLevel,
                 RiskFactors = riskFactors,
                 
-                // Market Intelligence
                 AgeInHours = Math.Round((DateTime.UtcNow - listedAt).TotalHours, 1),
                 PopularityScore = viewCount
             };
@@ -579,7 +558,6 @@ public class MarketController : ControllerBase
         {
             Log.Warning(ex, "Error processing listing analytics for listing {ListingId}", listing?.ListingId ?? 0);
             
-            // Return basic listing data if analytics fail
             return new
             {
                 ListingId = listing?.ListingId ?? 0,

@@ -10,7 +10,6 @@ namespace EeveeCore.Common.AutoCompletes;
 /// </summary>
 public class BreedingMaleAutocompleteHandler : AutocompleteHandler
 {
-    // Cache for breeding male Pokemon to reduce database queries (cache for 30 seconds)
     private static readonly NonBlocking.ConcurrentDictionary<ulong, (DateTime Expiry, List<AutocompleteResult> Pokemon)> BreedingMaleCache = new();
     private readonly LinqToDbConnectionProvider _dbProvider;
     private const int CacheTimeoutSeconds = 30;
@@ -47,22 +46,20 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
 
         try
         {
-            // Check cache first
             if (BreedingMaleCache.TryGetValue(userId, out var cached) && DateTime.UtcNow < cached.Expiry)
             {
                 var filteredResults = FilterBreedingResults(cached.Pokemon, currentValue);
                 return AutocompletionResult.FromSuccess(filteredResults);
             }
 
-            // Get user's Pokemon from database
             await using var db = await _dbProvider.GetConnectionAsync();
             
             var breedingMales = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { o.Position, Pokemon = p })
-                .Where(x => x.Pokemon.PokemonName != "Egg" && // Cannot breed eggs
-                           x.Pokemon.Breedable && // Must be breedable
-                           (x.Pokemon.Gender == "-m" || x.Pokemon.PokemonName.ToLower() == "ditto")) // Male or Ditto
+                .Where(x => x.Pokemon.PokemonName != "Egg" &&
+                           x.Pokemon.Breedable &&
+                           (x.Pokemon.Gender == "-m" || x.Pokemon.PokemonName.ToLower() == "ditto"))
                 .OrderBy(x => x.Position)
                 .Select(x => new
                 {
@@ -76,7 +73,6 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
                     x.Pokemon.Shiny,
                     x.Pokemon.Radiant,
                     x.Pokemon.Skin,
-                    // Calculate IV total for breeding assessment
                     IvTotal = x.Pokemon.HpIv + x.Pokemon.AttackIv + x.Pokemon.DefenseIv + 
                              x.Pokemon.SpecialAttackIv + x.Pokemon.SpecialDefenseIv + x.Pokemon.SpeedIv,
                     x.Pokemon.HpIv,
@@ -88,13 +84,12 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
                 })
                 .ToListAsync();
 
-            // Create autocomplete results with breeding-relevant information
             var breedingResults = breedingMales.Select(p => 
             {
                 var displayName = CreateBreedingDisplayName(
                     p.PokemonName!, 
                     p.Nickname, 
-                    p.Position + 1, // Convert to 1-based for display
+                    p.Position + 1,
                     p.Level, 
                     p.Nature,
                     p.IvTotal,
@@ -103,20 +98,17 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
                     p.Shiny, 
                     p.Radiant,
                     p.Skin!);
-                return new AutocompleteResult(displayName, (p.Position + 1).ToString()); // Return 1-based position
+                return new AutocompleteResult(displayName, (p.Position + 1).ToString());
             }).ToList();
 
-            // Cache the results
             var expiry = DateTime.UtcNow.AddSeconds(CacheTimeoutSeconds);
             BreedingMaleCache[userId] = (expiry, breedingResults);
 
-            // Filter and return results
             var filtered = FilterBreedingResults(breedingResults, currentValue);
             return AutocompletionResult.FromSuccess(filtered);
         }
         catch (Exception ex)
         {
-            // Log the error and return empty result
             Log.Information($"Error in BreedingMaleAutocompleteHandler: {ex.Message}");
             return AutocompletionResult.FromSuccess([]);
         }
@@ -163,22 +155,20 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
         var genderIcon = gender switch
         {
             "-m" => "♂️",
-            "-x" => "⚫", // For Ditto
+            "-x" => "⚫",
             _ => ""
         };
         
         var breedingInfo = "";
         
-        // Show key breeding items
         if (!string.IsNullOrEmpty(heldItem) && heldItem.ToLower() != "none")
         {
             if (heldItem.ToLower().Contains("knot"))
-                breedingInfo += " 🔗"; // Destiny Knot
+                breedingInfo += " 🔗";
             else if (heldItem.ToLower() == "everstone")
-                breedingInfo += " 🪨"; // Everstone
+                breedingInfo += " 🪨";
         }
         
-        // Format: Name (♂️#pos) - Lv X | IV% | Nature 🔗
         return $"{name} ({genderIcon}#{position}) - Lv{level} | {ivPercent}% | {nature}{breedingInfo}{specialIndicators}".Trim();
     }
 
@@ -195,13 +185,11 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
             return allResults.Take(MaxResults).ToList();
         }
 
-        // Filter by Pokemon name, nickname, position, nature, or breeding info
         var filtered = allResults.Where(result =>
             result.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
             result.Value.ToString()!.Contains(filter))
             .ToList();
 
-        // Prioritize exact matches and Ditto at the start
         var dittoMatches = filtered.Where(r => 
             r.Name.Contains("ditto", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -212,7 +200,6 @@ public class BreedingMaleAutocompleteHandler : AutocompleteHandler
         
         var otherMatches = filtered.Except(dittoMatches).Except(exactMatches).ToList();
         
-        // Order: Ditto first (universal breeder), then exact matches, then others
         return dittoMatches.Concat(exactMatches).Concat(otherMatches).Take(MaxResults).ToList();
     }
 

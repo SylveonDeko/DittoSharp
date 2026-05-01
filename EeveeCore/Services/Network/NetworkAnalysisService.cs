@@ -11,7 +11,6 @@ public class NetworkAnalysisService : INService
     private readonly IDataCache _cache;
     private readonly ILogger<NetworkAnalysisService> _logger;
 
-    // Analysis thresholds
     private const double FunnelSuspicionThreshold = 0.7;
     private const double ClusterSuspicionThreshold = 0.6;
     private const int MinClusterSize = 3;
@@ -66,37 +65,31 @@ public class NetworkAnalysisService : INService
 
         foreach (var node in network.Nodes.Values)
         {
-            // Find incoming relationships (users giving value to this node)
             var incomingEdges = network.Edges
                 .Where(e => e.ToUserId == node.UserId)
                 .ToList();
 
             if (incomingEdges.Count < minSources) continue;
 
-            // Calculate funnel metrics
             var totalIncomingValue = incomingEdges.Sum(e => e.TotalValue);
             var uniqueSources = incomingEdges.Select(e => e.FromUserId).Distinct().Count();
             var averageSourceValue = totalIncomingValue / uniqueSources;
             
-            // Check for suspicious patterns
             var suspiciousIndicators = 0;
             var suspicionReasons = new List<string>();
 
-            // High value concentration
-            if (totalIncomingValue > 500000) // 500K+ concentrated value
+            if (totalIncomingValue > 500000)
             {
                 suspiciousIndicators++;
                 suspicionReasons.Add("High value concentration");
             }
 
-            // Many small sources feeding one account
             if (uniqueSources >= 5 && averageSourceValue < 50000)
             {
                 suspiciousIndicators++;
                 suspicionReasons.Add("Many small sources");
             }
 
-            // New accounts as sources
             var newAccountSources = incomingEdges
                 .Count(e => network.Nodes.ContainsKey(e.FromUserId) && 
                             network.Nodes[e.FromUserId].AccountAgeDays < 30);
@@ -107,7 +100,6 @@ public class NetworkAnalysisService : INService
                 suspicionReasons.Add("Many new account sources");
             }
 
-            // High imbalance ratio on incoming trades
             var highImbalanceCount = incomingEdges.Count(e => e.ValueImbalanceRatio > 3.0);
             if (highImbalanceCount > incomingEdges.Count * 0.7)
             {
@@ -115,7 +107,6 @@ public class NetworkAnalysisService : INService
                 suspicionReasons.Add("High value imbalance ratios");
             }
 
-            // Calculate suspicion score
             var suspicionScore = Math.Min(1.0, suspiciousIndicators / 4.0);
 
             if (suspicionScore >= FunnelSuspicionThreshold)
@@ -134,7 +125,6 @@ public class NetworkAnalysisService : INService
             }
         }
 
-        // Cache the results
         var serialized = System.Text.Json.JsonSerializer.Serialize(funnelPatterns);
         await database.StringSetAsync(cacheKey, serialized, TimeSpan.FromHours(2));
 
@@ -167,7 +157,6 @@ public class NetworkAnalysisService : INService
         var network = await _graphService.GetTradeNetworkAsync(timeWindowDays);
         var clusters = new List<AccountCluster>();
 
-        // Find connected components using depth-first search
         var visited = new HashSet<ulong>();
         
         foreach (var startNode in network.Nodes.Keys)
@@ -186,10 +175,9 @@ public class NetworkAnalysisService : INService
                 visited.Add(current);
                 cluster.Add(current);
 
-                // Add connected nodes
                 var connectedNodes = network.Edges
                     .Where(e => (e.FromUserId == current || e.ToUserId == current) && 
-                               e.RiskScore > 0.3) // Only follow suspicious edges
+                               e.RiskScore > 0.3)
                     .SelectMany(e => new[] { e.FromUserId, e.ToUserId })
                     .Where(id => id != current && !visited.Contains(id));
 
@@ -209,7 +197,6 @@ public class NetworkAnalysisService : INService
             }
         }
 
-        // Cache the results
         var serialized = System.Text.Json.JsonSerializer.Serialize(clusters);
         await database.StringSetAsync(cacheKey, serialized, TimeSpan.FromHours(2));
 
@@ -243,7 +230,6 @@ public class NetworkAnalysisService : INService
         var network = await _graphService.GetTradeNetworkAsync(timeWindowDays);
         var circularFlows = new List<CircularFlow>();
 
-        // Find cycles using depth-first search with path tracking
         foreach (var startNode in network.Nodes.Keys)
         {
             var cycles = FindCyclesFromNode(startNode, network, maxPathLength);
@@ -258,10 +244,8 @@ public class NetworkAnalysisService : INService
             }
         }
 
-        // Remove duplicate cycles (same path in different direction)
         var uniqueFlows = RemoveDuplicateCircularFlows(circularFlows);
 
-        // Cache the results
         var serialized = System.Text.Json.JsonSerializer.Serialize(uniqueFlows);
         await database.StringSetAsync(cacheKey, serialized, TimeSpan.FromHours(2));
 
@@ -279,19 +263,17 @@ public class NetworkAnalysisService : INService
         var suspiciousIndicators = 0;
         var suspicionReasons = new List<string>();
 
-        // Check account age similarity
         var accountAges = userIds
             .Where(id => network.Nodes.ContainsKey(id))
             .Select(id => network.Nodes[id].AccountAgeDays)
             .ToList();
 
-        if (accountAges.Any() && accountAges.Max() - accountAges.Min() < 7) // Created within a week
+        if (accountAges.Any() && accountAges.Max() - accountAges.Min() < 7)
         {
             suspiciousIndicators++;
             suspicionReasons.Add("Similar account creation times");
         }
 
-        // Check for high internal trading
         var internalEdges = network.Edges
             .Where(e => userIds.Contains(e.FromUserId) && userIds.Contains(e.ToUserId))
             .ToList();
@@ -306,7 +288,6 @@ public class NetworkAnalysisService : INService
             suspicionReasons.Add("High internal trading ratio");
         }
 
-        // Check for coordinated timing
         var tradeTimes = internalEdges
             .SelectMany(e => new[] { e.FirstTradeTime, e.LastTradeTime })
             .OrderBy(t => t)
@@ -318,14 +299,13 @@ public class NetworkAnalysisService : INService
             var averageInterval = timeSpans.Average();
             var standardDeviation = Math.Sqrt(timeSpans.Select(t => Math.Pow(t - averageInterval, 2)).Average());
             
-            if (standardDeviation < averageInterval * 0.2) // Very regular timing
+            if (standardDeviation < averageInterval * 0.2)
             {
                 suspiciousIndicators++;
                 suspicionReasons.Add("Coordinated trading timing");
             }
         }
 
-        // Check for new accounts
         var newAccountCount = userIds.Count(id => 
             network.Nodes.ContainsKey(id) && network.Nodes[id].AccountAgeDays < 30);
         
@@ -377,7 +357,7 @@ public class NetworkAnalysisService : INService
 
             foreach (var neighbor in neighbors)
             {
-                if (neighbor == startNode && path.Count >= 3) // Found cycle back to start
+                if (neighbor == startNode && path.Count >= 3)
                 {
                     cycles.Add([..path]);
                 }
@@ -407,7 +387,6 @@ public class NetworkAnalysisService : INService
         var suspicionReasons = new List<string>();
         var totalValue = 0m;
 
-        // Analyze each edge in the cycle
         for (var i = 0; i < cycle.Count; i++)
         {
             var from = cycle[i];
@@ -425,7 +404,6 @@ public class NetworkAnalysisService : INService
             }
         }
 
-        // Check for rapid cycling (short time between trades)
         var edgeTimes = new List<DateTime>();
         for (var i = 0; i < cycle.Count; i++)
         {
@@ -442,21 +420,19 @@ public class NetworkAnalysisService : INService
         if (edgeTimes.Count > 1)
         {
             var maxTimeSpan = edgeTimes.Max() - edgeTimes.Min();
-            if (maxTimeSpan.TotalHours < 24) // Entire cycle completed within 24 hours
+            if (maxTimeSpan.TotalHours < 24)
             {
                 suspiciousIndicators++;
                 suspicionReasons.Add("Rapid cycling within 24 hours");
             }
         }
 
-        // Check for high total value
         if (totalValue > 100000)
         {
             suspiciousIndicators++;
             suspicionReasons.Add("High value circular flow");
         }
 
-        // Check for new accounts in cycle
         var newAccountCount = cycle.Count(id => 
             network.Nodes.ContainsKey(id) && network.Nodes[id].AccountAgeDays < 30);
         
@@ -490,7 +466,6 @@ public class NetworkAnalysisService : INService
 
         foreach (var flow in flows)
         {
-            // Create a normalized representation of the cycle
             var sortedPath = flow.Path.OrderBy(id => id).ToList();
             var key = string.Join(",", sortedPath);
 

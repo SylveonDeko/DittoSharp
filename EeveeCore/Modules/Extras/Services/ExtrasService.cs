@@ -30,7 +30,6 @@ public class ExtrasService : INService
     {
         if (pokemonName == "smeargle")
         {
-            // Moves which are not coded in the bot
             var uncoded = new[]
             {
                 266, 270, 476, 495, 502, 511, 597, 602, 603, 607, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632,

@@ -13,17 +13,14 @@ public partial class Move
 
         switch (Effect)
         {
-            // User Faints
             case 8 or 444:
                 msg += attacker.Faint(battle);
                 break;
-            // User takes damage
             case 420:
                 msg += attacker.Damage(attacker.StartingHp / 2, battle, source: "its head exploding (tragic)");
                 break;
         }
 
-        // User's type changes
         if (currentType != ElementType.TYPELESS)
         {
             if (attacker.Ability() == Ability.PROTEAN)
@@ -41,7 +38,6 @@ public partial class Move
             }
         }
 
-        // Status effects reflected by magic coat or magic bounce.
         if (IsAffectedByMagicCoat() &&
             (defender.Ability(attacker, this) == Ability.MAGIC_BOUNCE || defender.MagicCoat) &&
             !bounced)
@@ -53,7 +49,6 @@ public partial class Move
             return msg;
         }
 
-        // Check Effect
         if (!CheckEffective(attacker, defender, battle) && !bounced)
         {
             msg += "It had no effect...\n";
@@ -74,7 +69,6 @@ public partial class Move
             return msg;
         }
 
-        // Check Semi-invulnerable - treated as a miss
         if (!CheckSemiInvulnerable(attacker, defender, battle))
         {
             msg += $"{defender.Name} avoided the attack!\n";
@@ -94,7 +88,6 @@ public partial class Move
             return msg;
         }
 
-        // Check Protection
         var checkProtect = CheckProtect(attacker, defender, battle);
         var checkProtectItem1 = checkProtect.Item1;
         var checkProtectItem2 = checkProtect.Item2;
@@ -118,7 +111,6 @@ public partial class Move
             return msg;
         }
 
-        // Check Hit
         if (!CheckHit(attacker, defender, battle))
         {
             msg += "But it missed!\n";
@@ -139,11 +131,9 @@ public partial class Move
             return msg;
         }
 
-        // Absorbs
         if (TargetsOpponent() && Effect != 459)
             switch (currentType)
             {
-                // Heal
                 case ElementType.ELECTRIC when
                     defender.Ability(attacker, this) == Ability.VOLT_ABSORB:
                     msg += $"{defender.Name}'s volt absorb absorbed the move!\n";
@@ -164,7 +154,6 @@ public partial class Move
                     msg += $"{defender.Name}'s earth eater absorbed the move!\n";
                     msg += defender.Heal(defender.StartingHp / 4, "absorbing the move");
                     return msg;
-                // Stat stage changes
                 case ElementType.ELECTRIC when
                     defender.Ability(attacker, this) == Ability.LIGHTNING_ROD:
                     msg += $"{defender.Name}'s lightning rod absorbed the move!\n";
@@ -190,7 +179,6 @@ public partial class Move
                     msg += $"{defender.Name}'s well baked body absorbed the move!\n";
                     msg += defender.AppendDefense(2, defender, this);
                     return msg;
-                // Other
                 case ElementType.FIRE when
                     defender.Ability(attacker, this) == Ability.FLASH_FIRE:
                     defender.FlashFire = true;
@@ -198,7 +186,6 @@ public partial class Move
                     return msg;
             }
 
-        // Stat stage from type items
         if (defender.Substitute == 0)
         {
             switch (currentType)
@@ -226,10 +213,8 @@ public partial class Move
             }
         }
 
-        // Process special move effects
         switch (Effect)
         {
-            // Metronome
             case 84:
             {
                 attacker.HasMoved = false;
@@ -255,7 +240,6 @@ public partial class Move
                 msg += newMove.Use(attacker, defender, battle);
                 return msg;
             }
-            // Brick break - runs before damage calculation
             case 187:
             {
                 if (defender.Owner.AuroraVeil.Active())
@@ -278,7 +262,6 @@ public partial class Move
 
                 break;
             }
-            // Sleep talk
             case 98:
             {
                 var eligibleMoves = attacker.Moves.Where(m => m.SelectableBySleepTalk()).ToList();
@@ -292,7 +275,6 @@ public partial class Move
                 msg += "But it failed!\n";
                 return msg;
             }
-            // Mirror OldMove/Copy Cat
             case 10 or 243:
             {
                 if (defender.LastMove != null)
@@ -304,7 +286,6 @@ public partial class Move
                 msg += "But it failed!\n";
                 return msg;
             }
-            // Me First
             case 242:
             {
                 if (defender.Owner.SelectedAction is Trainer.MoveAction move)
@@ -316,7 +297,6 @@ public partial class Move
                 msg += "But it failed!\n";
                 return msg;
             }
-            // Assist
             case 181:
             {
                 var assistMove = attacker.GetAssistMove();
@@ -329,7 +309,6 @@ public partial class Move
                 msg += "But it failed!\n";
                 return msg;
             }
-            // Spectral Thief
             case 410:
             {
                 if (defender.AttackStage > 0)
@@ -390,12 +369,10 @@ public partial class Move
 
                 break;
             }
-            // Future Sight
             case 149:
                 defender.Owner.FutureSight.Set((attacker, this), 3);
                 msg += $"{attacker.Name} foresaw an attack!\n";
                 return msg;
-            // Present
             case 123:
             {
                 var action = Random.Shared.Next(1, 5);
@@ -415,7 +392,6 @@ public partial class Move
                 msg += msgadd;
                 return msg;
             }
-            // Incinerate
             case 315 when defender.HeldItem.IsBerry(false):
             {
                 if (defender.Ability(attacker, this) == Ability.STICKY_HOLD)
@@ -430,7 +406,6 @@ public partial class Move
 
                 break;
             }
-            // Poltergeist
             case 446:
                 msg += $"{defender.Name} is about to be attacked by its {defender.HeldItem.Get()}!\n";
                 break;

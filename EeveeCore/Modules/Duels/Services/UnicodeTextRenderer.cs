@@ -32,24 +32,18 @@ public static class UnicodeTextRenderer
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        // For simple ASCII text, we can use the faster SkiaSharp rendering
         if (!useHarfBuzz && IsSimpleAscii(text))
         {
             return DrawTextNoFallback(canvas, x, y, text, font, paint, false);
         }
 
-        // Text may contain characters which have no glyph in the current font
-        // in these instances a fallback font must be used
         float width = 0;
 
         if (font.ContainsGlyphs(text))
         {
-            // Font contains glyphs for the whole text. No fallback font is needed.
             return DrawTextNoFallback(canvas, x, y, text, font, paint, useHarfBuzz);
         }
 
-        // There are some characters in text which have no glyph in font
-        // Iterate over all text elements (grapheme clusters)
         var start = 0;
         var enumerator = StringInfo.GetTextElementEnumerator(text);
         
@@ -57,7 +51,6 @@ public static class UnicodeTextRenderer
         {
             var textElement = enumerator.GetTextElement();
             if (font.ContainsGlyphs(textElement)) continue;
-            // Render previous text elements with current font
             if (start != enumerator.ElementIndex)
             {
                 var regularText = text.Substring(start, enumerator.ElementIndex - start);
@@ -65,7 +58,6 @@ public static class UnicodeTextRenderer
                 start = enumerator.ElementIndex;
             }
 
-            // Find next element which can be rendered with current font again
             var foundNextGood = false;
             while (enumerator.MoveNext())
             {
@@ -74,16 +66,12 @@ public static class UnicodeTextRenderer
                 break;
             }
 
-            // Get text which has no glyphs in font
             var subtext = foundNextGood
                 ? text.Substring(start, enumerator.ElementIndex - start)
                 : text[start..];
 
-            // Unfortunately MatchCharacter only takes a char or code point - I cannot pass it a string which is a grapheme cluster
-            // so I just find a fallback for the first code point (still better than a single char)
             var firstCodepoint = subtext.EnumerateRunes().First().Value;
 
-            // Find a fallback font
             var fallback = SKFontManager.Default.MatchCharacter(
                 font.Typeface.FamilyName,
                 font.Typeface.FontStyle,
@@ -92,12 +80,10 @@ public static class UnicodeTextRenderer
 
             if (fallback is null)
             {
-                // No fallback found, then just use the given font
                 width += DrawTextNoFallback(canvas, x + width, y, subtext, font, paint, useHarfBuzz);
             }
             else
             {
-                // Use fallback font - this searches for fallback fonts again if necessary
                 width += DrawText(canvas, x + width, y, subtext, fallback.ToFont(font.Size), paint, useHarfBuzz);
             }
 
@@ -124,7 +110,6 @@ public static class UnicodeTextRenderer
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        // For simple ASCII text, we can use the faster SkiaSharp measurement
         if (!useHarfBuzz && IsSimpleAscii(text))
         {
             return font.MeasureText(text);
@@ -132,11 +117,9 @@ public static class UnicodeTextRenderer
 
         if (font.ContainsGlyphs(text))
         {
-            // Font contains glyphs for the whole text. No fallback font is needed.
             return useHarfBuzz ? HarfBuzzMeasure(text, font) : font.MeasureText(text);
         }
 
-        // There are some characters in text which have no glyph in font
         float width = 0;
         var start = 0;
         var enumerator = StringInfo.GetTextElementEnumerator(text);
@@ -145,7 +128,6 @@ public static class UnicodeTextRenderer
         {
             var textElement = enumerator.GetTextElement();
             if (font.ContainsGlyphs(textElement)) continue;
-            // Measure previous text elements with current font
             if (start != enumerator.ElementIndex)
             {
                 var regularText = text.Substring(start, enumerator.ElementIndex - start);
@@ -153,7 +135,6 @@ public static class UnicodeTextRenderer
                 start = enumerator.ElementIndex;
             }
 
-            // Find next element which can be rendered with current font again
             var foundNextGood = false;
             while (enumerator.MoveNext())
             {
@@ -162,14 +143,12 @@ public static class UnicodeTextRenderer
                 break;
             }
 
-            // Get text which has no glyphs in font
             var subtext = foundNextGood
                 ? text.Substring(start, enumerator.ElementIndex - start)
                 : text[start..];
 
             var firstCodepoint = subtext.EnumerateRunes().First().Value;
 
-            // Find a fallback font
             var fallback = SKFontManager.Default.MatchCharacter(
                 font.Typeface.FamilyName,
                 font.Typeface.FontStyle,
@@ -232,8 +211,6 @@ public static class UnicodeTextRenderer
     {
         try
         {
-            // Code from https://github.com/mono/SkiaSharp/issues/1810
-            // Updated for v3.0 and set UnitsPerEm which should work around the bug in that issue
 
             using var blob = font.Typeface.OpenStream().ToHarfBuzzBlob();
             using var hbface = new Face(blob, 0);
@@ -251,7 +228,6 @@ public static class UnicodeTextRenderer
         }
         catch
         {
-            // Fallback to basic measurement if HarfBuzz fails
             return font.MeasureText(text);
         }
     }

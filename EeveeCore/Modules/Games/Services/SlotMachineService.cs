@@ -17,7 +17,6 @@ public class SlotMachineService : INService
     /// <returns>The result of the slot machine spin.</returns>
     public SlotMachineResult Spin()
     {
-        // Spin the reels using weighted random selection
         var reel1 = GetWeightedRandomSymbol();
         var reel2 = GetWeightedRandomSymbol();
         var reel3 = GetWeightedRandomSymbol();
@@ -29,7 +28,6 @@ public class SlotMachineService : INService
             Reel3 = reel3
         };
 
-        // Check for wins and set the result message
         CalculateWinResult(result);
 
         return result;
@@ -52,7 +50,6 @@ public class SlotMachineService : INService
                 return GameConstants.SlotMachine.AllSymbols[i];
         }
 
-        // Fallback (should never happen)
         return GameConstants.SlotMachine.AllSymbols[0];
     }
 
@@ -64,7 +61,6 @@ public class SlotMachineService : INService
     {
         var reels = new[] { result.Reel1, result.Reel2, result.Reel3 };
 
-        // Check for jackpot (three sevens)
         if (reels.All(r => r == GameConstants.SlotMachine.Seven))
         {
             result.IsWin = true;
@@ -74,7 +70,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three stars
         if (reels.All(r => r == GameConstants.SlotMachine.Star))
         {
             result.IsWin = true;
@@ -84,7 +79,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three coins
         if (reels.All(r => r == GameConstants.SlotMachine.Coin))
         {
             result.IsWin = true;
@@ -94,7 +88,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three cherries
         if (reels.All(r => r == GameConstants.SlotMachine.Cherry))
         {
             result.IsWin = true;
@@ -104,7 +97,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three pikachus
         if (reels.All(r => r == GameConstants.SlotMachine.Pikachu))
         {
             result.IsWin = true;
@@ -114,7 +106,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three presents
         if (reels.All(r => r == GameConstants.SlotMachine.Present))
         {
             result.IsWin = true;
@@ -124,7 +115,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for three purples
         if (reels.All(r => r == GameConstants.SlotMachine.Purple))
         {
             result.IsWin = true;
@@ -134,7 +124,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check if any seven is present (lucky seven)
         if (reels.Contains(GameConstants.SlotMachine.Seven))
         {
             result.IsWin = true;
@@ -144,7 +133,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // Check for any three of a kind (not already covered above)
         if (reels.All(r => r == reels[0]))
         {
             result.IsWin = true;
@@ -154,7 +142,6 @@ public class SlotMachineService : INService
             return;
         }
 
-        // No win
         result.IsWin = false;
         result.WinType = "NO_WIN";
         result.PayoutMultiplier = 0m;
@@ -170,17 +157,15 @@ public class SlotMachineService : INService
         var totalWeight = GameConstants.SlotMachine.Weights.Sum();
         var probabilities = new Dictionary<string, double>();
 
-        // Calculate probability for each symbol
         for (var i = 0; i < GameConstants.SlotMachine.AllSymbols.Length; i++)
         {
             var symbolProb = (double)GameConstants.SlotMachine.Weights[i] / totalWeight;
-            var tripleProb = Math.Pow(symbolProb, 3) * 100; // Convert to percentage
+            var tripleProb = Math.Pow(symbolProb, 3) * 100;
             
             var symbolName = GetSymbolName(GameConstants.SlotMachine.AllSymbols[i]);
             probabilities[$"Triple {symbolName}"] = tripleProb;
         }
 
-        // Calculate lucky seven probability (any seven)
         var sevenProb = (double)GameConstants.SlotMachine.Weights[6] / totalWeight;
         var luckySevenProb = (1 - Math.Pow(1 - sevenProb, 3)) * 100;
         probabilities["Lucky Seven"] = luckySevenProb;

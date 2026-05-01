@@ -1,4 +1,3 @@
-// Controllers/AuthController.cs - CORRECTED VERSION
 
 using EeveeCore.Common.AuthModels;
 using Microsoft.AspNetCore.Authorization;
@@ -111,7 +110,7 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var clientId = _credentials.DiscordClientId; // Your Discord client ID
+            var clientId = _credentials.DiscordClientId;
             var scope = "identify";
             var responseType = "code";
             

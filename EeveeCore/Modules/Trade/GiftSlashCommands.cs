@@ -51,7 +51,6 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
             return;
         }
 
-        // Show confirmation dialog
         var confirmEmbed = new EmbedBuilder()
             .WithTitle("🎁 Confirm Gift")
             .WithDescription($"Are you sure you want to give **{amount:N0}** credits to {user.Mention}?")
@@ -78,7 +77,7 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
                 .WithTitle("🎉 Gift Successful!")
                 .WithDescription($"{ctx.User.Mention} has gifted **{amount:N0}** credits to {user.Mention}!")
                 .WithColor(Color.Green)
-                .WithThumbnailUrl("https://cdn.discordapp.com/emojis/1010679749212901407.png") // MewCoin emoji
+                .WithThumbnailUrl("https://cdn.discordapp.com/emojis/1010679749212901407.png")
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build();
 
@@ -134,7 +133,6 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
             return;
         }
 
-        // Show confirmation dialog
         var confirmEmbed = new EmbedBuilder()
             .WithTitle("🎁 Confirm Gift")
             .WithDescription($"Are you sure you want to give **{amount}** redeems to {user.Mention}?")
@@ -162,7 +160,7 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
                 .WithDescription($"{ctx.User.Mention} has gifted **{amount}** redeems to {user.Mention}!")
                 .WithColor(Color.Green)
                 .WithThumbnailUrl(
-                    "https://cdn.discordapp.com/emojis/1008748071584616569.png") // Redeem emoji placeholder
+                    "https://cdn.discordapp.com/emojis/1008748071584616569.png")
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build();
 
@@ -218,7 +216,6 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
             return;
         }
 
-        // Show confirmation dialog
         var confirmEmbed = new EmbedBuilder()
             .WithTitle("🎁 Confirm Gift")
             .WithDescription($"Are you sure you want to give your Pokemon at position **{pokemon}** to {user.Mention}?")
@@ -245,7 +242,7 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
                 .WithDescription($"{ctx.User.Mention} has gifted a **{result.Amount}** to {user.Mention}!")
                 .WithColor(Color.Green)
                 .WithThumbnailUrl(
-                    "https://cdn.discordapp.com/emojis/1008748071584616569.png") // Pokemon gift emoji placeholder
+                    "https://cdn.discordapp.com/emojis/1008748071584616569.png")
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build();
 
@@ -334,7 +331,6 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
             return;
         }
 
-        // Show confirmation dialog
         var confirmEmbed = new EmbedBuilder()
             .WithTitle("🎁 Confirm Gift")
             .WithDescription(
@@ -362,7 +358,7 @@ public class GiftSlashCommands : EeveeCoreSlashModuleBase<GiftService>
                 .WithDescription(
                     $"{ctx.User.Mention} has gifted **{amount}** {tokenType.GetEmoji()} **{tokenType.GetDisplayName()}** tokens to {user.Mention}!")
                 .WithColor(Color.Green)
-                .WithThumbnailUrl(tokenType.GetEmoji()) // Use the token emoji as thumbnail if possible
+                .WithThumbnailUrl(tokenType.GetEmoji())
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build();
 

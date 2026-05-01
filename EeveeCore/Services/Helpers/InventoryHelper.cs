@@ -23,7 +23,6 @@ public static class InventoryHelper
 
         try
         {
-            // First try the expected format
             return JsonSerializer.Deserialize<Dictionary<string, int>>(jsonString) 
                    ?? new Dictionary<string, int>();
         }
@@ -31,7 +30,6 @@ public static class InventoryHelper
         {
             try
             {
-                // If that fails, try deserializing as a more flexible format
                 using var document = JsonDocument.Parse(jsonString);
                 var result = new Dictionary<string, int>();
                 
@@ -39,7 +37,6 @@ public static class InventoryHelper
                 {
                     var value = property.Value;
                     
-                    // Handle different value types
                     switch (value.ValueKind)
                     {
                         case JsonValueKind.Number:
@@ -55,7 +52,6 @@ public static class InventoryHelper
                             }
                             break;
                         case JsonValueKind.Object:
-                            // For objects, try to extract a count property or default to 1
                             if (value.TryGetProperty("count", out var countProperty) && 
                                 countProperty.TryGetInt32(out var countValue))
                             {
@@ -63,14 +59,12 @@ public static class InventoryHelper
                             }
                             else
                             {
-                                // Default to 1 for objects we can't parse
                                 Log.Warning("Found object in inventory JSON for key '{Key}' in {Context}, defaulting to count 1", 
                                           property.Name, logContext ?? "unknown");
                                 result[property.Name] = 1;
                             }
                             break;
                         default:
-                            // Skip other types (arrays, booleans, etc.)
                             Log.Warning("Unexpected JSON value type '{ValueKind}' for inventory key '{Key}' in {Context}", 
                                       value.ValueKind, property.Name, logContext ?? "unknown");
                             break;
@@ -112,7 +106,7 @@ public static class InventoryHelper
         if (inventory == null) throw new ArgumentNullException(nameof(inventory));
         
         var currentCount = inventory.GetValueOrDefault(key, 0);
-        var newCount = Math.Max(0, currentCount + amount); // Prevent negative counts
+        var newCount = Math.Max(0, currentCount + amount);
         
         if (newCount == 0)
         {

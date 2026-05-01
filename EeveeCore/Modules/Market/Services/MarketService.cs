@@ -95,7 +95,6 @@ public class MarketService : INService
             if (user.TradeLock == true)
                 return MarketResult.FromError("You are not allowed to trade.");
 
-            // Get Pokemon from ownership table
             var ownership = await db.UserPokemonOwnerships
                 .FirstOrDefaultAsync(o => o.UserId == userId && o.Position == pokemonPosition);
 
@@ -118,7 +117,6 @@ public class MarketService : INService
                 return MarketResult.FromError($"You cannot market your {pokemon.PokemonName} as it is favorited.\n" +
                                               $"Unfavorite it first with `/fav remove {pokemonPosition}`.");
 
-            // Check current listings
             var currentListings = await db.Market
                 .CountAsync(m => m.OwnerId == userId && m.BuyerId == null);
 
@@ -126,7 +124,6 @@ public class MarketService : INService
                 return MarketResult.FromError(
                     $"You are only allowed to list {BaseMarketLimit} pokemon on the market at once.");
 
-            // Create market listing
             var marketListing = new Database.Linq.Models.Game.Market
             {
                 PokemonId = pokemon.Id,
@@ -140,7 +137,6 @@ public class MarketService : INService
 
             marketListing.Id = (ulong)await db.InsertWithInt64IdentityAsync(marketListing);
 
-            // Remove Pokemon from user's ownership
             await db.DeleteAsync(ownership);
 
             await LogMarketTransactionAsync(LogChannelId,
@@ -184,14 +180,12 @@ public class MarketService : INService
         if (pokemon == null)
             return MarketResult.FromError("Pokemon not found.");
 
-        // Find the next available position for this user
         var maxPosition = await db.UserPokemonOwnerships
             .Where(o => o.UserId == userId)
             .MaxAsync(o => o.Position);
 
         var newPosition = maxPosition + 1;
 
-        // Add Pokemon back to user's ownership
         var ownership = new UserPokemonOwnership
         {
             UserId = userId,
@@ -201,7 +195,6 @@ public class MarketService : INService
 
         await db.InsertAsync(ownership);
 
-        // Mark listing as removed (buyer = 0)
         await db.Market.Where(m => m.Id == listingId)
             .Set(m => m.BuyerId, 0UL)
             .UpdateAsync();
@@ -247,14 +240,12 @@ public class MarketService : INService
         if (listing.Price > (long)(buyer.MewCoins ?? 0))
             return MarketResult.FromError("You don't have enough credits to buy that pokemon.");
 
-        // Find the next available position for the buyer
         var maxPosition = await db.UserPokemonOwnerships
             .Where(o => o.UserId == buyerId)
             .MaxAsync(o => o.Position);
 
         var newPosition = maxPosition + 1;
 
-        // Transfer ownership
         var ownership = new UserPokemonOwnership
         {
             UserId = buyerId,
@@ -264,22 +255,18 @@ public class MarketService : INService
 
         await db.InsertAsync(ownership);
 
-        // Update buyer's credits
         await db.Users.Where(u => u.UserId == buyerId)
             .Set(u => u.MewCoins, u => (u.MewCoins ?? 0) - (ulong)listing.Price)
             .UpdateAsync();
 
-        // Update seller's credits
         await db.Users.Where(u => u.UserId == listing.OwnerId)
             .Set(u => u.MewCoins, u => (u.MewCoins ?? 0) + (ulong)listing.Price)
             .UpdateAsync();
 
-        // Mark listing as sold
         await db.Market.Where(m => m.Id == listingId)
             .Set(m => m.BuyerId, buyerId)
             .UpdateAsync();
 
-        // Update achievements
         await db.Achievements.Where(a => a.UserId == buyerId)
             .Set(a => a.MarketPurchased, a => a.MarketPurchased + 1)
             .UpdateAsync();
@@ -288,10 +275,9 @@ public class MarketService : INService
             .Set(a => a.MarketSold, a => a.MarketSold + 1)
             .UpdateAsync();
 
-        await LogMarketTransactionAsync(LogChannelId, 
+        await LogMarketTransactionAsync(LogChannelId,
             $"**ID** - `{listingId}`\n<a:plus:1008763677509431446> : <@{buyerId}>(`{buyerId}`) **BOUGHT** a **{pokemon.PokemonName}**. Seller - (<@{listing.OwnerId}>)`{listing.OwnerId}`.\n-----------------------------");
 
-        // Send DMs
         try
         {
             var buyerUser = _discordClient.GetUser(buyerId);
@@ -313,8 +299,7 @@ public class MarketService : INService
     public async Task<Database.Linq.Models.Pokemon.Pokemon?> GetPokemonAsync(ulong listingId)
     {
         await using var db = await _dbProvider.GetConnectionAsync();
-        
-        // Join market listing with pokemon data to get full info including price
+
         var result = await (from market in db.Market
                            join pokemon in db.UserPokemon on market.PokemonId equals pokemon.Id
                            where market.Id == listingId && market.BuyerId == null
@@ -324,7 +309,6 @@ public class MarketService : INService
         if (result == null)
             return null;
 
-        // Set the price from the market listing
         result.Pokemon.Price = result.Market.Price;
         return result.Pokemon;
     }
@@ -334,28 +318,28 @@ public class MarketService : INService
     {
         var database = _cache.Redis.GetDatabase();
         var lockedListings = await database.ListRangeAsync(MarketLockKey);
-        
-        return lockedListings.Any(value => 
-            value.HasValue && 
+
+        return lockedListings.Any(value =>
+            value.HasValue &&
             ulong.TryParse((string?)value, out var id) &&
             id == listingId);
     }
 
-    /// <inheritdoc />
+    /// <summary>Adds a market listing to the Redis lock list.</summary>
     public async Task AddMarketLockAsync(ulong listingId)
     {
         var database = _cache.Redis.GetDatabase();
         await database.ListLeftPushAsync(MarketLockKey, listingId.ToString());
     }
 
-    /// <inheritdoc />
+    /// <summary>Removes a market listing from the Redis lock list.</summary>
     public async Task RemoveMarketLockAsync(ulong listingId)
     {
         var database = _cache.Redis.GetDatabase();
         await database.ListRemoveAsync(MarketLockKey, listingId.ToString());
     }
 
-    /// <inheritdoc />
+    /// <summary>Acquires a market lock for the given listing, runs the action, and releases the lock. Returns false if already locked.</summary>
     public async Task<bool> ExecuteWithMarketLockAsync(ulong listingId, Func<Task> action)
     {
         if (await IsListingLockedAsync(listingId))
@@ -373,7 +357,7 @@ public class MarketService : INService
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>Posts a market transaction log line to the configured Discord channel.</summary>
     public async Task LogMarketTransactionAsync(ulong channelId, string message)
     {
         try
@@ -385,7 +369,6 @@ public class MarketService : INService
         }
         catch
         {
-            // Log errors might not be critical, so we'll silently fail
         }
     }
 
@@ -422,12 +405,10 @@ public class MarketService : INService
                 OwnerId = market.OwnerId
             };
 
-        // Determine if any filtering criteria were applied
         var hasFilter = filter != "all";
         var hasSearch = !string.IsNullOrEmpty(search);
         var hasFilters = hasFilter || hasSearch;
 
-        // Apply filter
         query = filter switch
         {
             "shiny" => query.Where(p => p.Shiny == true),
@@ -437,13 +418,11 @@ public class MarketService : INService
             _ => query
         };
 
-        // Apply search
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(p => p.PokemonName.Contains(search));
         }
 
-        // Apply sorting
         query = sortBy switch
         {
             "price_asc" => query.OrderBy(p => p.Price),
@@ -452,7 +431,7 @@ public class MarketService : INService
             "level_asc" => query.OrderBy(p => p.Level),
             "iv_desc" => query.OrderByDescending(p => p.HpIv + p.AttackIv + p.DefenseIv + p.SpecialAttackIv + p.SpecialDefenseIv + p.SpeedIv),
             "name" => query.OrderBy(p => p.PokemonName),
-            _ => query.OrderByDescending(p => p.ListingId) // recent
+            _ => query.OrderByDescending(p => p.ListingId)
         };
 
         var listings = await query.ToListAsync();

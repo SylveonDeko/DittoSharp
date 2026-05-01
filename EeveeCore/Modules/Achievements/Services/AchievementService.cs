@@ -31,8 +31,6 @@ public class AchievementService(
     /// </summary>
     private void RegisterEventHandlers()
     {
-        // These would be registered from other services when they fire events
-        // For now, we'll create public methods that other services can call
     }
 
     #endregion
@@ -50,13 +48,11 @@ public class AchievementService(
     {
         try
         {
-            // Get current achievement value from PostgreSQL
             await using var db = await dbProvider.GetConnectionAsync();
             var userAchievement = await db.Achievements.FirstOrDefaultAsync(a => a.UserId == userId);
-            
+
             if (userAchievement == null)
             {
-                // Create new achievement record
                 userAchievement = new Database.Linq.Models.Pokemon.Achievement
                 {
                     UserId = userId
@@ -64,15 +60,12 @@ public class AchievementService(
                 await db.InsertAsync(userAchievement);
             }
 
-            // Update the specific achievement field
             var currentValue = GetAchievementValue(userAchievement, achievement);
             var newValue = currentValue + increment;
             await SetAchievementValue(userAchievement, achievement, newValue);
 
-            // Check for milestone completions
             await CheckMilestonesAsync(userId, achievement, newValue, context);
 
-            // Update daily streak and loyalty points
             await UpdateDailyActivityAsync(userId);
         }
         catch (Exception e)
@@ -122,12 +115,10 @@ public class AchievementService(
             "donation_amount" => achievement.DonationAmount,
             "unown_event" => achievement.UnownEvent,
             
-            // Game achievements
             "game_wordsearch" => achievement.GameWordsearch,
             "game_slots" => achievement.GameSlots,
             "game_slots_win" => achievement.GameSlotsWin,
             
-            // Type-specific catching
             "pokemon_normal" => achievement.PokemonNormal,
             "pokemon_fighting" => achievement.PokemonFighting,
             "pokemon_flying" => achievement.PokemonFlying,
@@ -157,7 +148,7 @@ public class AchievementService(
     private async Task SetAchievementValue(Database.Linq.Models.Pokemon.Achievement achievement, string achievementType, int value)
     {
         await using var db = await dbProvider.GetConnectionAsync();
-        
+
         var updateQuery = achievementType switch
         {
             "pokemon_caught" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.PokemonCaught, value),
@@ -194,12 +185,10 @@ public class AchievementService(
             "donation_amount" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.DonationAmount, value),
             "unown_event" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.UnownEvent, value),
             
-            // Game achievements
             "game_wordsearch" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.GameWordsearch, value),
             "game_slots" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.GameSlots, value),
             "game_slots_win" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.GameSlotsWin, value),
             
-            // Type-specific catching
             "pokemon_normal" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.PokemonNormal, value),
             "pokemon_fighting" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.PokemonFighting, value),
             "pokemon_flying" => db.Achievements.Where(a => a.UserId == achievement.UserId).Set(a => a.PokemonFlying, value),
@@ -239,7 +228,6 @@ public class AchievementService(
             if (!AchievementConstants.Milestones.TryGetValue(achievement, out var milestones))
                 return;
 
-            // Get the last completed milestone for this achievement
             await using var db = await dbProvider.GetConnectionAsync();
             var lastMilestone = await db.MilestoneProgress
                 .Where(mp => mp.UserId == userId && mp.AchievementType == achievement)
@@ -255,8 +243,7 @@ public class AchievementService(
                 if (completion != null)
                 {
                     completedMilestones.Add(completion);
-                    
-                    // Record the milestone completion in the database
+
                     await db.InsertAsync(new Database.Linq.Models.Pokemon.MilestoneProgress
                     {
                         UserId = userId,
@@ -269,7 +256,6 @@ public class AchievementService(
 
             if (completedMilestones.Any())
             {
-                // Send notifications
                 if (context != null)
                 {
                     await SendMilestoneNotificationsAsync(context, completedMilestones);
@@ -298,20 +284,17 @@ public class AchievementService(
                 TierColor = CalculateTierColor(achievement, milestone)
             };
 
-            // Calculate rewards
             var (mewCoins, redeems, skinTokens) = CalculateRewards(achievement, milestone);
             completion.MewCoinReward = mewCoins;
             completion.RedeemReward = redeems;
             completion.SkinTokenReward = skinTokens;
             completion.HasSpecialReward = mewCoins > 0 || redeems > 0 || skinTokens > 0;
 
-            // Distribute rewards
             if (completion.HasSpecialReward)
             {
                 await DistributeRewardsAsync(userId, mewCoins, redeems, skinTokens);
             }
 
-            // Award loyalty points
             await AwardLoyaltyPointsAsync(userId, CalculateLoyaltyPoints(achievement, milestone));
 
             return completion;
@@ -332,7 +315,6 @@ public class AchievementService(
         var redeems = 0;
         var skinTokens = 0;
 
-        // Check for MewCoin rewards
         if (AchievementConstants.RewardMilestones.TryGetValue(achievement, out var rewardConfig))
         {
             var eligible = rewardConfig switch
@@ -349,7 +331,6 @@ public class AchievementService(
             }
         }
 
-        // Check for additional redeem rewards
         if (AchievementConstants.RedeemMilestones.TryGetValue(achievement, out var redeemMilestones) &&
             redeemMilestones.Contains(milestone))
         {
@@ -359,7 +340,6 @@ public class AchievementService(
             }
         }
 
-        // Check for skin token rewards
         if (AchievementConstants.SkinMilestones.TryGetValue(achievement, out var skinMilestones) &&
             skinMilestones.Contains(milestone))
         {
@@ -407,16 +387,14 @@ public class AchievementService(
     /// </summary>
     public async Task TrackPokemonCaughtAsync(ulong userId, List<int> typeIds, bool isShiny = false, bool isShadow = false, IDiscordInteraction? context = null)
     {
-        // Track general catching
         await UpdateAchievementAsync(userId, "pokemon_caught", 1, context);
-        
+
         if (isShiny)
             await UpdateAchievementAsync(userId, "shiny_caught", 1, context);
-            
+
         if (isShadow)
             await UpdateAchievementAsync(userId, "shadow_caught", 1, context);
 
-        // Track type-specific catching
         foreach (var typeId in typeIds)
         {
             if (AchievementConstants.TypeToAchievement.TryGetValue(typeId, out var achievementType))
@@ -436,7 +414,6 @@ public class AchievementService(
         var perfectIvCount = ivs.Count(iv => iv == 31);
         var nearPerfectCount = ivs.Count(iv => iv == 30);
 
-        // Track IV achievements
         switch (perfectIvCount)
         {
             case 6:
@@ -455,7 +432,7 @@ public class AchievementService(
 
         if (isShiny)
             await UpdateAchievementAsync(userId, "shiny_bred", 1, context);
-            
+
         if (isShadow)
             await UpdateAchievementAsync(userId, "shadow_bred", 1, context);
     }
@@ -466,7 +443,7 @@ public class AchievementService(
     public async Task TrackGameAsync(ulong userId, string gameType, bool won = false, IDiscordInteraction? context = null)
     {
         await UpdateAchievementAsync(userId, $"game_{gameType}", 1, context);
-        
+
         if (won && gameType == "slots")
         {
             await UpdateAchievementAsync(userId, "game_slots_win", 1, context);
@@ -486,9 +463,9 @@ public class AchievementService(
         {
             await using var db = await dbProvider.GetConnectionAsync();
             var today = DateTime.UtcNow.Date;
-            
+
             var loyalty = await db.UserLoyalty.FirstOrDefaultAsync(ul => ul.UserId == userId);
-            
+
             if (loyalty == null)
             {
                 loyalty = new Database.Linq.Models.Pokemon.UserLoyalty
@@ -501,12 +478,12 @@ public class AchievementService(
                 await db.InsertAsync(loyalty);
                 return;
             }
-            
+
             if (loyalty.LastLogin?.Date != today)
             {
                 var newStreak = loyalty.LastLogin?.Date == today.AddDays(-1) ? loyalty.DailyStreak + 1 : 1;
                 var loyaltyBonus = CalculateDailyLoyaltyBonus(newStreak);
-                
+
                 await db.UserLoyalty
                     .Where(ul => ul.UserId == userId)
                     .Set(ul => ul.DailyStreak, newStreak)
@@ -532,10 +509,9 @@ public class AchievementService(
         if (points <= 0) return;
 
         await using var db = await dbProvider.GetConnectionAsync();
-        
-        // Get or create loyalty record
+
         var loyalty = await db.UserLoyalty.FirstOrDefaultAsync(ul => ul.UserId == userId);
-        
+
         if (loyalty == null)
         {
             loyalty = new Database.Linq.Models.Pokemon.UserLoyalty
@@ -555,7 +531,7 @@ public class AchievementService(
                 .Set(ul => ul.UpdatedAt, DateTime.UtcNow)
                 .UpdateAsync();
         }
-        
+
         Log.Information("Awarded {Points} loyalty points to user {UserId}", points, userId);
     }
 
@@ -569,9 +545,9 @@ public class AchievementService(
     private async Task<Database.Linq.Models.Pokemon.UserLoyalty> GetOrCreateLoyaltyAsync(ulong userId)
     {
         await using var db = await dbProvider.GetConnectionAsync();
-        
+
         var loyalty = await db.UserLoyalty.FirstOrDefaultAsync(ul => ul.UserId == userId);
-        
+
         if (loyalty == null)
         {
             loyalty = new Database.Linq.Models.Pokemon.UserLoyalty
@@ -583,7 +559,7 @@ public class AchievementService(
             };
             await db.InsertAsync(loyalty);
         }
-        
+
         return loyalty;
     }
 
@@ -604,7 +580,6 @@ public class AchievementService(
     /// </summary>
     private static int CalculateLoyaltyPoints(string achievement, int milestone)
     {
-        // Base loyalty points calculation
         return achievement switch
         {
             var a when a.StartsWith("pokemon_") => milestone / 10,
@@ -677,7 +652,7 @@ public class AchievementService(
     {
         await using var db = await dbProvider.GetConnectionAsync();
         var achievement = await db.Achievements.FirstOrDefaultAsync(a => a.UserId == userId);
-        
+
         if (achievement == null)
             return new Dictionary<string, int>();
 

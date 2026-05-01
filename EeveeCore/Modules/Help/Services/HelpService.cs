@@ -244,6 +244,12 @@ public class HelpService : INService
         return embed;
     }
 
+    /// <summary>
+    ///     Builds the user-facing slash invocation path for a command by walking up its module chain and joining
+    ///     each <c>SlashGroupName</c> with the command's leaf name (e.g. <c>/spawn settings</c>).
+    /// </summary>
+    /// <param name="cmd">The slash command metadata.</param>
+    /// <returns>The space-separated invocation path.</returns>
     private static string GetSlashPath(SlashCommandInfo cmd)
     {
         var parts = new List<string>();
@@ -257,12 +263,25 @@ public class HelpService : INService
         return string.Join(" ", parts);
     }
 
+    /// <summary>
+    ///     Truncates a string to <paramref name="max"/> characters, replacing the final character with an
+    ///     ellipsis when truncation occurs.
+    /// </summary>
+    /// <param name="s">The string to truncate.</param>
+    /// <param name="max">The maximum allowed length.</param>
+    /// <returns>The original string, or a truncated copy ending in <c>…</c>.</returns>
     private static string Truncate(string s, int max)
     {
         if (s.Length <= max) return s;
         return s[..(max - 1)] + "…";
     }
 
+    /// <summary>
+    ///     Extracts a human-readable list of permission/role requirements from a slash command's precondition
+    ///     attributes (bot-owner, user permissions, bot permissions).
+    /// </summary>
+    /// <param name="cmd">The slash command metadata.</param>
+    /// <returns>An array of requirement strings, or an empty array if the command has no notable preconditions.</returns>
     private static string[] GetCommandRequirements(SlashCommandInfo cmd)
     {
         var list = new List<string>();

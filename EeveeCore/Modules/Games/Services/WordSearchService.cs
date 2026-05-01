@@ -23,7 +23,6 @@ public class WordSearchService(IMongoService mongoService) : INService
     /// <returns>A new word search game state.</returns>
     public async Task<WordSearchGameState> InitializeGameAsync(ulong userId)
     {
-        // Get Pokemon names from MongoDB
         var pokemonCursor = await mongoService.PFile
             .Find(p => p.Identifier != null && p.Identifier.Length <= GameConstants.MaxWordLength && !p.Identifier.Contains("-"))
             .ToListAsync();
@@ -91,7 +90,6 @@ public class WordSearchService(IMongoService mongoService) : INService
                 var x = Random.Next(0, GameConstants.WordSearchColumns - word.Length);
                 var y = Random.Next(0, GameConstants.WordSearchRows);
 
-                // Check if space is available
                 var canPlace = true;
                 for (var i = 0; i < word.Length; i++)
                 {
@@ -114,12 +112,11 @@ public class WordSearchService(IMongoService mongoService) : INService
                     return (true, coords);
                 }
             }
-            else // vertical
+            else
             {
                 var x = Random.Next(0, GameConstants.WordSearchColumns);
                 var y = Random.Next(0, GameConstants.WordSearchRows - word.Length);
 
-                // Check if space is available
                 var canPlace = true;
                 for (var i = 0; i < word.Length; i++)
                 {
@@ -193,10 +190,8 @@ public class WordSearchService(IMongoService mongoService) : INService
         if (lowerFoundWords.Contains(normalizedGuess))
             return new WordSearchGuessResult { Success = false, Message = "You already found that word!" };
 
-        // Add to found words
         gameState.FoundWords.Add(normalizedGuess);
 
-        // Check if all words found
         var allFound = gameState.FoundWords.Count == gameState.Words.Count;
         if (allFound)
         {
@@ -233,7 +228,6 @@ public class WordSearchService(IMongoService mongoService) : INService
         using var surface = SKSurface.Create(new SKImageInfo(imageWidth, imageHeight));
         var canvas = surface.Canvas;
 
-        // Load and draw background if provided
         if (!string.IsNullOrEmpty(backgroundImagePath) && File.Exists(backgroundImagePath))
         {
             using var backgroundBitmap = SKBitmap.Decode(backgroundImagePath);
@@ -244,7 +238,6 @@ public class WordSearchService(IMongoService mongoService) : INService
         }
         else
         {
-            // Draw a simple gradient background
             using var paint = new SKPaint();
             paint.Shader = SKShader.CreateLinearGradient(
                 new SKPoint(0, 0),
@@ -254,10 +247,8 @@ public class WordSearchService(IMongoService mongoService) : INService
             canvas.DrawRect(0, 0, imageWidth, imageHeight, paint);
         }
 
-        // Draw the grid
         await DrawGridAsync(canvas, gameState);
 
-        // Create image and return as stream
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         
@@ -281,7 +272,6 @@ public class WordSearchService(IMongoService mongoService) : INService
         using var textPaint = new SKPaint { Color = SKColors.White, IsAntialias = true };
         using var foundTextPaint = new SKPaint { Color = SKColors.Red, IsAntialias = true };
 
-        // Get coordinates of found words
         var foundCoordinates = new HashSet<(int Row, int Col)>();
         foreach (var foundWord in gameState.FoundWords)
         {
@@ -292,7 +282,6 @@ public class WordSearchService(IMongoService mongoService) : INService
             }
         }
 
-        // Draw each cell
         for (var row = 0; row < GameConstants.WordSearchRows; row++)
         {
             for (var col = 0; col < GameConstants.WordSearchColumns; col++)
@@ -301,11 +290,10 @@ public class WordSearchService(IMongoService mongoService) : INService
                 var paint = foundCoordinates.Contains((row, col)) ? foundTextPaint : textPaint;
 
                 var x = col * (GameConstants.WordSearchBoxSize + 4) + GameConstants.WordSearchLeftOffset;
-                var y = row * (GameConstants.WordSearchBoxSize + 4) + GameConstants.WordSearchTopOffset + 18; // Add offset for text baseline
+                var y = row * (GameConstants.WordSearchBoxSize + 4) + GameConstants.WordSearchTopOffset + 18;
 
                 canvas.DrawText(letter, x, y, SKTextAlign.Left, font, paint);
 
-                // Draw underline for found letters
                 if (foundCoordinates.Contains((row, col)))
                 {
                     using var underlinePaint = new SKPaint();
@@ -316,7 +304,7 @@ public class WordSearchService(IMongoService mongoService) : INService
             }
         }
 
-        await Task.CompletedTask; // Satisfy async requirement
+        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -356,7 +344,6 @@ public class WordSearchService(IMongoService mongoService) : INService
 
         foreach (var word in gameState.Words)
         {
-            // Create hint by showing 2 random letters
             var indices = Enumerable.Range(0, word.Length).OrderBy(_ => Random.Next()).Take(2).ToList();
             var maskedWord = new char[word.Length];
             

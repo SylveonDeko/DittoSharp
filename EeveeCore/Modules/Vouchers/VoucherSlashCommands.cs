@@ -28,7 +28,6 @@ public class VoucherSlashCommands(VoucherService voucherService)
         {
             await DeferAsync(ephemeral: true);
 
-            // Check if user has vouchers available
             var hasVouchers = await voucherService.HasAvailableVouchersAsync(ctx.User.Id);
             if (!hasVouchers)
             {
@@ -46,7 +45,6 @@ public class VoucherSlashCommands(VoucherService voucherService)
                 return;
             }
 
-            // Check if user can create more requests
             var canCreateMore = await voucherService.CanUserCreateMoreRequestsAsync(ctx.User.Id);
             if (!canCreateMore)
             {
@@ -58,7 +56,6 @@ public class VoucherSlashCommands(VoucherService voucherService)
                                    "Please wait for your current requests to be processed before submitting new ones.")
                     .WithColor(Color.Orange);
 
-                // Show existing requests status
                 if (existingRequests.Any())
                 {
                     var statusText = string.Join("\n", existingRequests.Select(r => 
@@ -80,7 +77,6 @@ public class VoucherSlashCommands(VoucherService voucherService)
                 return;
             }
 
-            // Create new form
             var formId = Guid.NewGuid().ToString();
             var formData = new VoucherRequestFormData();
             VoucherFormManager.StoreFormData(formId, formData);
@@ -137,7 +133,7 @@ public class VoucherSlashCommands(VoucherService voucherService)
                 .WithDescription($"You have {requests.Count} voucher request(s):")
                 .WithColor(Color.Blue);
 
-            foreach (var request in requests.Take(10)) // Limit to 10 to avoid embed size issues
+            foreach (var request in requests.Take(10))
             {
                 var statusColor = VoucherService.GetStatusColor(request.Status);
                 var statusText = VoucherService.FormatStatusList(request.Status);
@@ -259,13 +255,11 @@ public class VoucherSlashCommands(VoucherService voucherService)
     {
         var builder = new ComponentBuilder();
 
-        // First row - main form fields
         builder.WithButton("🎯 Pokemon", $"voucher:pokemon:{formId}", ButtonStyle.Primary)
                .WithButton("🎨 Appearance", $"voucher:appearance:{formId}", ButtonStyle.Primary)
                .WithButton("💰 Payment", $"voucher:payment:{formId}", ButtonStyle.Primary)
                .WithButton("👨‍🎨 Artist", $"voucher:artist:{formId}", ButtonStyle.Secondary);
 
-        // Second row - submit button
         builder.WithButton("📤 Submit Request", $"voucher:submit:{formId}", ButtonStyle.Success, row: 1);
 
         return builder.Build();

@@ -64,7 +64,6 @@ public class DuelInteractionHandler(
 
         try
         {
-            // Run the actual battle
             winner = await battle.Run();
         }
         catch (HttpRequestException)
@@ -92,7 +91,6 @@ public class DuelInteractionHandler(
                 "Please post this code in the support channel with " +
                 "details about what was happening when this error occurred.");
 
-            // Log error to appropriate channels
             var errorChannel = client.GetChannel(1351696540065857597) as IMessageChannel;
             var stackTrace = e.ToString();
 
@@ -103,25 +101,20 @@ public class DuelInteractionHandler(
             Log.Error(e, "Duels encountered an error.");
         }
 
-        // Handle rewards if we have a winner
         if (winner != null)
             try
             {
-                // Check for human vs human battle
                 if (battle is { Trainer1: MemberTrainer t1, Trainer2: MemberTrainer t2 })
                 {
-                    // Fire DuelCompleted mission event for both participants
                     if (missionService != null)
                     {
                         _ = Task.Run(async () => await missionService.FireDuelCompletedEvent(battle.Context.Interaction, (winner as MemberTrainer)!, t1.Id == (winner as MemberTrainer)?.Id ? t2 : t1));
                     }
-                    // Handle post-battle rewards, XP gain, etc.
                     var description = "";
 
                     await using var db = await dbProvider.GetConnectionAsync();
 
                     var memWinner = winner as MemberTrainer;
-                    // Update achievements for both players
                     await db.Achievements.Where(a => a.UserId == memWinner!.Id)
                         .Set(a => a.DuelPartyWins, a => a.DuelPartyWins + 1)
                         .UpdateAsync();
@@ -130,10 +123,8 @@ public class DuelInteractionHandler(
                         .Set(a => a.DuelsTotal, a => a.DuelsTotal + 1)
                         .UpdateAsync();
 
-                    // Grant XP to winning Pokémon
                     foreach (var poke in winner.Party.Where(poke => poke.Hp != 0 && poke.EverSentOut))
                     {
-                        // Get the Pokémon's current data directly from the database
                         var pokeData = await db.UserPokemon
                             .Where(p => p.Id == poke.Id)
                             .FirstOrDefaultAsync();
@@ -144,19 +135,16 @@ public class DuelInteractionHandler(
                         var heldItem = pokeData.HeldItem?.ToLower();
                         var currentExp = pokeData.Experience;
 
-                        // Calculate XP gain
                         if (heldItem == "xp-block") continue;
                         {
                             var expValue = 150 * poke.Level / 7.0;
 
                             if (heldItem == "lucky-egg") expValue *= 2.5;
 
-                            // Limit exp to prevent integer overflow
                             var exp = Math.Min((int)expValue, int.MaxValue - currentExp);
 
                             description += $"{poke.Name} got {exp} exp from winning.\n";
 
-                            // Update the Pokémon in the database
                             await db.UserPokemon
                                 .Where(p => p.Id == poke.Id)
                                 .Set(p => p.Happiness, p => p.Happiness + 1)
@@ -165,8 +153,7 @@ public class DuelInteractionHandler(
                         }
                     }
 
-                    
-                    // Display XP gains if any
+
                     if (!string.IsNullOrEmpty(description))
                     {
                         var rewardEmbed = new EmbedBuilder()
@@ -180,11 +167,9 @@ public class DuelInteractionHandler(
             }
             catch (Exception ex)
             {
-                // Log error but don't fail the entire battle result
                 Log.Error(ex, "Error processing battle rewards");
             }
 
-        // Always clean up battle references in Redis
         await duelService.EndBattle(battle);
 
         return winner!;
@@ -201,26 +186,22 @@ public class DuelInteractionHandler(
     /// </returns>
     private static List<string> PaginateErrorMessage(string message, ulong errorId)
     {
-        const int maxLength = 1900; // Limit for code blocks in Discord
+        const int maxLength = 1900;
         var parts = new List<string>();
 
-        // Add error ID to the first part
         var firstPart = $"Exception ID {errorId}\n\n{message}";
 
-        // Split the message if it's too long
         if (firstPart.Length <= maxLength)
         {
             parts.Add(firstPart);
         }
         else
         {
-            // Add the header to the first chunk
             var header = $"Exception ID {errorId}\n\n";
             var remainingLength = maxLength - header.Length;
 
             parts.Add(header + firstPart.Substring(header.Length, remainingLength));
 
-            // Split the rest
             for (var i = header.Length + remainingLength; i < message.Length; i += maxLength)
             {
                 var length = Math.Min(maxLength, message.Length - i);
@@ -260,7 +241,6 @@ public class DuelInteractionHandler(
             await DeferAsync();
             var challengerIdUlong = ulong.Parse(challengerId);
 
-            // Check if either user is already in a battle
             if (await Service.IsUserInBattle(challengerIdUlong))
             {
                 await ctx.Interaction.SendEphemeralErrorAsync("The challenger is already in a battle!");
@@ -273,7 +253,6 @@ public class DuelInteractionHandler(
                 return;
             }
 
-            // Check if both users are in the guild
             var challenger = await ctx.Guild.GetUserAsync(challengerIdUlong);
             if (challenger == null)
             {
@@ -281,7 +260,6 @@ public class DuelInteractionHandler(
                 return;
             }
 
-            // Create loading embed with local GIF attachment
             var selectedGifPath = PregameGifs[Random.Shared.Next(PregameGifs.Length)];
             var loadingEmbed = new EmbedBuilder()
                 .WithTitle("Pokemon Battle accepted! Loading...")
@@ -302,7 +280,6 @@ public class DuelInteractionHandler(
 
             switch (battleType)
             {
-                // Handle different battle types
                 case "single":
                     await HandleSingleBattle(challenger);
                     break;
@@ -351,7 +328,6 @@ public class DuelInteractionHandler(
     public async Task SelectLead()
     {
         await DeferAsync();
-        // Find battle for this user
         var battle = Service.FindBattle(ctx.User.Id);
         if (battle == null)
         {
@@ -360,10 +336,8 @@ public class DuelInteractionHandler(
         }
 
         var castTrainer1 = battle.Trainer1 as MemberTrainer;
-        // Find the trainer
         var trainer = castTrainer1?.Id == ctx.User.Id ? battle.Trainer1 : battle.Trainer2;
 
-        // Check if they already selected
         if (trainer.Event.Task.IsCompleted)
         {
             await ctx.Interaction.SendEphemeralErrorAsync("You have already selected a lead Pokémon!");
@@ -372,7 +346,6 @@ public class DuelInteractionHandler(
 
         var components = new ComponentBuilder();
 
-        // Add buttons for each Pokémon
         for (var i = 0; i < trainer.Party.Count; i++)
         {
             var pokemon = trainer.Party[i];
@@ -415,13 +388,9 @@ public class DuelInteractionHandler(
 
         try
         {
-            // Switch to the selected Pokémon
             trainer.SwitchPoke(index);
-
-            // Signal that the Pokémon has been selected
             trainer.Event.SetResult(true);
 
-            // Acknowledge the selection to the user
             await ctx.Interaction.FollowupAsync(
                 $"You will lead with {trainer.CurrentPokemon.Name}. Waiting for opponent.", ephemeral: true);
         }
@@ -465,7 +434,6 @@ public class DuelInteractionHandler(
 
         var moveResult = trainer.ValidMoves(opponent.CurrentPokemon);
 
-        // Handle forced moves
         if (moveResult.Type == ValidMovesResult.ResultType.ForcedMove)
         {
             trainer.SelectedAction = new Trainer.MoveAction(moveResult.ForcedMove!);
@@ -479,7 +447,6 @@ public class DuelInteractionHandler(
 
         var components = new ComponentBuilder();
 
-        // Handle struggle case
         if (moveResult.Type == ValidMovesResult.ResultType.Struggle)
         {
             var struggleMove = Move.Struggle();
@@ -493,12 +460,11 @@ public class DuelInteractionHandler(
             return;
         }
 
-        // Add move buttons
         for (var i = 0; i < trainer.CurrentPokemon.Moves.Count; i++)
         {
             var move = trainer.CurrentPokemon.Moves[i];
             var label = $"{move.PrettyName}";
-            if (move.Id != 165) // Not Struggle
+            if (move.Id != 165)
                 label += $" | {move.PP}pp";
 
             components.WithButton(
@@ -509,14 +475,11 @@ public class DuelInteractionHandler(
                 row: i / 2);
         }
 
-        // Add swap button
         var validSwaps = trainer.ValidSwaps(opponent.CurrentPokemon, battle);
         components.WithButton("Swap Pokémon", "battle:swap_request", disabled: validSwaps.Count == 0, row: 2);
 
-        // Add forfeit button
         components.WithButton("Forfeit", "battle:forfeit", ButtonStyle.Danger, row: 2);
 
-        // Add mega evolution button if applicable
         if (trainer is { CurrentPokemon: { MegaTypeIds: not null }, HasMegaEvolved: false })
         {
             var megaStyle = trainer.CurrentPokemon.ShouldMegaEvolve ? ButtonStyle.Success : ButtonStyle.Secondary;
@@ -735,15 +698,12 @@ public class DuelInteractionHandler(
         var trainer = castTrainer1?.Id == ctx.User.Id ? battle.Trainer1 : battle.Trainer2;
         var opponent = castTrainer1?.Id == ctx.User.Id ? battle.Trainer2 : battle.Trainer1;
 
-        // Toggle mega evolution
         trainer.CurrentPokemon.ShouldMegaEvolve = !trainer.CurrentPokemon.ShouldMegaEvolve;
 
-        // Rebuild the action menu with updated mega evolution state
         var moveResult = trainer.ValidMoves(opponent.CurrentPokemon);
 
         var components = new ComponentBuilder();
 
-        // Handle struggle case
         if (moveResult.Type == ValidMovesResult.ResultType.Struggle)
         {
             var struggleMove = Move.Struggle();
@@ -753,7 +713,6 @@ public class DuelInteractionHandler(
             components.WithButton("Swap Pokémon", "battle:swap_request", disabled: swapData.Count == 0, row: 0);
             components.WithButton("Forfeit", "battle:forfeit", ButtonStyle.Danger, row: 0);
 
-            // Add mega evolution button with updated state
             var megaStyle = trainer.CurrentPokemon.ShouldMegaEvolve ? ButtonStyle.Success : ButtonStyle.Secondary;
             components.WithButton("Mega Evolve", "battle:mega_toggle", megaStyle, row: 1);
 
@@ -766,12 +725,11 @@ public class DuelInteractionHandler(
             return;
         }
 
-        // Add move buttons
         for (var i = 0; i < trainer.CurrentPokemon.Moves.Count; i++)
         {
             var move = trainer.CurrentPokemon.Moves[i];
             var label = $"{move.PrettyName}";
-            if (move.Id != 165) // Not Struggle
+            if (move.Id != 165)
                 label += $" | {move.PP}pp";
 
             components.WithButton(
@@ -782,14 +740,11 @@ public class DuelInteractionHandler(
                 row: i / 2);
         }
 
-        // Add swap button
         var validSwaps = trainer.ValidSwaps(opponent.CurrentPokemon, battle);
         components.WithButton("Swap Pokémon", "battle:swap_request", disabled: validSwaps.Count == 0, row: 2);
 
-        // Add forfeit button
         components.WithButton("Forfeit", "battle:forfeit", ButtonStyle.Danger, row: 2);
 
-        // Add mega evolution button with updated state
         var megaButtonStyle = trainer.CurrentPokemon.ShouldMegaEvolve ? ButtonStyle.Success : ButtonStyle.Secondary;
         components.WithButton("Mega Evolve", "battle:mega_toggle", megaButtonStyle, row: 0);
 
@@ -890,7 +845,6 @@ public class DuelInteractionHandler(
     {
         await using var db = await dbContext.GetConnectionAsync();
 
-        // Get challenger's selected Pokemon
         var challengerSelected = await db.Users
             .Where(u => u.UserId == challenger.Id)
             .Select(u => u.Selected)
@@ -912,7 +866,6 @@ public class DuelInteractionHandler(
             return;
         }
 
-        // Get opponent's selected Pokemon
         var opponentSelected = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => u.Selected)
@@ -934,32 +887,25 @@ public class DuelInteractionHandler(
             return;
         }
 
-        // Create DuelPokemon objects
         var challengerDuelPoke = await DuelPokemon.Create(ctx, challengerPoke, mongoService, gameData);
         var opponentDuelPoke = await DuelPokemon.Create(ctx, opponentPoke, mongoService, gameData);
 
-        // Create trainers
         var trainer1 = new MemberTrainer(challenger, [challengerDuelPoke]);
         var trainer2 = new MemberTrainer(ctx.User, [opponentDuelPoke]);
 
-        // Create battle
         var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService, gameData);
 
-        // Store battle in local dictionary
         ActiveBattles[(challenger.Id, ctx.User.Id)] = battle;
 
-        // Register battle in Redis
         var battleId = ctx.Interaction.Id.ToString();
         await Service.RegisterBattle(challenger.Id, ctx.User.Id, battle, ctx.Interaction.Id);
 
-        // Update the original response
         await ctx.Interaction.ModifyOriginalResponseAsync(properties =>
         {
             properties.Content = $"Battle between {trainer1.Name} and {trainer2.Name} has begun!";
             properties.Components = new ComponentBuilder().Build();
         });
 
-        // Start battle immediately
         _ = RunBattle(battle, dbContext, client, Service);
     }
 
@@ -972,7 +918,6 @@ public class DuelInteractionHandler(
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePartyBattle(IUser challenger, bool inverseBattle)
     {
-        // Get party Pokemon for both users
         var challengerPokemon = await Service.GetUserPokemonParty(challenger.Id, ctx);
         var opponentPokemon = await Service.GetUserPokemonParty(ctx.User.Id, ctx);
 
@@ -989,45 +934,36 @@ public class DuelInteractionHandler(
             return;
         }
 
-        // Create trainers
         var trainer1 = new MemberTrainer(challenger, challengerPokemon);
         var trainer2 = new MemberTrainer(ctx.User, opponentPokemon);
 
-        // Create battle
         var battle = new Battle(ctx, ctx.Channel, trainer1, trainer2, mongoService, gameData, inverseBattle);
 
-        // Store in local dictionary
         ActiveBattles[(challenger.Id, ctx.User.Id)] = battle;
 
-        // Register in Redis
         var battleId = ctx.Interaction.Id.ToString();
         await Service.RegisterBattle(challenger.Id, ctx.User.Id, battle, ctx.Interaction.Id);
 
-        // Update the original response
         await ctx.Interaction.ModifyOriginalResponseAsync(properties =>
         {
             properties.Content = $"Battle between {trainer1.Name} and {trainer2.Name} has begun!";
             properties.Components = new ComponentBuilder().Build();
         });
 
-        // Generate team preview and set up events for selection
         battle.Trainer1.Event = new TaskCompletionSource<bool>();
         battle.Trainer2.Event = new TaskCompletionSource<bool>();
 
         await battleRenderer.GenerateTeamPreview(battle);
 
-        // Start the battle in the background after both trainers select lead Pokémon
         _ = Task.Run(async () =>
         {
             try
             {
-                // Wait for both trainers to select their Pokémon
                 await Task.WhenAll(
                     battle.Trainer1.Event.Task,
                     battle.Trainer2.Event.Task
                 );
 
-                // Proceed with the battle
                 await RunBattle(battle, dbContext, client, Service);
             }
             catch (Exception ex)

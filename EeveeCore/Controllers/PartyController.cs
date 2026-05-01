@@ -48,13 +48,11 @@ public class PartyController : ControllerBase
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            
-            // Get current party from Parties table
+
             var currentParty = await db.Parties
                 .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
 
-            // If no current party exists, create an empty one
             if (currentParty == null)
             {
                 currentParty = new Party
@@ -67,10 +65,9 @@ public class PartyController : ControllerBase
                 await db.InsertAsync(currentParty);
             }
 
-            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3,
                                currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
 
-            // Get all party Pokemon IDs that are not null/zero
             var partyPokemonIds = slots
                 .Where(id => id.HasValue && id.Value > 0)
                 .Select(id => id!.Value)
@@ -80,7 +77,6 @@ public class PartyController : ControllerBase
 
             if (partyPokemonIds.Count != 0)
             {
-                // Fetch all party Pokemon data in a single query with ownership info
                 var pokemonData = await (from ownership in db.UserPokemonOwnerships
                                         join pokemon in db.UserPokemon on ownership.PokemonId equals pokemon.Id
                                         where ownership.UserId == userId && partyPokemonIds.Contains(pokemon.Id)
@@ -89,10 +85,8 @@ public class PartyController : ControllerBase
 
                 var formsLookup = _gameData.FormsByIdentifier;
 
-                // Create a lookup for quick access
                 var pokemonLookup = pokemonData.ToDictionary(p => p.Pokemon.Id, p => p);
 
-                // Build party slots in correct order
                 for (var i = 0; i < 6; i++)
                 {
                     var pokemonId = slots[i];
@@ -111,7 +105,6 @@ public class PartyController : ControllerBase
                         var formId = 0;
                         var imagePath = "/images/regular/133-0-.png";
 
-                        // Find form info
                         if (formsLookup.TryGetValue(pokemonName, out var identifier))
                         {
                             var suffix = identifier.FormIdentifier;
@@ -129,7 +122,6 @@ public class PartyController : ControllerBase
                                 pokemonIdForImage = identifier.PokemonId;
                             }
 
-                            // Build image path
                             var pathSegments = new List<string> { "/images", "regular" };
 
                             if (pokemon.Radiant == true) pathSegments.Add("radiant");
@@ -173,14 +165,12 @@ public class PartyController : ControllerBase
             }
             else
             {
-                // No Pokemon in party, create 6 empty slots
                 for (var i = 0; i < 6; i++)
                 {
                     partyPokemon.Add(new { SlotNumber = i + 1, IsEmpty = true });
                 }
             }
 
-            // Fill remaining slots if party is less than 6
             while (partyPokemon.Count < 6)
             {
                 partyPokemon.Add(new { SlotNumber = partyPokemon.Count + 1, IsEmpty = true });
@@ -208,14 +198,12 @@ public class PartyController : ControllerBase
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            
-            // Get all saved parties for the user with full data in single query
+
             var parties = await db.Parties
                 .Where(p => p.UserId == userId)
                 .OrderBy(p => p.Name)
                 .ToListAsync();
 
-            // Get all unique Pokemon IDs from all parties
             var allPokemonIds = parties
                 .SelectMany(p => new[] { p.Slot1, p.Slot2, p.Slot3, p.Slot4, p.Slot5, p.Slot6 })
                 .Where(id => id.HasValue && id.Value > 0)
@@ -223,19 +211,17 @@ public class PartyController : ControllerBase
                 .Distinct()
                 .ToList();
 
-            // Fetch all Pokemon names in a single query
             var pokemonLookup = allPokemonIds.Any()
                 ? await db.UserPokemon
                     .Where(p => allPokemonIds.Contains(p.Id))
                     .ToDictionaryAsync(p => p.Id, p => p.PokemonName)
                 : new Dictionary<ulong, string>();
 
-            // Build the response with Pokemon names
             var savedPartiesWithDetails = parties.Select(party =>
             {
-                var slots = new[] { party.Slot1, party.Slot2, party.Slot3, 
+                var slots = new[] { party.Slot1, party.Slot2, party.Slot3,
                                    party.Slot4, party.Slot5, party.Slot6 };
-                
+
                 var pokemonNames = slots
                     .Where(slot => slot.HasValue && slot.Value > 0)
                     .Select(slot => pokemonLookup.TryGetValue(slot!.Value, out var name) ? name : null)
@@ -275,8 +261,7 @@ public class PartyController : ControllerBase
             if (userId == 0) return BadRequest(new { error = "Invalid user ID" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            
-            // Get current party from Parties table
+
             var currentParty = await db.Parties
                 .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
@@ -296,13 +281,12 @@ public class PartyController : ControllerBase
                 });
             }
 
-            // Get party Pokemon IDs from slots
-            var partyPokemonIds = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+            var partyPokemonIds = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3,
                                          currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 }
                 .Where(id => id.HasValue && id.Value > 0)
                 .Select(id => id!.Value)
                 .ToList();
-            
+
             if (!partyPokemonIds.Any())
             {
                 return Ok(new { 
@@ -538,21 +522,18 @@ public class PartyController : ControllerBase
             if (request.PokemonSlots.Any(slot => slot.PokemonPosition <= 0))
                 return BadRequest(new { error = "All Pokemon positions must be greater than 0" });
 
-            // Check for duplicate slots
             var slotNumbers = request.PokemonSlots.Select(s => s.SlotNumber).ToList();
             if (slotNumbers.Count != slotNumbers.Distinct().Count())
                 return BadRequest(new { error = "Duplicate slot numbers are not allowed" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
 
-            // Check if party name already exists
             var existingParty = await db.Parties
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.Name == request.PartyName);
 
             if (existingParty != null)
                 return BadRequest(new { error = $"A party with the name '{request.PartyName}' already exists" });
 
-            // Create empty party first
             var newParty = new Party
             {
                 UserId = userId,
@@ -569,7 +550,6 @@ public class PartyController : ControllerBase
 
             await db.InsertAsync(newParty);
 
-            // Add each Pokemon to their specified slots
             var errors = new List<string>();
             var successes = new List<string>();
 
@@ -589,7 +569,6 @@ public class PartyController : ControllerBase
 
             if (errors.Any())
             {
-                // If there were errors, clean up the party and return the errors
                 await db.Parties.Where(p => p.UserId == userId && p.Name == request.PartyName).DeleteAsync();
                 return BadRequest(new { error = "Failed to create party", details = errors });
             }
@@ -627,8 +606,7 @@ public class PartyController : ControllerBase
                 return BadRequest(new { error = "Cannot swap a slot with itself" });
 
             await using var db = await _dbProvider.GetConnectionAsync();
-            
-            // Get current party from Parties table
+
             var currentParty = await db.Parties
                 .Where(p => p.UserId == userId && p.IsCurrentParty)
                 .FirstOrDefaultAsync();
@@ -636,14 +614,12 @@ public class PartyController : ControllerBase
             if (currentParty == null)
                 return NotFound(new { error = "User party not found" });
 
-            // Get current slot values
-            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3, 
+            var slots = new[] { currentParty.Slot1, currentParty.Slot2, currentParty.Slot3,
                                currentParty.Slot4, currentParty.Slot5, currentParty.Slot6 };
 
             var pokemon1 = slots[request.Slot1 - 1];
             var pokemon2 = slots[request.Slot2 - 1];
 
-            // Perform the swap using individual slot updates
             switch (request.Slot1)
             {
                 case 1:

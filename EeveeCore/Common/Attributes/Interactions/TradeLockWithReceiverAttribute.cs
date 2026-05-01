@@ -22,12 +22,9 @@ public class TradeLockWithReceiverAttribute : PreconditionAttribute
     {
         var tradeLockService = services.GetRequiredService<ITradeLockService>();
 
-        // Check if author is currently trade locked
         if (await tradeLockService.IsUserTradeLockedAsync(context.User.Id))
             return PreconditionResult.FromError($"{context.User.Username} is currently in a trade!");
 
-        // We can't check the receiver here since we don't have access to the command parameters
-        // The actual locking will be handled in the command method using the TradeLockService
         return PreconditionResult.FromSuccess();
     }
 }

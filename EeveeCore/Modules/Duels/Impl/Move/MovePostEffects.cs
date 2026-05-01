@@ -13,7 +13,6 @@ public partial class Move
 
         switch (Effect)
         {
-            // Stockpile
             case 161:
                 attacker.Stockpile += 1;
                 msg += $"{attacker.Name} stores energy!\n";
@@ -23,7 +22,6 @@ public partial class Move
                 msg += attacker.AppendSpDef(-attacker.Stockpile, attacker, this);
                 attacker.Stockpile = 0;
                 break;
-            // Healing
             case 33:
             case 215:
                 msg += attacker.Heal(attacker.StartingHp / 2);
@@ -100,7 +98,6 @@ public partial class Move
             }
         }
 
-        // Status effect application
         msg += ApplyStatusEffects(attacker, defender, battle, effectChance);
 
         switch (Effect)
@@ -134,10 +131,8 @@ public partial class Move
     {
         var msg = "";
 
-        // Status effects
         switch (Effect)
         {
-            // Burns
             case 5 or 126 or 201 or 254 or 274 or 333 or 365 or 458 or 465 or 500 when effectChance.HasValue:
             {
                 if (Random.Shared.Next(1, 101) <= effectChance)
@@ -149,7 +144,6 @@ public partial class Move
             case 429 when defender.StatIncreased:
                 msg += defender.NonVolatileEffect.ApplyStatus("burn", battle, attacker, this);
                 break;
-            // Tri Attack
             case 37 when effectChance.HasValue:
             {
                 var statuses = new[] { "burn", "freeze", "paralysis" };
@@ -159,7 +153,6 @@ public partial class Move
 
                 break;
             }
-            // Secret Power
             case 464 when effectChance.HasValue:
             {
                 var statuses = new[] { "poison", "paralysis", "sleep" };
@@ -169,7 +162,6 @@ public partial class Move
 
                 break;
             }
-            // Freeze
             case 6 or 261 or 275 or 380 when effectChance.HasValue:
             {
                 if (Random.Shared.Next(1, 101) <= effectChance)
@@ -177,7 +169,6 @@ public partial class Move
 
                 break;
             }
-            // Paralysis
             case 7 or 153 or 263 or 264 or 276 or 332 or 372 or 396 when effectChance.HasValue:
             {
                 if (Random.Shared.Next(1, 101) <= effectChance)
@@ -188,7 +179,6 @@ public partial class Move
             case 68:
                 msg += defender.NonVolatileEffect.ApplyStatus("paralysis", battle, attacker, this);
                 break;
-            // Poison
             case 3 or 78 or 210 or 447 or 461 when
                 effectChance.HasValue:
             {
@@ -202,7 +192,6 @@ public partial class Move
             case 486:
                 msg += defender.NonVolatileEffect.ApplyStatus("poison", battle, attacker, this);
                 break;
-            // Toxic
             case 203 when effectChance.HasValue:
             {
                 if (Random.Shared.Next(1, 101) <= effectChance)
@@ -213,7 +202,6 @@ public partial class Move
             case 34:
                 msg += defender.NonVolatileEffect.ApplyStatus("b-poison", battle, attacker, this);
                 break;
-            // Sleep
             case 2 when Id == 464 && attacker.Name != "Darkrai":
                 msg += $"{attacker.Name} can't use the move!\n";
                 break;
@@ -239,14 +227,12 @@ public partial class Move
 
                 break;
             }
-            // Confusion
             case 50:
             case 119:
             case 167:
             case 200:
                 msg += defender.Confuse(attacker, this);
                 break;
-            // This checks if attacker.LockedMove is not null as locked_move is cleared if the poke dies to rocky helmet or similar items
             case 28 when attacker.LockedMove != null && attacker.LockedMove.IsLastTurn():
                 msg += attacker.Confuse();
                 break;
@@ -273,7 +259,6 @@ public partial class Move
     {
         var msg = "";
 
-        // Flinch
         if (!defender.HasMoved)
             for (var hit = 0; hit < numHits; hit++)
             {

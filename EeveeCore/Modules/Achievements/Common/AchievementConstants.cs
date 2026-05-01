@@ -29,7 +29,6 @@ public static class AchievementConstants
     }
 
     #endregion
-
     #region Milestone Definitions
 
     /// <summary>
@@ -37,7 +36,6 @@ public static class AchievementConstants
     /// </summary>
     public static readonly Dictionary<string, int[]> Milestones = new()
     {
-        // Battle Achievements
         ["duel_party_wins"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 50000],
         ["duel_single_wins"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 50000],
         ["duel_inverse_wins"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 50000],
@@ -47,7 +45,6 @@ public static class AchievementConstants
         ["duels_total"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 50000],
         ["duel_total_xp"] = [1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000],
 
-        // Breeding Achievements
         ["breed_titan"] = [1, 5, 10, 15, 30, 50, 100, 150, 200, 300],
         ["breed_hexa"] = [1, 5, 10, 15, 30, 50, 100, 150, 200, 300],
         ["breed_penta"] = [1, 5, 10, 15, 30, 50, 100, 150, 200, 400],
@@ -56,12 +53,10 @@ public static class AchievementConstants
         ["shiny_bred"] = [1, 5, 10, 50, 100, 200, 400, 800, 1200, 2000],
         ["shadow_bred"] = [1, 5, 10, 50, 100, 200, 400, 800, 1200, 2000],
 
-        // Catching Achievements
         ["pokemon_caught"] = [10, 50, 100, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000, 90000, 95000, 100000, 150000, 200000, 250000, 300000],
         ["shiny_caught"] = [1, 5, 10, 50, 100, 200, 400, 800, 1200, 2000],
         ["shadow_caught"] = [1, 5, 10, 50, 100, 200, 400, 800, 1200, 2000],
 
-        // Type-Specific Catching
         ["pokemon_normal"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
         ["pokemon_fighting"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
         ["pokemon_flying"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
@@ -81,21 +76,17 @@ public static class AchievementConstants
         ["pokemon_dark"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
         ["pokemon_fairy"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
 
-        // Special Achievements
         ["dex_complete"] = [1],
 
-        // Market Achievements
         ["market_purchased"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 25000, 50000],
         ["market_sold"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 25000, 50000],
         ["pokemon_released"] = [10, 50, 100, 500, 1000, 3000, 5000, 10000, 25000, 50000],
         ["pokemon_released_ivtotal"] = [1000, 2000, 3500, 5000, 7500, 10000, 13500, 15000, 17500, 20000],
 
-        // Activity Achievements
         ["fishing_success"] = [10, 50, 100, 300, 500, 1000, 3000, 5000, 10000, 50000],
         ["missions"] = [10, 50, 100, 300, 500, 1000, 3000, 5000, 10000, 50000],
         ["votes"] = [10, 30, 50, 100, 250, 500, 1000, 2000, 3000, 5000],
 
-        // Donation/Chest Achievements
         ["chests_legend"] = [5, 30, 100, 200, 400, 800, 1600, 3000],
         ["chests_voucher"] = [1, 5, 10, 15],
         ["chests_mythic"] = [5, 30, 100, 200, 400, 800, 1600, 3000],
@@ -104,17 +95,14 @@ public static class AchievementConstants
         ["redeems_used"] = [10, 30, 100, 400, 800, 1200, 2000, 3000, 5000, 10000, 20000],
         ["donation_amount"] = [10, 50, 100, 500, 1000],
 
-        // Event Achievements
         ["unown_event"] = [1, 5, 10, 15, 30, 50, 100, 150, 200, 400, 800, 1200, 2000],
 
-        // Game Achievements
         ["game_wordsearch"] = [1, 5, 10, 25, 50, 100, 250, 500, 1000],
         ["game_slots"] = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500],
         ["game_slots_win"] = [1, 5, 10, 25, 50, 100, 200, 400, 800]
     };
 
     #endregion
-
     #region Reward Configuration
 
     /// <summary>
@@ -122,17 +110,14 @@ public static class AchievementConstants
     /// </summary>
     public static readonly Dictionary<string, object> RewardMilestones = new()
     {
-        // Fishing
         ["fishing_success"] = new int[] { 100, 500, 1000, 3000, 5000, 10000, 50000 },
 
-        // Breeding - all milestones
         ["breed_hexa"] = "all",
-        ["breed_titan"] = "all", 
+        ["breed_titan"] = "all",
         ["breed_penta"] = "all",
         ["breed_quad"] = "all",
         ["breed_success"] = new int[] { 500, 3000, 10000 },
 
-        // Catching - all milestones
         ["pokemon_caught"] = "all",
         ["pokemon_normal"] = "all", ["pokemon_fighting"] = "all", ["pokemon_flying"] = "all",
         ["pokemon_poison"] = "all", ["pokemon_ground"] = "all", ["pokemon_rock"] = "all",
@@ -141,21 +126,17 @@ public static class AchievementConstants
         ["pokemon_electric"] = "all", ["pokemon_psychic"] = "all", ["pokemon_ice"] = "all",
         ["pokemon_dragon"] = "all", ["pokemon_dark"] = "all", ["pokemon_fairy"] = "all",
 
-        // Market
         ["market_sold"] = new int[] { 50, 10000 },
 
-        // Chests
         ["chests_common"] = new int[] { 100, 400, 800, 3000 },
         ["chests_rare"] = new int[] { 100, 400, 800, 3000 },
         ["chests_mythic"] = new int[] { 100, 400, 800, 3000 },
         ["chests_legend"] = new int[] { 100, 400, 800, 3000 },
         ["donation_amount"] = "all",
 
-        // Releasing
         ["pokemon_released_ivtotal"] = new int[] { 1000, 2000, 5000, 10000, 20000 },
         ["pokemon_released"] = new int[] { 1000, 5000, 10000 },
 
-        // Games
         ["game_wordsearch"] = new int[] { 5, 25, 100, 500 },
         ["game_slots"] = new int[] { 25, 100, 500, 2500 },
         ["game_slots_win"] = new int[] { 10, 50, 200, 800 }
@@ -172,7 +153,6 @@ public static class AchievementConstants
         ["breed_hexa"] = [1, 150],
         ["breed_penta"] = [5],
 
-        // Type-specific catching
         ["pokemon_normal"] = [100, 500, 1000, 2000, 5000], ["pokemon_fighting"] = [100, 500, 1000, 2000, 5000],
         ["pokemon_flying"] = [100, 500, 1000, 2000, 5000], ["pokemon_poison"] = [100, 500, 1000, 2000, 5000],
         ["pokemon_ground"] = [100, 500, 1000, 2000, 5000], ["pokemon_rock"] = [100, 500, 1000, 2000, 5000],
@@ -183,7 +163,6 @@ public static class AchievementConstants
         ["pokemon_ice"] = [100, 500, 1000, 2000, 5000], ["pokemon_dragon"] = [100, 500, 1000, 2000, 5000],
         ["pokemon_dark"] = [100, 500, 1000, 2000, 5000], ["pokemon_fairy"] = [100, 500, 1000, 2000, 5000],
 
-        // Games
         ["game_wordsearch"] = [25, 100, 500],
         ["game_slots"] = [100, 500, 2500],
         ["game_slots_win"] = [50, 200, 800]
@@ -207,7 +186,6 @@ public static class AchievementConstants
     };
 
     #endregion
-
     #region Reward Amounts
 
     /// <summary>
@@ -222,7 +200,6 @@ public static class AchievementConstants
         ["breed_penta"] = (25, 0.5),
         ["breed_quad"] = (10, 0.1),
 
-        // Type-specific catching
         ["pokemon_normal"] = (10, 0.01), ["pokemon_fighting"] = (10, 0.01), ["pokemon_flying"] = (10, 0.01),
         ["pokemon_poison"] = (10, 0.01), ["pokemon_ground"] = (10, 0.01), ["pokemon_rock"] = (10, 0.01),
         ["pokemon_bug"] = (10, 0.01), ["pokemon_ghost"] = (10, 0.01), ["pokemon_steel"] = (10, 0.01),
@@ -230,12 +207,10 @@ public static class AchievementConstants
         ["pokemon_electric"] = (10, 0.01), ["pokemon_psychic"] = (10, 0.01), ["pokemon_ice"] = (10, 0.01),
         ["pokemon_dragon"] = (10, 0.01), ["pokemon_dark"] = (10, 0.01), ["pokemon_fairy"] = (10, 0.01),
 
-        // Games
         ["game_wordsearch"] = (5, 0.002),
         ["game_slots"] = (2, 0.001),
         ["game_slots_win"] = (10, 0.005),
 
-        // Market and others
         ["market_sold"] = (5, 0.001),
         ["pokemon_released"] = (1, 0.0001),
         ["donation_amount"] = (100, 0.1),

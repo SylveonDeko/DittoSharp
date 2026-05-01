@@ -13,12 +13,8 @@ public partial class DuelPokemon
     {
         EverSentOut = true;
 
-        // Emergency exit `remove`s the pokemon *in the middle of the turn* in a somewhat unsafe way.
-        // `remove` may need to be called here, but that seems like it may have side effects.
         Flinched = false;
 
-        // This has to go BEFORE the send out message, and not in send_out_ability as it only
-        // applies on send out, not when abilities are changed, and it changes the send out msg.
         var illusionOptions = Owner.Party.Where(x => x != this && x.Hp > 0).ToList();
         if (Ability() == Impl.Ability.ILLUSION && illusionOptions.Count > 0)
         {
@@ -34,7 +30,6 @@ public partial class DuelPokemon
         else
             msg = $"{Owner.Name} sent out {Name}!\n";
 
-        // Any time a poke switches out, certain effects it had put on its opponent end
         if (otherpoke != null)
         {
             otherpoke.Trapping = false;
@@ -42,7 +37,6 @@ public partial class DuelPokemon
             otherpoke.Bind.SetTurns(0);
         }
 
-        // Baton Pass
         if (Owner.BatonPass != null)
         {
             msg += $"{Name} carries on the baton!\n";
@@ -50,15 +44,12 @@ public partial class DuelPokemon
             Owner.BatonPass = null!;
         }
 
-        // Shed Tail
         if (Owner.NextSubstitute > 0)
         {
             Substitute = Owner.NextSubstitute;
             Owner.NextSubstitute = 0;
         }
 
-        // Entry hazards
-        // Special case for clearing toxic spikes, still happens even with heavy duty boots
         if (Owner.ToxicSpikes > 0 && Grounded(battle) && TypeIds.Contains(ElementType.POISON))
         {
             Owner.ToxicSpikes = 0;
@@ -67,20 +58,16 @@ public partial class DuelPokemon
 
         if (HeldItem.Get() != "heavy-duty-boots")
         {
-            // Grounded entry hazards
             if (Grounded(battle))
             {
-                // Spikes
                 if (Owner.Spikes > 0)
                 {
-                    // 1/8 -> 1/4
                     var damage = StartingHp / (10 - 2 * Owner.Spikes);
                     msg += Damage(damage, battle, source: "spikes");
                 }
 
                 switch (Owner.ToxicSpikes)
                 {
-                    // Toxic spikes
                     case 1:
                         msg += NonVolatileEffect.ApplyStatus("poison", battle, source: "toxic spikes");
                         break;
@@ -89,17 +76,14 @@ public partial class DuelPokemon
                         break;
                 }
 
-                // Sticky web
                 if (Owner.StickyWeb) msg += AppendSpeed(-1, source: "the sticky web");
             }
 
-            // Non-grounded entry hazards
             if (Owner.StealthRock)
             {
                 var effective = Effectiveness(ElementType.ROCK, battle);
                 if (effective > 0)
                 {
-                    // damage = 1/8 max hp * effectiveness
                     var damage = StartingHp / (32 / (int)(4 * effective));
                     msg += Damage(damage, battle, source: "stealth rock");
                 }
@@ -108,7 +92,6 @@ public partial class DuelPokemon
 
         if (Hp > 0) msg += SendOutAbility(otherpoke!, battle);
 
-        // Restoration
         if (Owner.HealingWish)
         {
             var used = false;
@@ -160,7 +143,6 @@ public partial class DuelPokemon
             }
         }
 
-        // Items
         if (HeldItem.Get() == "air-balloon" && !Grounded(battle))
             msg += $"{Name} floats in the air with its air balloon!\n";
         if (HeldItem.Get() == "electric-seed" && battle.Terrain.Item?.ToString() == "electric")
@@ -199,14 +181,12 @@ public partial class DuelPokemon
     {
         var msg = "";
 
-        // Imposter (sus)
         if (Ability() == Impl.Ability.IMPOSTER && otherpoke is { Substitute: 0, _illusionDisplayName: null })
         {
             msg += $"{Name} transformed into {otherpoke._name}!\n";
             Transform(otherpoke);
         }
 
-        // Weather
         if (Ability() == Impl.Ability.DRIZZLE) msg += battle.Weather.Set("rain", this);
         if (Ability() == Impl.Ability.PRIMORDIAL_SEA) msg += battle.Weather.Set("h-rain", this);
         if (Ability() == Impl.Ability.SAND_STREAM) msg += battle.Weather.Set("sandstorm", this);
@@ -216,14 +196,12 @@ public partial class DuelPokemon
         if (Ability() == Impl.Ability.DESOLATE_LAND) msg += battle.Weather.Set("h-sun", this);
         if (Ability() == Impl.Ability.DELTA_STREAM) msg += battle.Weather.Set("h-wind", this);
 
-        // Terrain
         if (Ability() == Impl.Ability.GRASSY_SURGE) msg += battle.Terrain.Set("grassy", this);
         if (Ability() == Impl.Ability.MISTY_SURGE) msg += battle.Terrain.Set("misty", this);
         if (Ability() == Impl.Ability.ELECTRIC_SURGE || Ability() == Impl.Ability.HADRON_ENGINE)
             msg += battle.Terrain.Set("electric", this);
         if (Ability() == Impl.Ability.PSYCHIC_SURGE) msg += battle.Terrain.Set("psychic", this);
 
-        // Message only
         if (Ability() == Impl.Ability.MOLD_BREAKER) msg += $"{Name} breaks the mold!\n";
         if (Ability() == Impl.Ability.TURBOBLAZE) msg += $"{Name} is radiating a blazing aura!\n";
         if (Ability() == Impl.Ability.TERAVOLT) msg += $"{Name} is radiating a bursting aura!\n";
@@ -313,7 +291,7 @@ public partial class DuelPokemon
                     power = 0;
                 else if (move.Effect == 39)
                     power = 150;
-                else if (move.Power == null) // Good enough
+                else if (move.Power == null)
                     power = 80;
                 else
                     power = move.Power.Value;
@@ -572,7 +550,6 @@ public partial class DuelPokemon
                 case "misty":
                     element = ElementType.FAIRY;
                     break;
-                // terrain == "psychic"
                 default:
                     element = ElementType.PSYCHIC;
                     break;
@@ -771,7 +748,6 @@ public partial class DuelPokemon
     public string NextTurn(DuelPokemon otherpoke, Battle battle)
     {
         var msg = "";
-        // This needs to be here, as swapping sets this value explicitly
         HasMoved = false;
         if (!SwappedIn) ActiveTurns++;
         LastMoveDamage = null;
@@ -809,7 +785,6 @@ public partial class DuelPokemon
             if (LockedMove.NextTurn())
             {
                 LockedMove = null;
-                // Just in case they never actually used the move to remove it
                 Dive = false;
                 Dig = false;
                 Fly = false;
@@ -826,7 +801,6 @@ public partial class DuelPokemon
 
         msg += NonVolatileEffect.NextTurn(battle);
 
-        // Volatile status turn progression
         var prevDisabMove = (Move.Move)Disable.Item!;
         if (Disable.NextTurn()) msg += $"{Name}'s {prevDisabMove!.PrettyName} is no longer disabled!\n";
         if (Taunt.NextTurn()) msg += $"{Name}'s taunt has ended!\n";
@@ -853,7 +827,6 @@ public partial class DuelPokemon
             HeldItem.LastUsed = null;
         }
 
-        // Held Items
         if (HeldItem.Get() == "white-herb")
         {
             var changed = false;
@@ -919,7 +892,6 @@ public partial class DuelPokemon
                 msg += Damage(StartingHp / 8, battle, source: "its black sludge");
         }
 
-        // Abilities
         if (Ability() == Impl.Ability.SPEED_BOOST && !SwappedIn) msg += AppendSpeed(1, this, source: "its Speed boost");
         if (Ability() == Impl.Ability.LIMBER && NonVolatileEffect.Paralysis())
         {
@@ -1128,7 +1100,6 @@ public partial class DuelPokemon
             if (Form("Zygarde-complete"))
             {
                 msg += $"{Name} is at full power!\n";
-                // Janky way to raise the current HP of this poke, as it's new form has a higher HP stat. Note, this is NOT healing.
                 var newHp = (int)Math.Round((2 * BaseStats["Zygarde-complete"][0] + HpIV + HpEV / 4.0) * Level / 100 +
                                             Level + 10);
                 Hp = newHp - (StartingHp - Hp);
@@ -1151,29 +1122,22 @@ public partial class DuelPokemon
         if (Ability() == Impl.Ability.FLOWER_GIFT && _name == "Cherrim-sunshine" && battle.Weather.Get() != "sun" &&
             battle.Weather.Get() != "h-sun") Form("Cherrim");
 
-        // Bad Dreams
         if (otherpoke != null && otherpoke.Ability() == Impl.Ability.BAD_DREAMS && NonVolatileEffect.Sleep())
             msg += Damage(StartingHp / 8, battle, source: $"{otherpoke.Name}'s bad dreams");
-        // Leech seed
         if (LeechSeed && otherpoke != null)
         {
             var damage = StartingHp / 8;
             msg += Damage(damage, battle, attacker: otherpoke, drainHealRatio: 1, source: "leech seed");
         }
 
-        // Curse
         if (Curse) msg += Damage(StartingHp / 4, battle, source: "its curse");
-        // Syrup bomb
         if (SyrupBomb.Active() && otherpoke != null) msg += AppendSpeed(-1, otherpoke, source: "its syrup coating");
 
-        // Weather damages
         if (Ability() == Impl.Ability.OVERCOAT)
         {
-            // No damage from weather
         }
         else if (HeldItem.Get() == "safety-goggles")
         {
-            // No damage from weather
         }
         else if (battle.Weather.Get() == "sandstorm")
         {
@@ -1189,7 +1153,6 @@ public partial class DuelPokemon
                 Ability() != Impl.Ability.ICE_BODY) msg += Damage(StartingHp / 16, battle, source: "the hail");
         }
 
-        // Bind
         if (Bind.NextTurn())
         {
             msg += $"{Name} is no longer bound!\n";
@@ -1202,7 +1165,6 @@ public partial class DuelPokemon
                 msg += Damage(StartingHp / 8, battle, source: $"{otherpoke.Name}'s bind");
         }
 
-        // Ingrain
         if (Ingrain)
         {
             var heal = StartingHp / 16;
@@ -1210,7 +1172,6 @@ public partial class DuelPokemon
             msg += Heal(heal, "ingrain");
         }
 
-        // Aqua Ring
         if (AquaRing)
         {
             var heal = StartingHp / 16;
@@ -1218,18 +1179,15 @@ public partial class DuelPokemon
             msg += Heal(heal, "aqua ring");
         }
 
-        // Octolock
         if (Octolock && otherpoke != null)
         {
             msg += AppendDefense(-1, this, source: $"{otherpoke.Name}'s octolock");
             msg += AppendSpDef(-1, this, source: $"{otherpoke.Name}'s octolock");
         }
 
-        // Grassy Terrain
         if (battle.Terrain.Item?.ToString() == "grassy" && Grounded(battle) && !HealBlock.Active())
             msg += Heal(StartingHp / 16, "grassy terrain");
 
-        // Goes at the end so everything in this func that checks it handles it correctly
         SwappedIn = false;
 
         return msg;

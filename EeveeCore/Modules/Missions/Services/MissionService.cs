@@ -170,17 +170,16 @@ public class MissionService(
             }
 
             var currentProgress = GetProgressValue(userProgress, missionProgressKey);
-            var targetValue = mission.Target; // For now, using main target. 
+            var targetValue = mission.Target;
 
             if (currentProgress >= targetValue)
-                return false; // Already completed
+                return false;
 
             var newProgress = Math.Min(currentProgress + progressIncrement, targetValue);
             await UpdateProgressValue(userProgress, missionProgressKey, newProgress);
 
             if (newProgress >= targetValue)
             {
-                // Mission completed - award crystal slime
                 await using var db = await dbProvider.GetConnectionAsync();
                 await db.Users.Where(u => u.UserId == userId)
                     .Set(u => u.CrystalSlime, u => (u.CrystalSlime ?? 0) + mission.Reward)
@@ -342,7 +341,6 @@ public class MissionService(
             var currentXp = user.CurrentXp ?? 0;
             var currentLevel = user.Level ?? 1;
 
-            // Get XP requirements from MongoDB
             var levelsDoc = await mongoService.Levels
                 .Find(_ => true)
                 .FirstOrDefaultAsync();
@@ -355,7 +353,6 @@ public class MissionService(
 
             var xpRequirements = levelsDoc.LevelRequirements;
 
-            // Process any pending level-ups first
             var newLevel = currentLevel;
             var workingXp = currentXp;
 
@@ -364,26 +361,21 @@ public class MissionService(
                 workingXp -= Convert.ToInt32(xpRequirements[newLevel.ToString()]);
                 newLevel++;
                 
-                // Fire level up event
                 if (UserLeveledUp != null)
                     _ = Task.Run(() => UserLeveledUp(userId, newLevel));
             }
 
-            // Add new XP
             var finalXp = workingXp + xpToAdd;
 
-            // Check for more level-ups after adding XP
             while (xpRequirements.ContainsKey(newLevel.ToString()) && finalXp >= Convert.ToInt32(xpRequirements[newLevel.ToString()]))
             {
                 finalXp -= Convert.ToInt32(xpRequirements[newLevel.ToString()]);
                 newLevel++;
                 
-                // Fire level up event
                 if (UserLeveledUp != null)
                     _ = Task.Run(() => UserLeveledUp(userId, newLevel));
             }
 
-            // Update user data
             await db.Users.Where(u => u.UserId == userId)
                 .Set(u => u.CurrentXp, finalXp)
                 .Set(u => u.Level, newLevel)
@@ -447,7 +439,6 @@ public class MissionService(
         
         if (user == null) return;
 
-        // Parse existing items JSON
         var items = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(user.Items ?? "{}");
         items ??= new Dictionary<string, int>();
         
@@ -583,7 +574,6 @@ public class MissionService(
     {
         eventHandler.MessageReceived += HandleMessageReceived;
         
-        // Subscribe to custom events
         PokemonBred += HandlePokemonBred;
         PokemonCaught += HandlePokemonCaught;
         PokemonHatched += HandlePokemonHatched;
@@ -603,9 +593,13 @@ public class MissionService(
 
     #region Event Handlers
 
+    /// <summary>
+    ///     Inspects every received Discord message for the top.gg vote-confirmation pattern in the configured vote channel and forwards the user ID to <see cref="ProcessVoteEvent"/>.
+    /// </summary>
+    /// <param name="message">The incoming Discord message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleMessageReceived(SocketMessage message)
     {
-        // Handle vote events from TopGG
         if (message.Channel.Id == MissionConstants.VoteChannelId && message.Content.Contains("topgg"))
         {
             var parts = message.Content.Split();
@@ -616,6 +610,11 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Awards vote XP and progresses any active <c>vote</c> missions for a user. Errors are logged and swallowed.
+    /// </summary>
+    /// <param name="userId">The voter's Discord ID.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task ProcessVoteEvent(ulong userId)
     {
         try
@@ -644,6 +643,13 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>breed</c> missions whose IV requirement is met by the bred Pokemon, awards breed XP plus a bonus for high-IV offspring, and notifies the user when a mission completes.
+    /// </summary>
+    /// <param name="interaction">The interaction that produced the breed.</param>
+    /// <param name="pokemon">The newly bred Pokemon.</param>
+    /// <param name="shadow">Whether the offspring is a shadow Pokemon.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePokemonBred(IDiscordInteraction interaction, Database.Linq.Models.Pokemon.Pokemon pokemon, bool shadow)
     {
         try
@@ -683,6 +689,11 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>catch</c> missions and awards catch XP for the catching user.
+    /// </summary>
+    /// <param name="interaction">The interaction that produced the catch.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePokemonCaught(IDiscordInteraction interaction)
     {
         try
@@ -713,6 +724,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>hatch</c> missions and awards hatch XP for the hatching user.
+    /// </summary>
+    /// <param name="message">The message context surrounding the hatch.</param>
+    /// <param name="pokemon">The hatched Pokemon.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePokemonHatched(IMessage message, Database.Linq.Models.Pokemon.Pokemon pokemon)
     {
         try
@@ -729,7 +746,6 @@ public class MissionService(
                     if (completed)
                     {
                         xpGained += 1 + (mission.Reward / 2);
-                        // Send completion message to channel
                         await message.Channel.SendMessageAsync("Daily Mission Completed.", 
                             embed: new EmbedBuilder()
                                 .WithTitle("Congratulations!\nTake this reward!")
@@ -749,6 +765,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>fish</c> missions and awards fishing XP for the user.
+    /// </summary>
+    /// <param name="message">The message context surrounding the catch.</param>
+    /// <param name="user">The user who fished.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePokemonFished(IMessage message, User user)
     {
         try
@@ -765,7 +787,6 @@ public class MissionService(
                     if (completed)
                     {
                         xpGained += 1 + (mission.Reward / 2);
-                        // Send completion message to channel
                         await message.Channel.SendMessageAsync("Daily Mission Completed.", 
                             embed: new EmbedBuilder()
                                 .WithTitle("Congratulations!\nTake this reward!")
@@ -785,6 +806,13 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>duel</c> missions for the winning user and awards duel XP.
+    /// </summary>
+    /// <param name="interaction">The interaction the duel was completed under.</param>
+    /// <param name="battle">The completed battle instance (loosely typed to avoid Duels-module coupling).</param>
+    /// <param name="winner">The winning side.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleDuelCompleted(IDiscordInteraction interaction, object battle, object winner)
     {
         try
@@ -815,6 +843,13 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>npc</c> missions for the winning user when an NPC battle resolves and awards battle XP.
+    /// </summary>
+    /// <param name="interaction">The interaction that triggered the battle.</param>
+    /// <param name="winner">The winning side.</param>
+    /// <param name="battle">The completed battle instance.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleNpcBattleCompleted(IDiscordInteraction interaction, object winner, object battle)
     {
         try
@@ -845,6 +880,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Reacts to a user level-up event by awarding milestone rewards and notifying the user where applicable.
+    /// </summary>
+    /// <param name="userId">The user who leveled up.</param>
+    /// <param name="newLevel">The level just reached.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleUserLeveledUp(ulong userId, int newLevel)
     {
         try
@@ -864,7 +905,6 @@ public class MissionService(
                 }
             }
 
-            // Send level up notification
             var channel = client.GetChannel(MissionConstants.LevelUpChannelId) as ITextChannel;
             if (channel != null)
                 await channel.SendMessageAsync($"<@{userId}> is now level {newLevel}!");
@@ -878,6 +918,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>ev</c> missions and awards EV-training XP proportional to the EV amount applied.
+    /// </summary>
+    /// <param name="interaction">The interaction that initiated training.</param>
+    /// <param name="amount">The number of EVs applied.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleEvTraining(IDiscordInteraction interaction, int amount)
     {
         try
@@ -908,6 +954,13 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses missions tied to specific setup actions (rename, mark, etc.) and awards corresponding XP.
+    /// </summary>
+    /// <param name="interaction">The interaction that initiated the action.</param>
+    /// <param name="actionType">The setup action key (e.g. <c>rename</c>).</param>
+    /// <param name="amount">The action's quantitative magnitude where applicable.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePokemonSetup(IDiscordInteraction interaction, string actionType, int amount)
     {
         try
@@ -946,6 +999,11 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Progresses active <c>party</c> missions when a user registers a party and awards party XP.
+    /// </summary>
+    /// <param name="interaction">The interaction that registered the party.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandlePartyRegistered(IDiscordInteraction interaction)
     {
         try
@@ -976,6 +1034,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Persists XP gain for a user and triggers level-up handling when thresholds are crossed.
+    /// </summary>
+    /// <param name="userId">The Discord ID of the user gaining XP.</param>
+    /// <param name="xpGained">The amount of XP to award.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleXpGained(ulong userId, int xpGained)
     {
         try
@@ -1037,7 +1101,6 @@ public class MissionService(
             var activeWinMissions = won ? await GetActiveMissionsWithKeyAndIvAsync("game_slots_win") : new List<MissionInfo>();
             var xpGained = MissionConstants.GameSlotsXp + (won ? MissionConstants.GameSlotsWinXp : 0);
 
-            // Process slot play missions
             if (activeMissions.Count > 0)
             {
                 foreach (var mission in activeMissions)
@@ -1051,7 +1114,6 @@ public class MissionService(
                 }
             }
 
-            // Process slot win missions if applicable
             if (won && activeWinMissions.Count > 0)
             {
                 foreach (var mission in activeWinMissions)
@@ -1079,6 +1141,12 @@ public class MissionService(
         }
     }
 
+    /// <summary>
+    ///     Sends a follow-up message to the originating interaction announcing the reward earned for completing a mission.
+    /// </summary>
+    /// <param name="interaction">The interaction whose follow-up channel will receive the message.</param>
+    /// <param name="reward">The reward amount to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task SendMissionCompletionMessage(IDiscordInteraction interaction, int reward)
     {
         try

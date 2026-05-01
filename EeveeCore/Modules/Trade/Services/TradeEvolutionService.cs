@@ -37,7 +37,6 @@ public class TradeEvolutionService : INService
         {
             var pokemonName = pokemon.PokemonName.ToLower();
             
-            // Get Pokemon species data from MongoDB
             var pokemonSpecies = await _mongoService.PFile
                 .Find(p => p.Identifier == pokemonName)
                 .FirstOrDefaultAsync();
@@ -47,14 +46,12 @@ public class TradeEvolutionService : INService
                 return null;
             }
 
-            // Get all possible evolutions for this Pokemon (Pokemon that evolve FROM this one)
             var evolutions = await _mongoService.PFile
                 .Find(p => p.EvolvesFromSpeciesId == pokemonSpecies.PokemonId)
                 .ToListAsync();
 
             foreach (var evolution in evolutions)
             {
-                // Check if this evolution is triggered by trade
                 var evolutionTrigger = await _mongoService.Evolution
                     .Find(e => e.EvolvedSpeciesId == evolution.PokemonId)
                     .FirstOrDefaultAsync();
@@ -62,10 +59,8 @@ public class TradeEvolutionService : INService
                 if (evolutionTrigger == null)
                     continue;
 
-                // Check for held item requirement
                 if (evolutionTrigger.HeldItemId != null)
                 {
-                    // Get the held item name
                     var requiredItem = await _mongoService.Items
                         .Find(i => i.ItemId == evolutionTrigger.HeldItemId)
                         .FirstOrDefaultAsync();
@@ -74,7 +69,6 @@ public class TradeEvolutionService : INService
                     {
                         if (pokemon.HeldItem.Equals(requiredItem.Identifier, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Evolution with held item
                             await using var db = await _context.GetConnectionAsync();
                             await db.UserPokemon
                                 .Where(p => p.Id == pokemon.Id)
@@ -84,9 +78,8 @@ public class TradeEvolutionService : INService
                         }
                     }
                 }
-                else if (evolutionTrigger.EvolutionTriggerId == 2) // Trade trigger ID is 2
+                else if (evolutionTrigger.EvolutionTriggerId == 2)
                 {
-                    // Simple trade evolution (no item required)
                     await using var db = await _context.GetConnectionAsync();
                     await db.UserPokemon
                         .Where(p => p.Id == pokemon.Id)
@@ -124,7 +117,6 @@ public class TradeEvolutionService : INService
 
             var pokemonName = pokemon.PokemonName.ToLower();
             
-            // Get Pokemon species data from MongoDB
             var pokemonSpecies = await _mongoService.PFile
                 .Find(p => p.Identifier == pokemonName)
                 .FirstOrDefaultAsync();
@@ -134,20 +126,16 @@ public class TradeEvolutionService : INService
                 return;
             }
 
-            // Get evolution data
             var evolutionData = await _mongoService.Evolution
                 .Find(e => e.EvolvedSpeciesId == pokemonSpecies.EvolvesFromSpeciesId)
                 .ToListAsync();
 
-            // Find trade evolutions
             foreach (var evolution in evolutionData)
             {
-                // Check for trade evolution trigger (evolution_trigger_id == 2)
                 if (evolution.EvolutionTriggerId == 2)
                 {
                     await ProcessTradeEvolution(pokemon, evolution, newOwnerId, interaction);
                 }
-                // Check for held item trade evolution
                 else if (evolution.HeldItemId.HasValue)
                 {
                     await ProcessHeldItemTradeEvolution(pokemon, evolution, newOwnerId, interaction);
@@ -156,7 +144,6 @@ public class TradeEvolutionService : INService
         }
         catch (Exception ex)
         {
-            // Evolution errors should not break the trade, just log and continue
             Log.Information($"Error processing trade evolution for Pokemon {pokemonId}: {ex.Message}");
         }
     }
@@ -174,7 +161,6 @@ public class TradeEvolutionService : INService
         ulong newOwnerId, 
         IDiscordInteraction interaction)
     {
-        // Get the evolved species name
         var evolvedSpecies = await _mongoService.PFile
             .Find(p => p.PokemonId == evolution.EvolvedSpeciesId)
             .FirstOrDefaultAsync();
@@ -187,14 +173,12 @@ public class TradeEvolutionService : INService
         var oldName = pokemon.PokemonName;
         var newName = CapitalizeName(evolvedSpecies.Identifier);
 
-        // Update Pokemon name
         await using var db = await _context.GetConnectionAsync();
         await db.UserPokemon
             .Where(p => p.Id == pokemon.Id)
             .Set(p => p.PokemonName, newName)
             .UpdateAsync();
 
-        // Send evolution message
         var embed = new EmbedBuilder()
             .WithTitle("🎉 Congratulations!!!")
             .WithDescription($"<@{newOwnerId}>, your {oldName} has evolved into {newName}!")
@@ -222,7 +206,6 @@ public class TradeEvolutionService : INService
             return;
         }
 
-        // Get the required held item
         var requiredItem = await _mongoService.Items
             .Find(i => i.ItemId == evolution.HeldItemId.Value)
             .FirstOrDefaultAsync();
@@ -232,7 +215,6 @@ public class TradeEvolutionService : INService
             return;
         }
 
-        // Check if Pokemon is holding the required item
         var currentHeldItem = pokemon.HeldItem?.ToLower();
         var requiredItemName = requiredItem!.Identifier!.ToLower();
 
@@ -241,7 +223,6 @@ public class TradeEvolutionService : INService
             return;
         }
 
-        // Get the evolved species name
         var evolvedSpecies = await _mongoService.PFile
             .Find(p => p.PokemonId == evolution.EvolvedSpeciesId)
             .FirstOrDefaultAsync();
@@ -254,14 +235,12 @@ public class TradeEvolutionService : INService
         var oldName = pokemon.PokemonName;
         var newName = CapitalizeName(evolvedSpecies.Identifier);
 
-        // Update Pokemon name
         await using var db = await _context.GetConnectionAsync();
         await db.UserPokemon
             .Where(p => p.Id == pokemon.Id)
             .Set(p => p.PokemonName, newName)
             .UpdateAsync();
 
-        // Send evolution message
         var embed = new EmbedBuilder()
             .WithTitle("🎉 Congratulations!!!")
             .WithDescription($"<@{newOwnerId}>, your {oldName} has evolved into {newName}!")

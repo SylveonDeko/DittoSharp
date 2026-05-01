@@ -6,7 +6,6 @@ namespace EeveeCore.Modules.Fishing.Common;
 /// </summary>
 public static class FishingConstants
 {
-    // Experience and level calculations
     /// <summary>
     ///     Base experience required for level calculations.
     /// </summary>
@@ -42,7 +41,6 @@ public static class FishingConstants
     /// </summary>
     public const int MaxLevel = 401;
     
-    // Credits system
     /// <summary>
     ///     Credits earned per level above the minimum.
     /// </summary>
@@ -73,7 +71,6 @@ public static class FishingConstants
     /// </summary>
     public const int CreditsCapLevel = 400;
     
-    // Fishing mechanics
     /// <summary>
     ///     Minimum base time for fishing attempts in seconds.
     /// </summary>
@@ -99,7 +96,6 @@ public static class FishingConstants
     /// </summary>
     public const double ExpGainDivisor = 250.0;
     
-    // Rod level requirements
     /// <summary>
     ///     Minimum level required to use the Supreme Rod.
     /// </summary>
@@ -115,7 +111,6 @@ public static class FishingConstants
     /// </summary>
     public const int MasterRodMinLevel = 200;
     
-    // Chest chances
     /// <summary>
     ///     Chance denominator for common chest drops at levels under 150.
     /// </summary>
@@ -136,7 +131,6 @@ public static class FishingConstants
     /// </summary>
     public const int RareChestChanceOver150 = 300;
     
-    // Ultra rare item chance
     /// <summary>
     ///     Base chance for ultra rare item drops.
     /// </summary>
@@ -147,7 +141,6 @@ public static class FishingConstants
     /// </summary>
     public const double UltraRareExpBonus = 100000.0 / 8333.0;
     
-    // Scatter mechanics
     /// <summary>
     ///     Chance denominator for scattering block characters in Pokemon names.
     /// </summary>
@@ -158,7 +151,6 @@ public static class FishingConstants
     /// </summary>
     public const string ScatterBlock = "▫️";
     
-    // Multi-box chance
     /// <summary>
     ///     Chance denominator for multi-box events.
     /// </summary>
@@ -174,7 +166,6 @@ public static class FishingConstants
     /// </summary>
     public const int BattleMultiplierCap = 50;
     
-    // Rod time bonuses
     /// <summary>
     ///     Dictionary mapping rod types to their time bonus ranges in seconds.
     /// </summary>
@@ -189,7 +180,6 @@ public static class FishingConstants
         { "master-rod", (6, 9) }
     };
     
-    // Rod second chance items
     /// <summary>
     ///     Rods that provide a second chance to catch Pokemon after timeout.
     /// </summary>
@@ -200,7 +190,6 @@ public static class FishingConstants
     /// </summary>
     public const int SecondChanceChance = 3;
     
-    // Sellable items
     /// <summary>
     ///     Array of items that are considered sellable/useless.
     /// </summary>
@@ -213,19 +202,16 @@ public static class FishingConstants
         "comet-shard"
     ];
     
-    // Ultra rare items
     /// <summary>
     ///     Array of ultra rare items that can be obtained from fishing.
     /// </summary>
     public static readonly string[] UltraRareItems = ["supreme-rod", "rusty-shield"];
     
-    // Chest items
     /// <summary>
     ///     Array of chest items that go into inventory rather than items.
     /// </summary>
     public static readonly string[] ChestItems = ["common-chest", "rare-chest", "mystery-box"];
     
-    // Funny fail messages for empty boxes
     /// <summary>
     ///     Array of humorous messages displayed when multi-box events fail.
     /// </summary>
@@ -272,7 +258,6 @@ public static class FishingConstants
         "Congratulations, you just won an empty box!"
     ];
     
-    // Energy phrases
     /// <summary>
     ///     Array of phrases to display remaining energy to users.
     /// </summary>
@@ -285,20 +270,18 @@ public static class FishingConstants
         "You have used up one of your Energy Points. You have {0} left."
     ];
 
-    // Rarity chances (out of 10000)
     /// <summary>
     ///     Dictionary mapping rarity names to their chance thresholds out of 10000.
     /// </summary>
     public static readonly Dictionary<string, double> RarityChances = new()
     {
-        { "common", 8000 },      // 80%
-        { "uncommon", 9500 },    // 15%
-        { "rare", 9900 },        // 4%
-        { "extremely_rare", 9999 }, // 0.99%
-        { "ultra_rare", 10000 }  // 0.01%
+        { "common", 8000 },
+        { "uncommon", 9500 },
+        { "rare", 9900 },
+        { "extremely_rare", 9999 },
+        { "ultra_rare", 10000 }
     };
 
-    // Shop price tiers
     /// <summary>
     ///     Dictionary mapping tier names to their price ranges for shop items.
     /// </summary>
@@ -310,13 +293,11 @@ public static class FishingConstants
         { "super", (8000, 999999999) }
     };
 
-    // Excluded items from fishing rewards
     /// <summary>
     ///     Array of items excluded from fishing reward pools.
     /// </summary>
     public static readonly string[] ExcludedItems = ["old-rod", "master-rod", "epic-rod"];
     
-    // Fishing image
     /// <summary>
     ///     URL or filename for the fishing animation image.
     /// </summary>

@@ -90,6 +90,13 @@ public class CommandHandler : INService
     /// </summary>
     public event Func<IUserMessage, Task> OnMessageNoTrigger = delegate { return Task.CompletedTask; };
 
+    /// <summary>
+    ///     Discord message-received handler. Filters out bots/non-user messages, enqueues the message in its
+    ///     channel-specific parse queue, and triggers a queue drain. Errors are caught and logged so a single
+    ///     bad message cannot break the pipeline.
+    /// </summary>
+    /// <param name="msg">The incoming message.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleMessageAsync(IMessage msg)
     {
         try
@@ -108,6 +115,11 @@ public class CommandHandler : INService
         }
     }
 
+    /// <summary>
+    ///     Appends an incoming user message to its channel's parse queue, creating the queue on first use.
+    ///     Per-channel queues serialize command execution and prevent races between concurrent senders.
+    /// </summary>
+    /// <param name="usrMsg">The user message to enqueue.</param>
     private void AddCommandToParseQueue(IUserMessage usrMsg)
     {
         _commandParseQueue.AddOrUpdate(usrMsg.Channel.Id,
@@ -122,8 +134,8 @@ public class CommandHandler : INService
     /// <summary>
     ///     Executes a command in the given channel in the queue.
     /// </summary>
-    /// <param name="channelId">The channel id o the channel to run a command in.</param>
-    /// <returns>Whether the run was successful.</returns>
+    /// <param name="channelId">The channel ID to run a command in.</param>
+    /// <returns>True if a command was executed, false otherwise.</returns>
     public async Task<bool> ExecuteCommandsInChannelAsync(ulong channelId)
     {
         if (_commandParseLock.GetValueOrDefault(channelId) ||
@@ -153,11 +165,18 @@ public class CommandHandler : INService
         }
     }
 
+    /// <summary>
+    ///     Resolves the guild's prefix, parses and executes a command from the message, and routes the
+    ///     outcome to logging and the appropriate <c>CommandExecuted</c> / <c>CommandErrored</c> event.
+    /// </summary>
+    /// <param name="guild">The guild the message originated from, or <c>null</c> for DMs.</param>
+    /// <param name="channel">The channel the message originated from.</param>
+    /// <param name="usrMsg">The user message to process.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task TryRunCommandAsync(IGuild? guild, IChannel channel, IUserMessage usrMsg)
     {
         var execTime = Environment.TickCount;
 
-        // Get prefix for this guild
         var prefix = await _guildSettings.GetPrefix(guild);
         if (prefix == null) return;
 
@@ -178,27 +197,6 @@ public class CommandHandler : INService
 
         execTime = Environment.TickCount - execTime;
 
-        /*// Update stats if command was recognized
-        if (command != null && guild != null)
-        {
-            await using var db = await _db.GetContextAsync();
-            var guildConfig = await _guildSettings.GetGuildConfigAsync(guild.Id);
-            if (!guildConfig.StatsOptOut)
-            {
-                var commandStats = new CommandStats
-                {
-                    ChannelId = channel.Id,
-                    GuildId = guild.Id,
-                    IsSlash = false,
-                    NameOrId = command.Name,
-                    UserId = usrMsg.Author.Id,
-                    Module = command.Module.Name
-                };
-                await db.CommandStats.AddAsync(commandStats);
-                await db.SaveChangesAsync();
-            }
-        }*/
-
         if (success)
         {
             await LogCommandExecution(usrMsg, channel as ITextChannel, command, true, execTime);
@@ -213,6 +211,15 @@ public class CommandHandler : INService
         }
     }
 
+    /// <summary>
+    ///     Resolves the best-matching command for the given input by running search, preconditions, and
+    ///     argument parsing in turn, applies the global short-cooldown, and executes the chosen overload.
+    /// </summary>
+    /// <param name="context">The command context built from the message.</param>
+    /// <param name="input">The raw message content.</param>
+    /// <param name="argPos">The index in <paramref name="input"/> where the prefix ends and arguments begin.</param>
+    /// <param name="multiMatchHandling">Strategy when multiple commands match equally well.</param>
+    /// <returns>A tuple of success flag, error reason (when failed), and the matched command info (if any).</returns>
     private async Task<(bool Success, string Error, CommandInfo? Info)> ExecuteCommandAsync(
         CommandContext context,
         string input,
@@ -276,6 +283,16 @@ public class CommandHandler : INService
         return (result.IsSuccess, result.ErrorReason, cmd);
     }
 
+    /// <summary>
+    ///     Writes a structured log line and builds an audit embed for a completed (or failed) command execution.
+    /// </summary>
+    /// <param name="msg">The originating user message.</param>
+    /// <param name="channel">The text channel where the command ran, or <c>null</c> for DMs.</param>
+    /// <param name="commandInfo">The matched command, or <c>null</c> if no match was found.</param>
+    /// <param name="success">Whether the command executed successfully.</param>
+    /// <param name="executionTime">Execution duration in milliseconds.</param>
+    /// <param name="errorMessage">Optional error reason when <paramref name="success"/> is <c>false</c>.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task LogCommandExecution(
         IMessage msg,
         ITextChannel? channel,
@@ -314,27 +331,16 @@ public class CommandHandler : INService
 
         if (commandInfo != null)
             embed.AddField("Command", $"{commandInfo.Module.Name} | {commandInfo.Name}");
-
-        /*// Log to command log channel if configured
-        if (channel?.Guild != null)
-        {
-            var guildConfig = await _guildSettings.GetGuildConfigAsync(channel.Guild.Id);
-            if (guildConfig.CommandLogChannel != 0)
-            {
-                try
-                {
-                    var logChannel = await channel.Guild.GetTextChannelAsync(guildConfig.CommandLogChannel);
-                    if (logChannel != null)
-                        await logChannel.SendMessageAsync(embed: embed.Build());
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to log command to guild log channel");
-                }
-            }
-        }*/
     }
 
+    /// <summary>
+    ///     Routes an incoming Discord interaction (slash command, component, modal, etc.) into the
+    ///     <see cref="InteractionService"/>. Skips interactions already managed by the interactive paginator.
+    ///     On unexpected failure, replies ephemerally to application-command interactions so the user is not
+    ///     left without feedback.
+    /// </summary>
+    /// <param name="interaction">The Discord interaction.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleInteractionAsync(SocketInteraction interaction)
     {
         if (_interactive.IsManaged(interaction))
@@ -356,6 +362,14 @@ public class CommandHandler : INService
         }
     }
 
+    /// <summary>
+    ///     Post-execution hook for slash commands: replies with the failure reason when a command was not
+    ///     successful and logs both the result and any execution exception.
+    /// </summary>
+    /// <param name="commandInfo">The command that ran.</param>
+    /// <param name="context">The interaction context.</param>
+    /// <param name="result">The execution result returned by the interaction service.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task HandleSlashCommand(SlashCommandInfo commandInfo, IInteractionContext context, IResult result)
     {
         if (!result.IsSuccess)
@@ -377,35 +391,22 @@ public class CommandHandler : INService
             return;
         }
 
-        // Log successful command execution
         Log.Information(
             "Slash Command Executed\n" +
             $"User: {context.User} [{context.User.Id}]\n" +
             $"Guild: {context.Guild?.Name ?? "PRIVATE"} [{context.Guild?.Id}]\n" +
             $"Channel: {context.Channel.Name} [{context.Channel.Id}]\n" +
             $"Command: {commandInfo.Name}");
-
-        /*// Update command stats if enabled
-        if (context.Guild != null)
-        {
-            var config = await _guildSettings.GetGuildConfigAsync(context.Guild.Id);
-            if (!config.StatsOptOut)
-            {
-                await using var dbContext = await _db.GetContextAsync();
-                await dbContext.CommandStats.AddAsync(new CommandStats
-                {
-                    ChannelId = context.Channel.Id,
-                    GuildId = context.Guild.Id,
-                    IsSlash = true,
-                    Module = commandInfo.Module.Name,
-                    NameOrId = commandInfo.Name,
-                    UserId = context.User.Id
-                });
-                await dbContext.SaveChangesAsync();
-            }
-        }*/
     }
 
+    /// <summary>
+    ///     Determines the number of leading characters in a message that constitute its command prefix.
+    ///     Recognizes the configured text prefix as well as the bot's mention forms (<c>@Bot</c>, <c>&lt;@id&gt;</c>,
+    ///     <c>&lt;@!id&gt;</c>); returns <c>0</c> when no prefix matches.
+    /// </summary>
+    /// <param name="content">The raw message content.</param>
+    /// <param name="prefix">The guild's configured text prefix.</param>
+    /// <returns>The prefix length, or <c>0</c> if the message is not prefixed.</returns>
     private int GetPrefixLength(string content, string prefix)
     {
         if (content.StartsWith(prefix, StringComparison.InvariantCulture))

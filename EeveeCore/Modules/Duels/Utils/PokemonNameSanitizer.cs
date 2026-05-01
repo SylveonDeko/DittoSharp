@@ -7,7 +7,6 @@ namespace EeveeCore.Modules.Duels.Utils;
 /// </summary>
 public static partial class PokemonNameSanitizer
 {
-    // Regex patterns for different Discord formatting elements
     private static readonly Regex DiscordEmotePattern = DiscordEmoteRegex();
     private static readonly Regex MarkdownCodeBlockPattern = CodeBlockRegex();
     private static readonly Regex MarkdownInlineCodePattern = InlineCodeRegex();
@@ -31,31 +30,24 @@ public static partial class PokemonNameSanitizer
 
         var sanitized = name;
 
-        // Remove Discord emotes (both static and animated) - no capture group, remove entirely
         sanitized = DiscordEmotePattern.Replace(sanitized, "");
 
-        // Remove markdown code blocks - no capture group, remove entirely
         sanitized = MarkdownCodeBlockPattern.Replace(sanitized, "");
 
-        // Remove inline code and extract content - has capture group, keep content
         sanitized = MarkdownInlineCodePattern.Replace(sanitized, "$1");
 
-        // Remove other markdown formatting but keep the content - all have capture groups
         sanitized = MarkdownBoldPattern.Replace(sanitized, "$1");
         sanitized = MarkdownItalicPattern.Replace(sanitized, "$1");
         sanitized = MarkdownUnderlinePattern.Replace(sanitized, "$1");
         sanitized = MarkdownStrikethroughPattern.Replace(sanitized, "$1");
         sanitized = MarkdownSpoilerPattern.Replace(sanitized, "$1");
 
-        // Clean up excessive whitespace
         sanitized = ExcessiveWhitespacePattern.Replace(sanitized, " ");
         sanitized = sanitized.Trim();
 
-        // Handle empty result
         if (string.IsNullOrWhiteSpace(sanitized))
             sanitized = "Pokémon";
 
-        // Truncate if too long and add ellipsis
         if (sanitized.Length > maxLength)
             sanitized = sanitized[..(maxLength - 3)] + "...";
 
@@ -77,7 +69,6 @@ public static partial class PokemonNameSanitizer
         var matches = DiscordEmotePattern.Matches(text);
         foreach (Match match in matches)
         {
-            // Extract emote name from <:name:id> or <a:name:id>
             var emoteContent = match.Value.Trim('<', '>');
             var parts = emoteContent.Split(':');
             if (parts.Length < 2) continue;
@@ -105,12 +96,9 @@ public static partial class PokemonNameSanitizer
 
         if (includeEmoteHint && emoteNames.Any())
         {
-            // If we found emotes and the sanitized name is very short or generic,
-            // try to include context
             if (sanitizedName.Length < 3 || sanitizedName == "Pokémon")
             {
                 var primaryEmote = emoteNames.First();
-                // Capitalize first letter for better display
                 primaryEmote = char.ToUpper(primaryEmote[0]) + primaryEmote[1..].ToLower();
                 return $"{sanitizedName} ({primaryEmote})";
             }
@@ -119,31 +107,48 @@ public static partial class PokemonNameSanitizer
         return sanitizedName;
     }
 
-    // Generated regex patterns with descriptive names
+    /// <summary>Compiled regex matching Discord custom emote tags (e.g. <c>&lt;:name:123&gt;</c>, <c>&lt;a:name:123&gt;</c>).</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"<a?:\w+:\d+>", RegexOptions.Compiled)]
     private static partial Regex DiscordEmoteRegex();
-    
+
+    /// <summary>Compiled regex matching Discord triple-backtick code blocks.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"```[\s\S]*?```", RegexOptions.Compiled)]
     private static partial Regex CodeBlockRegex();
-    
+
+    /// <summary>Compiled regex matching Discord inline single-backtick code spans, capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"`([^`]+)`", RegexOptions.Compiled)]
     private static partial Regex InlineCodeRegex();
-    
+
+    /// <summary>Compiled regex matching Discord bold markdown (<c>**text**</c>), capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"\*\*([^*]+)\*\*", RegexOptions.Compiled)]
     private static partial Regex BoldRegex();
-    
+
+    /// <summary>Compiled regex matching Discord italic markdown (<c>*text*</c>), capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"\*([^*]+)\*", RegexOptions.Compiled)]
     private static partial Regex ItalicRegex();
-    
+
+    /// <summary>Compiled regex matching Discord underline markdown (<c>__text__</c>), capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"__([^_]+)__", RegexOptions.Compiled)]
     private static partial Regex UnderlineRegex();
-    
+
+    /// <summary>Compiled regex matching Discord strikethrough markdown (<c>~~text~~</c>), capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"~~([^~]+)~~", RegexOptions.Compiled)]
     private static partial Regex StrikethroughRegex();
-    
+
+    /// <summary>Compiled regex matching Discord spoiler markdown (<c>||text||</c>), capturing the inner text.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"\|\|([^|]+)\|\|", RegexOptions.Compiled)]
     private static partial Regex SpoilerRegex();
-    
+
+    /// <summary>Compiled regex matching one or more consecutive whitespace characters.</summary>
+    /// <returns>The compiled regex.</returns>
     [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
     private static partial Regex WhitespaceRegex();
 }

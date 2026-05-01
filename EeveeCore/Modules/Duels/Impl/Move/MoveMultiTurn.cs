@@ -10,23 +10,18 @@ public partial class Move
     {
         var msg = "";
 
-        // Setup for multi-turn moves
         if (attacker.LockedMove == null)
         {
             switch (Effect)
             {
-                // 2 turn moves
-                // During sun, this move does not need to charge
                 case 152 when !new[] { "sun", "h-sun" }.Contains(battle.Weather.Get()):
                     attacker.LockedMove = new LockedMove(this, 2);
                     break;
-                // During rain, this move does not need to charge
                 case 502:
                 {
                     if (!new[] { "rain", "h-rain" }.Contains(battle.Weather.Get()))
                         attacker.LockedMove = new LockedMove(this, 2);
                     else
-                        // If this move isn't charging, the spatk increase has to happen manually
                         msg += attacker.AppendSpAtk(1, attacker, this);
 
                     break;
@@ -38,7 +33,6 @@ public partial class Move
 
             switch (Effect)
             {
-                // 3 turn moves
                 case 27:
                     attacker.LockedMove = new LockedMove(this, 3);
                     attacker.Bide = 0;
@@ -61,11 +55,9 @@ public partial class Move
 
                     break;
                 }
-                // 5 turn moves
                 case 118:
                     attacker.LockedMove = new LockedMove(this, 5);
                     break;
-                // 2-3 turn moves
                 case 28:
                     attacker.LockedMove = new LockedMove(this, Random.Shared.Next(2, 4));
                     break;
@@ -73,11 +65,9 @@ public partial class Move
 
             switch (Effect)
             {
-                // 2-5 turn moves
                 case 160:
                     attacker.LockedMove = new LockedMove(this, Random.Shared.Next(2, 6));
                     break;
-                // Semi-invulnerable
                 case 256:
                     attacker.Dive = true;
                     break;
@@ -93,8 +83,6 @@ public partial class Move
             }
         }
 
-        // Early exits for moves that hit a certain turn when it is not that turn
-        // Turn 1 hit moves
         if (Effect == 81 && attacker.LockedMove != null)
         {
             if (attacker.LockedMove.Turn != 0)
@@ -103,7 +91,6 @@ public partial class Move
                 return msg;
             }
         }
-        // Turn 2 hit moves
         else if (new[] { 40, 76, 146, 152, 156, 256, 257, 264, 273, 332, 333, 366, 451, 502 }.Contains(Effect) &&
                  attacker.LockedMove != null)
         {
@@ -120,7 +107,6 @@ public partial class Move
                     default:
                     {
                         msg += "It's charging up!\n";
-                        // Gulp Missile
                         if (Effect == 256 && attacker.Ability() == Ability.GULP_MISSILE &&
                             attacker.Name == "Cramorant")
                         {
@@ -143,7 +129,6 @@ public partial class Move
                 return msg;
             }
         }
-        // Turn 3 hit moves
         else if (Effect == 27)
         {
             if (attacker!.LockedMove!.Turn != 2)

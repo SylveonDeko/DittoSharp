@@ -28,7 +28,6 @@ public class ShopSlashCommands(ShopService shopService)
         {
             await DeferAsync();
 
-            // Check if user can access the radiant shop
             var canAccess = await shopService.CanAccessRadiantShopAsync(ctx.User.Id);
             if (!canAccess)
             {
@@ -55,7 +54,6 @@ public class ShopSlashCommands(ShopService shopService)
                 return;
             }
 
-            // Show shop access available
             var userCredits = await shopService.GetUserCreditsAsync(ctx.User.Id);
             
             var welcomeEmbed = new EmbedBuilder()
@@ -69,7 +67,7 @@ public class ShopSlashCommands(ShopService shopService)
                 .WithColor(ShopConstants.CategoryColors["Radiant"])
                 .AddField("💰 Your Credits", $"{ShopConstants.Emojis.Credits} {userCredits:N0}", true)
                 .AddField("🎯 Access Level", "✅ Radiant Shop Unlocked", true)
-                .WithThumbnailUrl("https://images.mewdeko.tech/skins/radiant/150-0-.png") // Radiant Mewtwo
+                .WithThumbnailUrl("https://images.mewdeko.tech/skins/radiant/150-0-.png")
                 .WithFooter("Tip: Use filters to find exactly what you're looking for!")
                 .Build();
 
@@ -108,7 +106,6 @@ public class ShopSlashCommands(ShopService shopService)
                 .WithDescription($"**Current Balance:** {ShopConstants.Emojis.Credits} {credits:N0} credits")
                 .WithColor(Color.Gold);
 
-            // Add earning tips
             embed.AddField("💡 How to Earn Credits",
                 "• Complete daily missions\n" +
                 "• Win Pokemon battles\n" +
@@ -165,7 +162,6 @@ public class ShopSlashCommands(ShopService shopService)
         {
             await DeferAsync(ephemeral: true);
 
-            // Check shop access
             var canAccess = await shopService.CanAccessRadiantShopAsync(ctx.User.Id);
             if (!canAccess)
             {
@@ -176,7 +172,6 @@ public class ShopSlashCommands(ShopService shopService)
                 return;
             }
 
-            // Create search filters
             var filters = new ShopFilters
             {
                 ItemName = query,
@@ -205,7 +200,7 @@ public class ShopSlashCommands(ShopService shopService)
             {
                 embed.WithDescription($"Found {items.Count} item(s) matching your search:");
 
-                foreach (var item in items.Take(10)) // Limit to first 10 results
+                foreach (var item in items.Take(10))
                 {
                     var typeEmoji = !string.IsNullOrEmpty(item.PokemonType) && 
                                   ShopConstants.TypeEmojis.TryGetValue(item.PokemonType, out var emoji) ? emoji : "";
@@ -224,7 +219,6 @@ public class ShopSlashCommands(ShopService shopService)
                 }
             }
 
-            // Add active filters info
             var filterInfo = new List<string>();
             if (!string.IsNullOrEmpty(type)) filterInfo.Add($"Type: {type}");
             if (maxPrice.HasValue) filterInfo.Add($"Max Price: {maxPrice:N0}");
@@ -303,7 +297,7 @@ public class ShopSlashCommands(ShopService shopService)
                 "• Some items are seasonal or event-exclusive", false);
 
             embed.WithFooter("Happy shopping! 🛍️");
-            embed.WithThumbnailUrl("https://images.mewdeko.tech/skins/radiant/384-0-.png"); // Radiant Rayquaza
+            embed.WithThumbnailUrl("https://images.mewdeko.tech/skins/radiant/384-0-.png");
 
             await RespondAsync(embed: embed.Build(), ephemeral: true);
         }
@@ -333,14 +327,12 @@ public class ShopSlashCommands(ShopService shopService)
                 .WithDescription("Current shop status and popular items")
                 .WithColor(Color.Purple);
 
-            // General stats
             embed.AddField("🏪 **Shop Overview**",
                 $"• Total Items: {allItems.Count}\n" +
                 $"• Radiant Pokemon: {allItems.Count(i => i.IsRadiant)}\n" +
                 $"• Categories: {allItems.Select(i => i.Category).Distinct().Count()}\n" +
                 $"• Average Price: {ShopConstants.Emojis.Credits} {(allItems.Any() ? allItems.Average(i => i.Price) : 0):N0}", true);
 
-            // Price ranges
             if (allItems.Any())
             {
                 embed.AddField("💰 **Price Ranges**",
@@ -349,7 +341,6 @@ public class ShopSlashCommands(ShopService shopService)
                     $"• You can afford: {allItems.Count(i => i.Price <= userCredits)} items", true);
             }
 
-            // Category breakdown
             var categoryStats = allItems.GroupBy(i => i.Category)
                 .OrderByDescending(g => g.Count())
                 .Take(5)
@@ -361,7 +352,6 @@ public class ShopSlashCommands(ShopService shopService)
                 embed.AddField("📂 **Top Categories**", string.Join("\n", categoryStats), true);
             }
 
-            // Affordable items for user
             var affordableItems = allItems.Where(i => i.Price <= userCredits).Take(5).ToList();
             if (affordableItems.Any())
             {
@@ -495,7 +485,6 @@ public class ShopSlashCommands(ShopService shopService)
         {
             try
             {
-                // Require confirmation for chest purchases
                 if (!await PromptUserConfirmAsync(
                         $"Are you sure you want to buy a {chestType} chest with {currency}?", ctx.User.Id))
                 {

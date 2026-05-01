@@ -84,7 +84,6 @@ public class MarketComponents : EeveeCoreSlashModuleBase<MarketService>
             return;
         }
 
-        // Extract listing ID from the value format "market_info:listingId"
         var selectedValue = values[0];
         if (!selectedValue.StartsWith("market_info:"))
         {
@@ -120,7 +119,6 @@ public class MarketComponents : EeveeCoreSlashModuleBase<MarketService>
             return;
         }
 
-        // Create a basic Pokemon info embed (same logic as slash command)
         var embed = new EmbedBuilder()
             .WithTitle($"Market Listing #{listingId}")
             .WithDescription($"**{pokemon.PokemonName}** (Level {pokemon.Level})")

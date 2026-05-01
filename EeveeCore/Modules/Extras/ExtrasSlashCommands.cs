@@ -127,7 +127,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         ["fairy"] = 0xF6C9E3
     };
 
-    // List of all Pokémon
     private static readonly List<string> TotalList = [];
     private readonly LinqToDbConnectionProvider _dbContextProvider;
     private readonly GuildSettingsService _guildSettingsService;
@@ -163,7 +162,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     /// </summary>
     private async void InitializePokemonList()
     {
-        // This would be populated from a database or other source
         var pokemonFiles = await _mongoService.PFile.Find(_ => true).ToListAsync();
         foreach (var pokemon in pokemonFiles)
             if (!string.IsNullOrEmpty(pokemon.Identifier))
@@ -256,10 +254,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var heldItem = details.HeldItem;
         var staffRank = details.Staff;
 
-        // Create Components V2 container
         var containerComponents = new List<IMessageComponentBuilder>();
 
-        // Add title with staff indicators
         var titleText = staffRank.ToLower() switch
         {
             "gym" => $"**{trainerNick}** - *Official Gym Leader*",
@@ -269,7 +265,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
 
-        // Add main balance section
         var balanceText = $"## Balances\n" +
                          $"**Credits:** {details.MewCoins:N0}\n" +
                          $"**Redeems:** {details.Redeems}\n" +
@@ -278,7 +273,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
 
-        // Add game progress section  
         var energy = details.Energy ?? 10;
         var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) + string.Concat(Enumerable.Repeat("⚫", 10 - energy));
         var progressText = $"## Game Progress\n" +
@@ -296,7 +290,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
 
-        // Add navigation buttons
         var navigationRow = new ActionRowBuilder()
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
             .WithButton("Details", "misc_button", ButtonStyle.Secondary)
@@ -304,7 +297,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(navigationRow);
 
-        // Create the main container
         var accentColor = staffRank.ToLower() switch
         {
             "gym" => Color.Orange,
@@ -454,7 +446,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         if (chain > 0 && !string.IsNullOrEmpty(hunt))
         {
-            // This would normally use ConfirmView which we don't have available
             var confirmed = await PromptUserConfirmAsync(
                 $"Are you sure you want to abandon your hunt for **{hunt}**?\nYou will lose your streak of **{chain}**.",
                 ctx.User.Id
@@ -480,12 +471,9 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             .WithDescription($"Successfully changed shadow hunt selection to **{pokemon}**.")
             .WithColor(new Color(0xFFB6C1));
 
-        // This would normally call a method to get the Pokemon image
-        // embed.WithImageUrl(await GetPokemonImage(pokemon, skin: "shadow"));
 
         await RespondAsync(embed: embed.Build());
 
-        // Log the hunt change
         var logChannel = (IMessageChannel)await ctx.Client.GetChannelAsync(1005559143886766121);
         await logChannel.SendMessageAsync($"`{ctx.User.Id} - {hunt} @ {chain}x -> {pokemon}`");
     }
@@ -596,10 +584,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             var heldItem = details.HeldItem;
             var staffRank = details.Staff;
 
-            // Create Components V2 container
             var containerComponents = new List<IMessageComponentBuilder>();
 
-            // Add title with staff indicators
             var titleText = staffRank.ToLower() switch
             {
                 "gym" => $"**{trainerNick}** - *Official Gym Leader*",
@@ -609,7 +595,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}"));
 
-            // Add main balance section
             var balanceText = $"## Balances\n" +
                               $"**Credits:** {details.MewCoins:N0}\n" +
                               $"**Redeems:** {details.Redeems}\n" +
@@ -618,7 +603,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             containerComponents.Add(new TextDisplayBuilder().WithContent(balanceText));
 
-            // Add game progress section  
             var energy = details.Energy ?? 10;
             var energyBar = string.Concat(Enumerable.Repeat("🟢", energy)) +
                             string.Concat(Enumerable.Repeat("⚫", 10 - energy));
@@ -637,7 +621,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             containerComponents.Add(new TextDisplayBuilder().WithContent(progressText));
 
-            // Add navigation buttons
             var navigationRow = new ActionRowBuilder()
                 .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
                 .WithButton("Details", "misc_button", ButtonStyle.Secondary)
@@ -645,7 +628,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             containerComponents.Add(navigationRow);
 
-            // Create the main container
             var accentColor = staffRank.ToLower() switch
             {
                 "gym" => Color.Orange,
@@ -711,10 +693,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var staffRank = details.Staff;
         var trainerNick = details.TrainerNickname ?? user.Username;
 
-        // Create Components V2 container
         var containerComponents = new List<IMessageComponentBuilder>();
 
-        // Add title
         var titleText = staffRank.ToLower() switch
         {
             "gym" => $"**{trainerNick}** - *Official Gym Leader*",
@@ -724,7 +704,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Chests"));
 
-        // Add chest inventory
         var chestsText = $"## Chest Inventory\n" +
                         $"**Legend:** {legend}\n" +
                         $"**Mythic:** {mythic}\n" +
@@ -733,7 +712,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(chestsText));
 
-        // Add navigation buttons
         var navigationRow = new ActionRowBuilder()
             .WithButton("Main", "main_button", ButtonStyle.Primary)
             .WithButton("Chests", "chest_button", ButtonStyle.Success, disabled: true)
@@ -742,7 +720,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(navigationRow);
 
-        // Create the main container
         var accentColor = staffRank.ToLower() switch
         {
             "gym" => Color.Orange,
@@ -808,10 +785,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var trainerNick = details.TrainerNickname ?? user.Username;
         var staffRank = details.Staff;
 
-        // Create Components V2 container
         var containerComponents = new List<IMessageComponentBuilder>();
 
-        // Add title
         var titleText = staffRank.ToLower() switch
         {
             "gym" => $"**{trainerNick}** - *Official Gym Leader*",
@@ -821,7 +796,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Tokens"));
 
-        // Add tokens list
         var hasTokens = false;
         var tokensList = new List<string>();
         
@@ -840,7 +814,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(tokensText));
 
-        // Add navigation buttons
         var navigationRow = new ActionRowBuilder()
             .WithButton("Main", "main_button", ButtonStyle.Primary)
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
@@ -849,7 +822,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(navigationRow);
 
-        // Create the main container
         var accentColor = staffRank.ToLower() switch
         {
             "gym" => Color.Orange,
@@ -934,10 +906,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         var filledBars = (int)(fishingProgress * fishingBarLength);
         var fishingExpBar = string.Concat(Enumerable.Repeat("🟦", filledBars)) + string.Concat(Enumerable.Repeat("⬜", fishingBarLength - filledBars));
 
-        // Create Components V2 container
         var containerComponents = new List<IMessageComponentBuilder>();
 
-        // Add title
         var titleText = staffRank.ToLower() switch
         {
             "gym" => $"**{trainerNick}** - *Official Gym Leader*",
@@ -947,7 +917,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent($"## {titleText}'s Details"));
 
-        // Add account stats
         var accountText = $"## Account Stats\n" +
                          $"**Market Slots:** {marketUsed}/{marketLimit}\n" +
                          $"**Daycare:** {daycared}/{daycareLimit}\n" +
@@ -956,14 +925,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(accountText));
 
-        // Add hunt info
         var huntText = !string.IsNullOrEmpty(hunt) 
             ? $"## Shadow Hunt\n**Target:** {hunt}\n**Chain:** {huntProgress}x"
             : $"## Shadow Hunt\n*No active hunt - use `/hunt` to start*";
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(huntText));
 
-        // Add energy and fishing stats
         var statsText = $"## Energy & Fishing\n" +
                        $"**Energy:** {energyBar} ({energyValue}/10)\n" +
                        $"**Fishing Level:** {fishingLevel}\n" +
@@ -972,7 +939,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(new TextDisplayBuilder().WithContent(statsText));
 
-        // Add inventory (without chest items and custom emotes)
         var inventoryItems = new List<string>();
         inventory.Remove("coin-case");
 
@@ -996,7 +962,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             containerComponents.Add(new TextDisplayBuilder().WithContent(inventoryText));
         }
 
-        // Add navigation buttons
         var navigationRow = new ActionRowBuilder()
             .WithButton("Main", "main_button", ButtonStyle.Primary)
             .WithButton("Chests", "chest_button", ButtonStyle.Secondary)
@@ -1005,7 +970,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
         containerComponents.Add(navigationRow);
 
-        // Create the main container
         var accentColor = staffRank.ToLower() switch
         {
             "gym" => Color.Orange,
@@ -1210,7 +1174,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
     [Group("set", "Used to set Pokemon properties")]
     public class SetCommands : EeveeCoreSlashModuleBase<ExtrasService>
     {
-        // List of natures
         private static readonly List<string> NatureList =
         [
             "Hardy", "Lonely", "Brave", "Adamant", "Naughty",
@@ -1300,7 +1263,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            // Check for inappropriate content
             if (nick.Contains("@here") ||
                 nick.Contains("@everyone") ||
                 nick.Contains("http") ||
@@ -1448,7 +1410,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             move = move.ToLower().Replace(" ", "-");
 
-            // Validate the move exists
             var exists = await _mongoService.Moves.Find(x => x.Identifier == move).FirstOrDefaultAsync();
             if (exists == null)
             {
@@ -1456,7 +1417,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            // Build the embed
             var prio = exists.Priority;
             var pp = exists.PP;
             var type =
@@ -1482,7 +1442,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                                  $"| **PP:** `{pp}` " +
                                  (prio != 0 ? $"\n**Priority:** `{prio}`" : ""));
 
-            // Get effect information
             var effectEntries = await _mongoService.Moves
                 .Find(m => m.Identifier == move && m.EffectChance != null)
                 .FirstOrDefaultAsync();
@@ -1505,7 +1464,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
         {
             ability = ability.ToLower().Replace(" ", "-");
 
-            // Validate the ability exists
             var exists = await _mongoService.Abilities.Find(x => x.Identifier == ability).FirstOrDefaultAsync();
             if (exists == null)
             {
@@ -1513,14 +1471,12 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            // Build the embed
             var embed = new EmbedBuilder()
                 .WithTitle(ability!.Capitalize().Replace("-", " "))
                 .WithColor(new Color(0xF699CD));
 
             embed.AddField("Effect", "Effect information is stored in the database");
 
-            // Find Pokémon with this ability
             var pokeWithAbility = await _mongoService.PokeAbilities
                 .Find(a => a.AbilityId == exists.AbilityId)
                 .ToListAsync();
@@ -1593,7 +1549,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             if (!string.IsNullOrEmpty(type2)) types.Add(type2.Capitalize()!);
 
-            // Validate types
             foreach (var t in types)
                 if (!typeIds.Values.Contains(t))
                 {
@@ -1604,7 +1559,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
             var attackEffectiveness = new Dictionary<double, List<string>>();
             var defenseEffectiveness = new Dictionary<double, List<string>>();
 
-            // Calculate attack effectiveness (only for single type)
             if (type2 == null)
                 foreach (var targetType in typeIds.Values)
                 {
@@ -1617,7 +1571,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                     attackEffectiveness[effectiveness].Add(targetType);
                 }
 
-            // Calculate defense effectiveness
             foreach (var damageType in typeIds.Values)
             {
                 var effectiveness = 1.0;
@@ -1631,10 +1584,8 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 defenseEffectiveness[effectiveness].Add(damageType);
             }
 
-            // Build description
             StringBuilder desc = new();
 
-            // Defense effectiveness
             if (defenseEffectiveness.TryGetValue(4.0, out var quadDamage) && quadDamage.Any())
                 desc.AppendLine($"**x4 damage from:** `{string.Join(", ", quadDamage)}`");
 
@@ -1655,7 +1606,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             desc.AppendLine();
 
-            // Attack effectiveness (only for single type)
             if (type2 == null)
             {
                 if (attackEffectiveness.TryGetValue(2.0, out var superEffective) && superEffective.Any())
@@ -1838,7 +1788,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            // Update the moves
             string[] newMoves = [first.ToLower(), second.ToLower(), third.ToLower(), fourth.ToLower()];
 
             await db.UserPokemon.Where(p => p.Id == selectedPokemon.Id)
@@ -1911,7 +1860,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                 return;
             }
 
-            // Get current moves and update the specific slot
             var currentMoves = selectedPokemon.Moves.ToArray();
             currentMoves[(int)slot - 1] = move.ToLower();
 
@@ -2040,7 +1988,7 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                     damageClass = "<:status1:1013111246121353359><:status2:1013111249095098497>";
                 else if (damageClassId == 2)
                     damageClass = "<:phys1:1013111228803059754><:phys2:1013111230937960479>";
-                else // damageClassId == 3
+                else
                     damageClass = "<:special1:1013111240966557706><:special2:1013111242547802183>";
 
                 var typeInfo = await _mongoService.Types.Find(t => t.TypeId == typeId).FirstOrDefaultAsync();
@@ -2122,7 +2070,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
 
             try
             {
-                // Update the appropriate stat based on the input
                 switch (stat)
                 {
                     case "attack":
@@ -2157,7 +2104,6 @@ public class ExtrasModule : EeveeCoreSlashModuleBase<ExtrasService>
                         break;
                 }
 
-                // Deduct the EV points from the user
                 await db.Users.Where(u => u.UserId == ctx.User.Id)
                     .Set(u => u.EvPoints, u => u.EvPoints - amount)
                     .UpdateAsync();

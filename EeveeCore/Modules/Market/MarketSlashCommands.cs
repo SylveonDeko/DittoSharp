@@ -37,14 +37,13 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         [Summary("price", "The price to list the Pokemon for (in coins)")] int price)
     {
         await DeferAsync();
-        
-        // Check if user is market banned
+
         await using var db = await _dbProvider.GetConnectionAsync();
         var user = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => new { u.MarketBanned, u.MarketBanReason })
             .FirstOrDefaultAsync();
-            
+
         if (user?.MarketBanned == true)
         {
             await ctx.Interaction.SendEphemeralFollowupErrorAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}");
@@ -54,7 +53,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         var success = await tradeLockService.ExecuteWithTradeLockAsync(ctx.User, async () =>
         {
             var result = await Service.AddPokemonToMarketAsync(ctx.User.Id, (ulong)pokemonPosition, price);
-            
+
             if (result.Success)
             {
                 var embed = new EmbedBuilder()
@@ -63,7 +62,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                     .WithColor(Color.Green)
                     .WithFooter($"Listing ID: {result.Data}")
                     .Build();
-                    
+
                 await ctx.Interaction.FollowupAsync(embed: embed);
             }
             else
@@ -87,24 +86,22 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
     public async Task BuyPokemonFromMarket(
         [Summary("listing_id", "The market listing ID of the Pokemon to buy")] ulong listingId)
     {
-        // Check if user is market banned
         await using var db = await _dbProvider.GetConnectionAsync();
         var user = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => new { u.MarketBanned, u.MarketBanReason })
             .FirstOrDefaultAsync();
-            
+
         if (user?.MarketBanned == true)
         {
             await ctx.Interaction.RespondAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}", ephemeral: true);
             return;
         }
-        
+
         var success = await tradeLockService.ExecuteWithTradeLockAsync(ctx.User, async () =>
         {
             var lockSuccess = await Service.ExecuteWithMarketLockAsync(listingId, async () =>
             {
-                // Show confirmation first
                 var listing = await Service.GetPokemonAsync(listingId);
                 if (listing == null)
                 {
@@ -147,14 +144,13 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         [Autocomplete(typeof(MarketListingsAutocompleteHandler))] ulong listingId)
     {
         await DeferAsync();
-        
-        // Check if user is market banned
+
         await using var db = await _dbProvider.GetConnectionAsync();
         var user = await db.Users
             .Where(u => u.UserId == ctx.User.Id)
             .Select(u => new { u.MarketBanned, u.MarketBanReason })
             .FirstOrDefaultAsync();
-            
+
         if (user?.MarketBanned == true)
         {
             await ctx.Interaction.SendEphemeralFollowupErrorAsync($"You are banned from using the market. Reason: {user.MarketBanReason ?? "Fraud detection"}");
@@ -162,7 +158,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         }
 
         var result = await Service.RemovePokemonFromMarketAsync(ctx.User.Id, listingId);
-        
+
         if (result.Success)
         {
             var embed = new EmbedBuilder()
@@ -170,7 +166,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                 .WithDescription(result.Message)
                 .WithColor(Color.Orange)
                 .Build();
-                
+
             await ctx.Interaction.FollowupAsync(embed: embed);
         }
         else
@@ -190,14 +186,13 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
         await DeferAsync();
 
         var pokemon = await Service.GetPokemonAsync(listingId);
-        
+
         if (pokemon == null)
         {
             await ctx.Interaction.SendEphemeralFollowupErrorAsync("That listing does not exist or has already ended.");
             return;
         }
 
-        // Create a basic Pokemon info embed
         var embed = new EmbedBuilder()
             .WithTitle($"Market Listing #{listingId}")
             .WithDescription($"**{pokemon.PokemonName}** (Level {pokemon.Level})")
@@ -259,7 +254,6 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                 return;
             }
 
-            // Create component paginator with page factory
             const int itemsPerPage = 5;
             var totalPages = (result.Listings.Count - 1) / itemsPerPage + 1;
 
@@ -269,7 +263,7 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                 .WithPageCount(totalPages)
                 .Build();
 
-            await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10), 
+            await interactivity.SendPaginatorAsync(paginator, Context.Interaction, TimeSpan.FromMinutes(10),
                 InteractionResponseType.DeferredChannelMessageWithSource);
 
             async ValueTask<IPage> GeneratePage(IComponentPaginator p)
@@ -282,14 +276,11 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                 var fileAttachments = new List<FileAttachment>();
                 var attachmentCounter = 0;
 
-                // Create a main container to hold everything
                 var containerComponents = new List<IMessageComponentBuilder>();
 
-                // Add title
                 containerComponents.Add(new TextDisplayBuilder()
                     .WithContent($"# 🏪 Pokemon Market\n**Currently Available Pokemon:**"));
 
-                // Add separator after title
                 containerComponents.Add(new SeparatorBuilder());
 
                 foreach (var listing in pageItems)
@@ -299,38 +290,33 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                     var ivTotal = listing.HpIv + listing.AttackIv + listing.DefenseIv +
                                   listing.SpecialAttackIv + listing.SpecialDefenseIv + listing.SpeedIv;
 
-                    // Get Pokemon image
                     var (_, imagePath) = await pokemonService.GetPokemonFormInfo(
                         listing.PokemonName,
                         listing.Shiny == true,
                         listing.Radiant == true,
                         listing.Skin ?? "");
 
-                    // Create info text component with IV progress bar
                     var ivPercentage = (int)Math.Round((double)ivTotal / 186 * 100);
                     var ivProgressBar = GenerateProgressBar(ivPercentage);
-                    
+
                     var infoText = $"**{emoji} {listing.PokemonName}** {genderEmoji}\n" +
                                    $"Level: {listing.Level}\n" +
                                    $"IV: {ivProgressBar} {ivPercentage}%\n" +
                                    $"💰 **{listing.Price:N0}** coins\n" +
                                    $"ID: `{listing.ListingId}`";
 
-                    // Create section with text and thumbnail layout
                     var sectionBuilder = new SectionBuilder()
                         .WithComponents(new List<IMessageComponentBuilder>
                         {
                             new TextDisplayBuilder().WithContent(infoText)
                         });
 
-                    // Add thumbnail as accessory (right side) if image exists
                     if (File.Exists(imagePath))
                     {
                         var imageFileName = $"pokemon_{attachmentCounter}.png";
                         var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
                         fileAttachments.Add(new FileAttachment(fileStream, imageFileName));
 
-                        // Add thumbnail as accessory for the section (right side)
                         var thumbnailBuilder = new ThumbnailBuilder()
                             .WithMedia(new UnfurledMediaItemProperties
                             {
@@ -342,7 +328,6 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                     }
                     else
                     {
-                        // If no image, add info button as accessory instead
                         var infoButton = new ButtonBuilder()
                             .WithCustomId($"market_info:{listing.ListingId}")
                             .WithStyle(ButtonStyle.Primary)
@@ -353,18 +338,15 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
 
                     containerComponents.Add(sectionBuilder);
 
-                    // Add separator between listings
                     if (listing != pageItems.Last())
                     {
                         containerComponents.Add(new SeparatorBuilder());
                     }
                 }
 
-                // Add separator before controls
                 containerComponents.Add(new SeparatorBuilder());
 
-                // Create select menu with current page Pokemon
-                var selectOptions = pageItems.Select(listing => 
+                var selectOptions = pageItems.Select(listing =>
                     new SelectMenuOptionBuilder()
                         .WithLabel($"{GetMarketPokemonEmoji(listing.Shiny, listing.Radiant, listing.Skin)} {listing.PokemonName}")
                         .WithValue($"market_info:{listing.ListingId}")
@@ -376,7 +358,6 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
 
                 containerComponents.Add(selectMenuRow);
 
-                // Create action row with navigation buttons (5 buttons for visual balance)
                 var navigationRow = new ActionRowBuilder()
                     .WithButton("⏪", "market_first_page", ButtonStyle.Secondary, disabled: p.CurrentPageIndex == 0 || p.ShouldDisable())
                     .AddPreviousButton(p, style: ButtonStyle.Secondary)
@@ -386,11 +367,9 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
 
                 containerComponents.Add(navigationRow);
 
-                // Add footer text
                 containerComponents.Add(new TextDisplayBuilder()
                     .WithContent($"Page {p.CurrentPageIndex + 1}/{p.PageCount} • {result.Listings.Count} Pokemon listed"));
 
-                // Create the main container with all components
                 var mainContainer = new ContainerBuilder()
                     .WithComponents(containerComponents)
                     .WithAccentColor(Color.Green);
@@ -401,7 +380,6 @@ public class MarketSlashCommands(InteractiveService interactivity, ITradeLockSer
                 var pageBuilder = new PageBuilder()
                     .WithComponents(componentsV2.Build());
 
-                // Add file attachments if any
                 if (fileAttachments.Count > 0)
                 {
                     pageBuilder.WithAttachmentsFactory(() => new ValueTask<IEnumerable<FileAttachment>?>(fileAttachments));

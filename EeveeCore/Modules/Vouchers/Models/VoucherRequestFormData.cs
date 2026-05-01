@@ -45,7 +45,7 @@ public class VoucherRequestFormData
             if (!string.IsNullOrWhiteSpace(PaymentMethod)) filledFields++;
             if (Artist == 0) filledFields++;
             
-            return (filledFields * 100) / 4; // 4 total fields
+            return (filledFields * 100) / 4;
         }
     }
 }

@@ -190,7 +190,6 @@ public static class Extensions
             }
             catch
             {
-                // ignored
             }
         });
     }

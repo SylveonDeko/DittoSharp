@@ -39,7 +39,6 @@ public class StoreDropdown : SelectMenuBuilder
 /// </summary>
 public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 {
-    // Store items are now loaded from MissionConstants.StoreItems
 
     /// <summary>
     ///     Handles store dropdown selection.
@@ -70,7 +69,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
                 return;
             }
 
-            // Process the purchase based on item type
             var success = await ProcessPurchase(userId, itemKey, item);
             
             if (!success)
@@ -79,10 +77,8 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
                 return;
             }
 
-            // Deduct the cost
             await Service.DeductCrystalSlimeAsync(userId, item.Cost);
 
-            // Send success message based on item type
             await SendPurchaseSuccessMessage(itemKey, item);
         }
         catch (Exception ex)
@@ -125,7 +121,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
                     break;
 
                 case "small_chance_ticket":
-                    // Start lottery game
                     var amounts = GenerateMeowthTicketAmounts(MissionConstants.LotteryChoiceCount);
                     var lotteryView = new ComponentBuilder()
                         .AddRow(new ActionRowBuilder()
@@ -233,7 +228,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
         try
         {
-            // Verify the user matches
             if (ctx.User.Id != userId)
             {
                 await FollowupAsync("This lottery game is not for you!", ephemeral: true);
@@ -249,7 +243,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
             var revealedAmount = amountArray[choiceIndex];
 
-            // Create new view with revealed choice and keep/risk options
             var updatedView = new ComponentBuilder()
                 .AddRow(new ActionRowBuilder()
                     .WithButton("Choice 1", $"lottery_choice_0:{userId}:{amounts}", ButtonStyle.Secondary, disabled: choiceIndex == 0)
@@ -296,14 +289,12 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
         try
         {
-            // Verify the user matches
             if (ctx.User.Id != userId)
             {
                 await FollowupAsync("This lottery game is not for you!", ephemeral: true);
                 return;
             }
 
-            // Award the MewCoins
             await Service.AddMewCoinsAsync(userId, (ulong)amount);
 
             var embed = new EmbedBuilder()
@@ -336,7 +327,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
         try
         {
-            // Verify the user matches
             if (ctx.User.Id != userId)
             {
                 await FollowupAsync("This lottery game is not for you!", ephemeral: true);
@@ -345,7 +335,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
             var amountArray = amounts.Split(',').Select(int.Parse).ToArray();
 
-            // Create new view with previous choice disabled
             var riskView = new ComponentBuilder()
                 .AddRow(new ActionRowBuilder()
                     .WithButton("Choice 1", $"lottery_final_0:{userId}:{amounts}", ButtonStyle.Secondary, disabled: previousChoice == 0)
@@ -388,7 +377,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
         try
         {
-            // Verify the user matches
             if (ctx.User.Id != userId)
             {
                 await FollowupAsync("This lottery game is not for you!", ephemeral: true);
@@ -404,7 +392,6 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
 
             var finalAmount = amountArray[choiceIndex];
 
-            // Award the MewCoins
             await Service.AddMewCoinsAsync(userId, (ulong)finalAmount);
 
             var embed = new EmbedBuilder()
@@ -424,4 +411,3 @@ public class StoreComponents : EeveeCoreSlashModuleBase<MissionService>
     }
 }
 
-// StoreItem class moved to MissionConstants as StoreItemConfig

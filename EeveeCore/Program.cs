@@ -58,29 +58,23 @@ public class Program
         if (credentials.IsApiEnabled)
         {
             var builder = WebApplication.CreateBuilder(args);
-            
-            // Clear default logging providers and configure Serilog
+
             builder.Logging.ClearProviders();
-            
+
             ConfigureServices(builder.Services, credentials);
 
             builder.WebHost.UseUrls($"http://localhost:{credentials.ApiPort}");
 
-            // Register JWT token service
             builder.Services.AddSingleton<JwtTokenService>();
             builder.Services.AddHttpClient<JwtTokenService>();
+            builder.Services.AddHttpClient();
 
-            // Configure authentication schemes
             builder.Services.AddTransient<IApiKeyValidation, ApiKeyValidation>();
             var auth = builder.Services.AddAuthentication();
 
-            // Add existing API Key authentication
             auth.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>("ApiKey", null);
-
-            // Add new JWT authentication
             auth.AddScheme<AuthenticationSchemeOptions, JwtAuthHandler>("Jwt", null);
 
-            // Configure authorization policies
             builder.Services.AddAuthorizationBuilder()
                 .AddPolicy("ApiKeyPolicy",
                     policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("ApiKey"))
@@ -108,7 +102,6 @@ public class Program
 
             builder.Services.AddAuthorization();
 
-            // Add controllers with JSON options
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -118,11 +111,9 @@ public class Program
                 })
                 .ConfigureApiBehaviorOptions(options => { options.SuppressModelStateInvalidFilter = true; });
 
-            // Update Swagger configuration to support both authentication schemes
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(x =>
             {
-                // API Key authentication
                 x.AddSecurityDefinition("ApiKeyHeader", new OpenApiSecurityScheme
                 {
                     Name = "X-API-Key",
@@ -131,7 +122,6 @@ public class Program
                     Description = "Authorization by X-API-Key inside request's header"
                 });
 
-                // JWT Bearer authentication
                 x.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
                     Name = "Authorization",
@@ -143,7 +133,6 @@ public class Program
                         "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
                 });
 
-                // Add security requirements for both schemes
                 x.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
                 {
                     { new OpenApiSecuritySchemeReference("ApiKeyHeader", doc, null), new List<string>() }
@@ -155,7 +144,6 @@ public class Program
                 });
             });
 
-            // Update CORS policy to include auth endpoints
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("FraudDashboardPolicy", policy =>
@@ -163,8 +151,8 @@ public class Program
                     policy
                         .WithOrigins($"http://localhost:{credentials.ApiPort}",
                             $"https://localhost:{credentials.ApiPort}",
-                            "http://localhost:3000", // Add your Svelte dev server
-                            "http://localhost:5173") // Add Vite dev server default port
+                            "http://localhost:3000",
+                            "http://localhost:5173")
                         .AllowAnyMethod()
                         .AllowAnyHeader()
                         .AllowCredentials();
@@ -186,7 +174,6 @@ public class Program
                 });
             }
 
-            // Add authentication and authorization middleware
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
@@ -214,7 +201,6 @@ public class Program
     /// <param name="credentials">The bot credentials.</param>
     private static void ConfigureServices(IServiceCollection services, BotCredentials credentials)
     {
-        // Add Serilog to service collection
         services.AddSerilog(LogSetup.SetupLogger("EeveeCore"));
         
         var client = new DiscordShardedClient(new DiscordSocketConfig

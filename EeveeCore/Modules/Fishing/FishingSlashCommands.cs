@@ -24,7 +24,6 @@ public class FishingSlashCommands : EeveeCoreSlashModuleBase<FishingService>
         {
             await DeferAsync();
 
-            // Process fishing attempt
             var result = await Service.HandleFishing(Context);
 
             if (!result.Success)
@@ -33,19 +32,15 @@ public class FishingSlashCommands : EeveeCoreSlashModuleBase<FishingService>
                 return;
             }
 
-            // Send the fishing embed with image attachment
             var message = await SendFishingMessageAsync(result.ResponseEmbed!);
 
-            // Store fishing data for event handling
             await Service.StoreFishingData(Context.Channel.Id, message.Id, result);
 
-            // Handle multi-box chance if applicable
             if (result.ShowMultiBox)
             {
                 await HandleMultiBoxAsync();
             }
 
-            // Show energy warning if empty
             if (result.RemainingEnergy <= 0)
             {
                 await FollowupAsync($"Sorry, you seem to be out of energy!\nVote for {Context.Client.CurrentUser.Username} to get more energy with `/ditto vote`!");
@@ -59,14 +54,14 @@ public class FishingSlashCommands : EeveeCoreSlashModuleBase<FishingService>
     }
 
     /// <summary>
-    ///     Sends the fishing message with image attachment.
+    ///     Sends the fishing message with image attachment, falling back to embed-only if unavailable.
     /// </summary>
     /// <param name="embed">The embed to send.</param>
     /// <returns>The sent message.</returns>
     private async Task<IUserMessage> SendFishingMessageAsync(Embed embed)
     {
         var fishingImagePath = Path.Combine("data", "images", "fishing.gif");
-        
+
         if (File.Exists(fishingImagePath))
         {
             try
@@ -78,7 +73,6 @@ public class FishingSlashCommands : EeveeCoreSlashModuleBase<FishingService>
             catch (Exception ex)
             {
                 Log.Warning(ex, "Failed to send fishing image attachment");
-                // Fallback to embed without image
                 var fallbackEmbed = embed.ToEmbedBuilder()
                     .WithImageUrl(null)
                     .WithDescription($"{embed.Description}\n\n*[Image not available]*")
@@ -89,7 +83,6 @@ public class FishingSlashCommands : EeveeCoreSlashModuleBase<FishingService>
         else
         {
             Log.Warning("Fishing image not found at path: {ImagePath}", fishingImagePath);
-            // Fallback to embed without image
             var fallbackEmbed = embed.ToEmbedBuilder()
                 .WithImageUrl(null)
                 .WithDescription($"{embed.Description}\n\n*[Image not available]*")

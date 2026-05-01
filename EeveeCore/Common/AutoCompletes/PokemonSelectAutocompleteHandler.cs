@@ -10,7 +10,6 @@ namespace EeveeCore.Common.AutoCompletes;
 /// </summary>
 public class PokemonSelectAutocompleteHandler : AutocompleteHandler
 {
-    // Cache for user Pokemon to reduce database queries (cache for 30 seconds)
     private static readonly ConcurrentDictionary<ulong, (DateTime Expiry, List<AutocompleteResult> Pokemon)> PokemonCache = new();
     private readonly LinqToDbConnectionProvider _dbProvider;
     private const int CacheTimeoutSeconds = 30;
@@ -47,20 +46,18 @@ public class PokemonSelectAutocompleteHandler : AutocompleteHandler
 
         try
         {
-            // Check cache first
             if (PokemonCache.TryGetValue(userId, out var cached) && DateTime.UtcNow < cached.Expiry)
             {
                 var filteredResults = FilterPokemonResults(cached.Pokemon, currentValue);
                 return AutocompletionResult.FromSuccess(filteredResults);
             }
 
-            // Get user's Pokemon from database with detailed stats
             await using var db = await _dbProvider.GetConnectionAsync();
             
             var userPokemon = await db.UserPokemonOwnerships
                 .Where(o => o.UserId == userId)
                 .Join(db.UserPokemon, o => o.PokemonId, p => p.Id, (o, p) => new { o.Position, Pokemon = p })
-                .Where(x => x.Pokemon.PokemonName != "Egg") // Only exclude eggs
+                .Where(x => x.Pokemon.PokemonName != "Egg")
                 .OrderBy(x => x.Position)
                 .Select(x => new
                 {
@@ -81,7 +78,6 @@ public class PokemonSelectAutocompleteHandler : AutocompleteHandler
                 })
                 .ToListAsync();
 
-            // Create autocomplete results with detailed stats
             var pokemonResults = userPokemon.Select(p => 
             {
                 var displayName = CreateDetailedDisplayName(
@@ -91,17 +87,14 @@ public class PokemonSelectAutocompleteHandler : AutocompleteHandler
                 return new AutocompleteResult(displayName, p.Position.ToString());
             }).ToList();
 
-            // Cache the results
             var expiry = DateTime.UtcNow.AddSeconds(CacheTimeoutSeconds);
             PokemonCache[userId] = (expiry, pokemonResults);
 
-            // Filter and return results
             var filtered = FilterPokemonResults(pokemonResults, currentValue);
             return AutocompletionResult.FromSuccess(filtered);
         }
         catch (Exception ex)
         {
-            // Log the error and return empty result
             Log.Information($"Error in PokemonSelectAutocompleteHandler: {ex.Message}");
             return AutocompletionResult.FromSuccess([]);
         }
@@ -140,14 +133,11 @@ public class PokemonSelectAutocompleteHandler : AutocompleteHandler
         if (favorite == true)
             specialIndicators += "⭐";
 
-        // Calculate total IV percentage
         var totalIV = (hp ?? 0) + (attack ?? 0) + (defense ?? 0) + (specialAttack ?? 0) + (specialDefense ?? 0) + (speed ?? 0);
-        var ivPercentage = Math.Round((totalIV / 186.0) * 100, 1); // 186 is max total IVs (31*6)
+        var ivPercentage = Math.Round((totalIV / 186.0) * 100, 1);
 
-        // Format nature
         var natureText = !string.IsNullOrEmpty(nature) ? nature.Capitalize() : "Unknown";
 
-        // Create compact display: Name (#{pos}) Lvl{level} | {nature} | {IV%}% IV {indicators}
         return $"{name} (#{position+1}) Lvl{level} | {natureText} | {ivPercentage}%{specialIndicators}".Trim();
     }
 
@@ -164,13 +154,11 @@ public class PokemonSelectAutocompleteHandler : AutocompleteHandler
             return allResults.Take(MaxResults).ToList();
         }
 
-        // Filter by Pokemon name, nickname, position, nature, or IV percentage
         var filtered = allResults.Where(result =>
             result.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
             result.Value.ToString()!.Contains(filter)
         ).ToList();
 
-        // Prioritize exact matches at the start
         var exactMatches = filtered.Where(r => 
             r.Name.StartsWith(filter, StringComparison.OrdinalIgnoreCase)
         ).ToList();

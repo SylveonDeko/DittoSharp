@@ -119,7 +119,7 @@ public static class ShopConstants
             Price = 50000,
             Category = "Boost",
             IsConsumable = true,
-            Stock = -1 // Unlimited
+            Stock = -1
         },
         new ShopItem 
         { 

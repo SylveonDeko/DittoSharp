@@ -46,23 +46,19 @@ public class TradeLockService : ITradeLockService, INService
     /// <inheritdoc />
     public async Task<bool> ExecuteWithTradeLockAsync(IUser user, Func<Task> action)
     {
-        // Check if user is already trade locked
         if (await IsUserTradeLockedAsync(user.Id))
             return false;
 
         try
         {
-            // Add trade lock
             await AddTradeLockAsync(user.Id);
             
-            // Execute the action
             await action();
             
             return true;
         }
         finally
         {
-            // Always remove trade lock
             await RemoveTradeLockAsync(user.Id);
         }
     }
@@ -70,24 +66,20 @@ public class TradeLockService : ITradeLockService, INService
     /// <inheritdoc />
     public async Task<bool> ExecuteWithTradeLockAsync(IUser user1, IUser user2, Func<Task> action)
     {
-        // Check if either user is already trade locked
         if (await IsUserTradeLockedAsync(user1.Id) || await IsUserTradeLockedAsync(user2.Id))
             return false;
 
         try
         {
-            // Add trade locks for both users
             await AddTradeLockAsync(user1.Id);
             await AddTradeLockAsync(user2.Id);
             
-            // Execute the action
             await action();
             
             return true;
         }
         finally
         {
-            // Always remove trade locks for both users
             await RemoveTradeLockAsync(user1.Id);
             await RemoveTradeLockAsync(user2.Id);
         }
@@ -98,8 +90,6 @@ public class TradeLockService : ITradeLockService, INService
     {
         var database = _cache.Redis.GetDatabase();
         
-        // Remove all instances of this user from the trade lock list
-        // Use -1 to remove all occurrences
         await database.ListRemoveAsync(TradeLockKey, userId.ToString(), -1);
     }
 }
